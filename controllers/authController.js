@@ -1,15 +1,39 @@
 require("dotenv").config();
+
 const User = require("../models/User");
 const OTP = require("../models/OTP");
+const Zone = require("../models/Zone");
+
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const axios = require("axios");
-const { OAuth2Client } = require("google-auth-library");
-const { body } = require("express-validator");
+const nodemailer = require("nodemailer");
 
+const { OAuth2Client } = require("google-auth-library");
+const { body, validationResult } = require("express-validator");
+
+
+// ======================================================
+// GOOGLE CLIENT
+// ======================================================
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-// ================= TOKEN =================
+
+// ======================================================
+// NODEMAILER
+// ======================================================
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
+
+
+// ======================================================
+// GENERATE TOKEN
+// ======================================================
 const generateToken = (user) => {
   return jwt.sign(
     { id: user._id, role: user.role },
@@ -18,118 +42,522 @@ const generateToken = (user) => {
   );
 };
 
-// ================= CLEAN RESPONSE (FINAL FIX) =================
+
+// ======================================================
+// SEND RESPONSE
+// ======================================================
 const sendResponse = (res, message, user) => {
   const token = generateToken(user);
 
-  const responseUser = {
-    id: user._id,
-    role: user.role,
-    phone: user.phone,
-    isPhoneVerified: user.isPhoneVerified || false,
-    isEmailVerified: user.isEmailVerified || false,
-  };
-
-  // only include if exists
-  if (user.name) responseUser.name = user.name;
-  if (user.email) responseUser.email = user.email;
-
-  return res.json({
+  return res.status(200).json({
+    success: true,
     message,
     token,
-    user: responseUser,
+    user: {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      role: user.role,
+      isPhoneVerified: user.isPhoneVerified || false,
+      isEmailVerified: user.isEmailVerified || false,
+      lastLogin: user.lastLogin || null,
+
+      location: {
+        type: user.location?.type || null,
+        coordinates: user.location?.coordinates || { lat: null, lng: null },
+        zone: user.location?.zone || "",
+        area: user.location?.area || "",
+        address: user.location?.address || "",
+        isEnabled: user.location?.isEnabled || false,
+      },
+
+      hasLocation: user?.location?.isEnabled || false,
+    },
   });
 };
 
-// ================= OTP GENERATOR =================
-const generateOtp = () =>
-  Math.floor(100000 + Math.random() * 900000).toString();
+
+// ======================================================
+// OTP GENERATOR
+// ======================================================
+const generateOtp = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
 
 
-// =====================================================
-// ================= SEND OTP ===========================
-// =====================================================
+// ======================================================
+// PHONE OTP
+// ======================================================
+// exports.sendOTP = async (req, res) => {
+//   try {
+//     const { userId, phone } = req.body;
+
+//     if (!userId || !phone) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "userId and phone are required",
+//       });
+//     }
+
+//     const user = await User.findById(userId);
+
+//     if (!user) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "User not found",
+//       });
+//     }
+
+//     const otp = generateOtp();
+
+//     await OTP.findOneAndUpdate(
+//       {
+//         userId,
+//         phone,
+//         purpose: "phone-verification",
+//       },
+//       {
+//         userId,
+//         phone,
+//         otp,
+//         type: "phone",
+//         purpose: "phone-verification",
+//         expiresAt: Date.now() + 5 * 60 * 1000,
+//         verified: false,
+//         isUsed: false,
+//       },
+//       { upsert: true, new: true }
+//     );
+
+//     console.log("PHONE OTP:", otp);
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "OTP sent successfully",
+//     });
+
+//   } catch (err) {
+//     return res.status(500).json({
+//       success: false,
+//       message: err.message,
+//     });
+//   }
+// };
+
 exports.sendOTP = async (req, res) => {
   try {
-    const { phone } = req.body;
 
-    if (!phone) {
-      return res.status(400).json({ message: "Phone is required" });
+    const {
+      userId,
+      type,
+      value,
+      purpose,
+    } = req.body;
+
+    if (
+      !userId ||
+      !type ||
+      !value ||
+      !purpose
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "userId, type, value and purpose required",
+      });
+    }
+
+    const user =
+      await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
     }
 
     const otp = generateOtp();
 
+    const otpData = {
+      userId,
+      otp,
+      type,
+      purpose,
+      verified: false,
+      isUsed: false,
+      expiresAt:
+        Date.now() +
+        5 * 60 * 1000,
+    };
+
+    if (type === "phone") {
+      otpData.phone = value;
+    }
+
+    if (type === "email") {
+      otpData.email = value;
+    }
+
     await OTP.findOneAndUpdate(
-      { phone },
       {
-        phone,
-        otp,
-        expiresAt: Date.now() + 5 * 60 * 1000,
-        verified: false,
+        userId,
+        purpose,
       },
-      { upsert: true, new: true }
+      otpData,
+      {
+        upsert: true,
+        new: true,
+      }
     );
 
-    console.log("OTP:", otp);
+    if (type === "email") {
 
-    return res.json({
+      await transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: value,
+        subject: "OTP Verification",
+        html: `
+          <h2>Your OTP</h2>
+          <h1>${otp}</h1>
+          <p>Expires in 5 minutes</p>
+        `,
+      });
+
+      console.log(
+        `${purpose} EMAIL OTP:`,
+        otp
+      );
+    }
+
+    if (type === "phone") {
+      console.log(
+        `${purpose} PHONE OTP:`,
+        otp
+      );
+    }
+
+    return res.status(200).json({
+      success: true,
       message: "OTP sent successfully",
     });
 
   } catch (err) {
-    res.status(500).json({ message: err.message });
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+
   }
 };
 
 
-// =====================================================
-// ================= VERIFY OTP ========================
-// =====================================================
+// ======================================================
+// VERIFY PHONE OTP
+// ======================================================
+// exports.verifyOTP = async (req, res) => {
+//   try {
+//     const { userId, phone, otp } = req.body;
+
+//     if (!userId || !phone || !otp) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "userId, phone, otp required",
+//       });
+//     }
+
+//     const record = await OTP.findOne({ userId, phone });
+
+//     if (!record) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "OTP not found",
+//       });
+//     }
+
+//     if (record.expiresAt < Date.now()) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "OTP expired",
+//       });
+//     }
+
+//     if (record.otp !== otp) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid OTP",
+//       });
+//     }
+
+//     // mark OTP verified
+//     record.verified = true;
+//     await record.save();
+
+//     // update USER permanently
+//     const user = await User.findById(userId);
+
+//     if (!user) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "User not found",
+//       });
+//     }
+
+//     user.phone = phone;
+//     user.isPhoneVerified = true; 
+//     await user.save();
+
+//     return res.json({
+//       success: true,
+//       message: "Phone verified successfully",
+//       user,
+//     });
+
+//   } catch (err) {
+//     return res.status(500).json({
+//       success: false,
+//       message: err.message,
+//     });
+//   }
+// };
+
 exports.verifyOTP = async (req, res) => {
   try {
-    const { phone, otp } = req.body;
 
-    const record = await OTP.findOne({ phone });
+    const {
+      userId,
+      otp,
+      purpose,
+    } = req.body;
+
+    if (
+      !userId ||
+      !otp ||
+      !purpose
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "userId, otp, purpose required",
+      });
+    }
+
+    const record =
+      await OTP.findOne({
+        userId,
+        purpose,
+      });
 
     if (!record) {
-      return res.status(400).json({ message: "OTP not found" });
+      return res.status(400).json({
+        success: false,
+        message: "OTP not found",
+      });
     }
 
-    if (record.expiresAt < Date.now()) {
-      return res.status(400).json({ message: "OTP expired" });
+    if (
+      record.expiresAt <
+      Date.now()
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "OTP expired",
+      });
     }
 
-    if (record.otp !== otp) {
-      return res.status(400).json({ message: "Invalid OTP" });
+    if (
+      record.otp !== otp
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid OTP",
+      });
     }
 
     record.verified = true;
+
     await record.save();
 
-    let user = await User.findOne({ phone });
+    const user =
+      await User.findById(userId);
 
     if (!user) {
-      user = await User.create({
-        phone,
-        role: "user",
-        isPhoneVerified: true,
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
       });
-    } else {
-      user.isPhoneVerified = true;
-      await user.save();
     }
 
-    return sendResponse(res, "Phone verified successfully", user);
+    if (
+      purpose ===
+      "phone-verification"
+    ) {
+
+      user.phone =
+        record.phone;
+
+      user.isPhoneVerified =
+        true;
+
+      await user.save();
+
+      return res.json({
+        success: true,
+        message:
+          "Phone verified successfully",
+        user,
+      });
+    }
+
+    if (
+      purpose ===
+      "forgot-password"
+    ) {
+      return res.json({
+        success: true,
+        userId,
+        message:
+          "OTP verified successfully",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message:
+        "OTP verified successfully",
+    });
 
   } catch (err) {
-    res.status(500).json({ message: err.message });
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+
   }
 };
+// ======================================================
+// EMAIL OTP
+// ======================================================
+// exports.sendEmailOTP = async (req, res) => {
+//   try {
+//     const { userId, email } = req.body;
+
+//     if (!userId || !email) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "userId and email required",
+//       });
+//     }
+
+//     const otp = generateOtp();
+
+//     await OTP.findOneAndUpdate(
+//       {
+//         userId,
+//         email,
+//         purpose: "email-verification",
+//       },
+//       {
+//         userId,
+//         email,
+//         otp,
+//         type: "email",
+//         purpose: "email-verification",
+//         expiresAt: Date.now() + 5 * 60 * 1000,
+//         verified: false,
+//         isUsed: false,
+//       },
+//       { upsert: true, new: true }
+//     );
+
+//     await transporter.sendMail({
+//       from: process.env.EMAIL_USER,
+//       to: email,
+//       subject: "Email Verification OTP",
+//       html: `<h2>Your OTP: ${otp}</h2>`,
+//     });
+
+//     console.log("EMAIL OTP:", otp);
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "OTP sent to email",
+//     });
+
+//   } catch (err) {
+//     return res.status(500).json({
+//       success: false,
+//       message: err.message,
+//     });
+//   }
+// };
 
 
-// =====================================================
-// ================= SIGNUP ============================
-// =====================================================
+
+// ======================================================
+// VERIFY EMAIL OTP (FIXED BUG BRACE)
+// ======================================================
+// exports.verifyEmailOTP = async (req, res) => {
+//   try {
+//     const { email, otp } = req.body;
+
+//     const record = await OTP.findOne({ email });
+
+//     if (!record) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "OTP not found",
+//       });
+//     }
+
+//     if (record.expiresAt < Date.now()) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "OTP expired",
+//       });
+//     }
+
+//     if (record.otp !== otp) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid OTP",
+//       });
+//     }
+
+//     record.verified = true;
+//     await record.save();
+
+//     const user = await User.findOne({ email });
+
+//     if (!user) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "User not found",
+//       });
+//     }
+
+//     user.isEmailVerified = true;
+//     await user.save();
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Email verified successfully",
+//     });
+//   } catch (err) {
+//     return res.status(500).json({
+//       success: false,
+//       message: err.message,
+//     });
+//   }
+// };
+
+
+// ======================================================
+// SIGNUP
+// ======================================================
 exports.signup = [
   body("name").notEmpty(),
   body("email").isEmail(),
@@ -137,63 +565,105 @@ exports.signup = [
 
   async (req, res) => {
     try {
-      const { name, email, password } = req.body;
+      const errors = validationResult(req);
 
-      const existing = await User.findOne({ email });
-
-      if (existing) {
-        return res.status(400).json({ message: "Email already exists" });
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          errors: errors.array(),
+        });
       }
 
-      const hashedPassword = await bcrypt.hash(password, 12);
+      const { name, email, password } = req.body;
 
+      // CHECK EXISTING USER
+      const exists = await User.findOne({ email });
+
+      if (exists) {
+        return res.status(400).json({
+          success: false,
+          message: "Email already exists",
+        });
+      }
+
+      // HASH PASSWORD
+      const hash = await bcrypt.hash(password, 12);
+
+      // CREATE USER
       const user = await User.create({
         name,
         email,
-        password: hashedPassword,
+        password: hash,
         role: "user",
+
+        // ✅ AUTO VERIFIED
         isEmailVerified: true,
       });
 
       return sendResponse(res, "Signup successful", user);
 
     } catch (err) {
-      res.status(500).json({ message: err.message });
+      return res.status(500).json({
+        success: false,
+        message: err.message,
+      });
     }
   },
 ];
 
 
-// =====================================================
-// ================= LOGIN =============================
-// =====================================================
+// ======================================================
+// LOGIN
+// ======================================================
 exports.login = async (req, res) => {
   try {
+
     const { email, password } = req.body;
 
+    // FIND USER
     const user = await User.findOne({ email });
 
-    if (!user || !user.password) {
-      return res.status(400).json({ message: "Invalid credentials" });
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid email or password",
+      });
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    // CHECK PASSWORD
+    const match = await bcrypt.compare(password, user.password);
 
-    if (!isMatch) {
-      return res.status(400).json({ message: "Invalid credentials" });
+    if (!match) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid email or password",
+      });
     }
+
+    // UPDATE LOGIN TIME
+    user.lastLogin = new Date();
+
+    // ✅ AUTO EMAIL VERIFIED
+    user.isEmailVerified = true;
+
+    await user.save();
 
     return sendResponse(res, "Login successful", user);
 
   } catch (err) {
-    res.status(500).json({ message: err.message });
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+
   }
 };
 
 
-// =====================================================
-// ================= GOOGLE LOGIN ======================
-// =====================================================
+// ======================================================
+// GOOGLE LOGIN
+// ======================================================
 exports.googleLogin = async (req, res) => {
   try {
     const { idToken } = req.body;
@@ -212,22 +682,23 @@ exports.googleLogin = async (req, res) => {
         name,
         email,
         googleId: sub,
-        role: "user",
         isEmailVerified: true,
       });
     }
 
-    return sendResponse(res, "Google login successful", user);
-
+    return sendResponse(res, "Google login success", user);
   } catch (err) {
-    res.status(401).json({ message: "Invalid Google Token" });
+    return res.status(401).json({
+      success: false,
+      message: "Invalid Google Token",
+    });
   }
 };
 
 
-// =====================================================
-// ================= FACEBOOK LOGIN ====================
-// =====================================================
+// ======================================================
+// FACEBOOK LOGIN
+// ======================================================
 exports.facebookLogin = async (req, res) => {
   try {
     const { accessToken } = req.body;
@@ -245,79 +716,605 @@ exports.facebookLogin = async (req, res) => {
         name,
         email,
         facebookId: id,
-        role: "user",
         isEmailVerified: true,
       });
     }
 
-    return sendResponse(res, "Facebook login successful", user);
-
+    return sendResponse(res, "Facebook login success", user);
   } catch (err) {
-    res.status(401).json({ message: "Invalid Facebook Token" });
+    return res.status(401).json({
+      success: false,
+      message: "Invalid Facebook Token",
+    });
   }
 };
 
 
-// =====================================================
-// ================= CREATE ADMIN ======================
-// =====================================================
+// ======================================================
+// LOCATION (FIXED)
+// ======================================================
+exports.enableCurrentLocation = async (req, res) => {
+  try {
+    const { lat, lng, zone, area, address } = req.body;
+
+    const user = await User.findById(req.user.id);
+
+    user.location = {
+      type: "auto",
+      coordinates: { lat: Number(lat), lng: Number(lng) },
+      zone,
+      area,
+      address,
+      isEnabled: true,
+    };
+
+    await user.save();
+
+    return res.json({
+      success: true,
+      location: user.location,
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+
+// ======================================================
+// MANUAL LOCATION
+// ======================================================
+exports.selectManualLocation = async (req, res) => {
+  try {
+    const { zone, area, address } = req.body;
+
+    const user = await User.findById(req.user.id);
+
+    user.location = {
+      type: "manual",
+      zone,
+      area,
+      address,
+      coordinates: { lat: null, lng: null },
+      isEnabled: true,
+    };
+
+    await user.save();
+
+    return res.json({
+      success: true,
+      location: user.location,
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+
+// ======================================================
+// ADMIN
+// ======================================================
 exports.createAdmin = async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
-    const existing = await User.findOne({ email });
-
-    if (existing) {
-      return res.status(400).json({ message: "Email already exists" });
-    }
-
-    const hashed = await bcrypt.hash(password, 12);
+    const hash = await bcrypt.hash(password, 12);
 
     const admin = await User.create({
       name,
       email,
-      password: hashed,
+      password: hash,
       role: "admin",
       isEmailVerified: true,
     });
 
-    return sendResponse(res, "Admin created successfully", admin);
-
+    return res.json({ success: true, admin });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 };
 
 
-// =====================================================
-// ================= CREATE RIDER ======================
-// =====================================================
+// ======================================================
+// RIDER
+// ======================================================
 exports.createRider = async (req, res) => {
   try {
     const { name, email, password, phone } = req.body;
 
-    const existing = await User.findOne({
-      $or: [{ email }, { phone }],
-    });
-
-    if (existing) {
-      return res.status(400).json({ message: "User already exists" });
-    }
-
-    const hashed = await bcrypt.hash(password, 12);
+    const hash = await bcrypt.hash(password, 12);
 
     const rider = await User.create({
       name,
       email,
       phone,
-      password: hashed,
+      password: hash,
       role: "rider",
-      isEmailVerified: true,
     });
 
-    return sendResponse(res, "Rider created successfully", rider);
+    return res.json({ success: true, rider });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+// ======================================================
+// FORGOT PASSWORD - SEND OTP
+// ======================================================
+exports.forgotPassword = async (req, res) => {
+  try {
+    const { email, phone } = req.body;
+
+    if (!email && !phone) {
+      return res.status(400).json({
+        success: false,
+        message: "Email or phone is required",
+      });
+    }
+
+    const user = await User.findOne({
+      $or: [
+        ...(email ? [{ email }] : []),
+        ...(phone ? [{ phone }] : []),
+      ],
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const otp = generateOtp();
+
+    // EMAIL OTP
+    if (email) {
+
+      await OTP.findOneAndUpdate(
+        {
+          userId: user._id,
+          purpose: "forgot-password",
+        },
+        {
+          userId: user._id,
+          email: user.email,
+          otp,
+          type: "email",
+          purpose: "forgot-password",
+          verified: false,
+          isUsed: false,
+          expiresAt: Date.now() + 5 * 60 * 1000,
+        },
+        { upsert: true, new: true }
+      );
+
+      await transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: "Reset Password OTP",
+        html: `
+          <h2>Password Reset OTP</h2>
+          <h1>${otp}</h1>
+          <p>OTP expires in 5 minutes.</p>
+        `,
+      });
+
+      console.log("EMAIL RESET OTP:", otp);
+
+      return res.status(200).json({
+        success: true,
+        userId: user._id,
+        type: "email",
+        message: "OTP sent to email",
+      });
+    }
+
+    // PHONE OTP
+    if (phone) {
+
+      await OTP.findOneAndUpdate(
+        {
+          userId: user._id,
+          purpose: "forgot-password",
+        },
+        {
+          userId: user._id,
+          phone: user.phone,
+          otp,
+          type: "phone",
+          purpose: "forgot-password",
+          verified: false,
+          isUsed: false,
+          expiresAt: Date.now() + 5 * 60 * 1000,
+        },
+        { upsert: true, new: true }
+      );
+
+      console.log("PHONE RESET OTP:", otp);
+
+      return res.status(200).json({
+        success: true,
+        userId: user._id,
+        type: "phone",
+        message: "OTP sent to phone",
+      });
+    }
 
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// ======================================================
+// VERIFY FORGOT PASSWORD OTP
+// ======================================================
+exports.verifyForgotPasswordOTP = async (req, res) => {
+  try {
+    const { userId, otp } = req.body;
+
+    if (!userId || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: "userId and otp required",
+      });
+    }
+
+    // FIND USER
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // FIND OTP
+    const record = await OTP.findOne({
+      userId,
+      purpose: "forgot-password",
+    });
+
+    if (!record) {
+      return res.status(400).json({
+        success: false,
+        message: "OTP not found",
+      });
+    }
+
+    // CHECK EXPIRE
+    if (record.expiresAt < Date.now()) {
+      return res.status(400).json({
+        success: false,
+        message: "OTP expired",
+      });
+    }
+
+    // CHECK OTP
+    if (record.otp !== otp) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid OTP",
+      });
+    }
+
+    // VERIFIED
+    record.verified = true;
+    await record.save();
+
+    return res.status(200).json({
+      success: true,
+      userId: user._id, // ✅ USER ID
+      message: "OTP verified successfully",
+    });
+
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+
+// ======================================================
+// RESET PASSWORD
+// ======================================================
+exports.resetPassword = async (req, res) => {
+  try {
+    const { userId, newPassword } = req.body;
+
+    if (!userId || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "userId and newPassword required",
+      });
+    }
+
+    // FIND USER
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // FIND VERIFIED OTP
+    const record = await OTP.findOne({
+      userId,
+      purpose: "forgot-password",
+      verified: true,
+    });
+
+    if (!record) {
+      return res.status(400).json({
+        success: false,
+        message: "OTP verification required",
+      });
+    }
+
+    // HASH PASSWORD
+    const hash = await bcrypt.hash(newPassword, 12);
+
+    // UPDATE PASSWORD
+    user.password = hash;
+
+    // OPTIONAL
+    user.lastPasswordChanged = new Date();
+
+    await user.save();
+
+    // DELETE OTP
+    await OTP.deleteOne({ _id: record._id });
+
+    return res.status(200).json({
+      success: true,
+      userId: user._id, // ✅ USER ID
+      message: "Password reset successful",
+    });
+
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+
+exports.addZone = async (req, res) => {
+  try {
+    const { zone, areas } = req.body;
+
+    if (!zone) {
+      return res.status(400).json({
+        success: false,
+        message: "Zone is required",
+      });
+    }
+
+    let existingZone = await Zone.findOne({
+      zone: zone.trim(),
+    });
+
+    // =========================
+    // UPDATE EXISTING ZONE
+    // =========================
+    if (existingZone) {
+      if (areas && areas.length > 0) {
+        existingZone.areas = [
+          ...new Set([
+            ...existingZone.areas,
+            ...areas.map(a => a.trim()),
+          ]),
+        ];
+      }
+
+      await existingZone.save();
+
+      return res.status(200).json({
+        success: true,
+        message: "Zone updated successfully",
+        zone: existingZone,
+      });
+    }
+
+    // =========================
+    // CREATE NEW ZONE
+    // =========================
+    const newZone = await Zone.create({
+      zone: zone.trim(),
+      areas: (areas || []).map(a => a.trim()),
+      isActive: true,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Zone added successfully",
+      zone: newZone,
+    });
+
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+exports.getZones = async (req, res) => {
+  try {
+    const zones = await Zone.find().sort({ createdAt: -1 });
+
+    return res.json({
+      success: true,
+      zones,
+    });
+
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+exports.checkServiceability = async (req, res) => {
+  try {
+    const { zone, area } = req.body;
+
+    const zoneData = await Zone.findOne({ zone });
+
+    if (!zoneData) {
+      return res.status(404).json({
+        success: false,
+        serviceable: false,
+        message: "Zone not found",
+      });
+    }
+
+    const ok = zoneData.areas.includes(area);
+
+    if (!ok) {
+      return res.status(404).json({
+        success: false,
+        serviceable: false,
+        message: "Area not serviceable",
+      });
+    }
+
+    return res.json({
+      success: true,
+      serviceable: true,
+      zone,
+      area,
+    });
+
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+exports.saveManualLocation = async (req, res) => {
+  try {
+    const { userId, zone, area, address } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    const zoneData = await Zone.findOne({ zone });
+
+    if (!zoneData || !zoneData.areas.includes(area)) {
+      return res.status(400).json({
+        success: false,
+        message: "Not serviceable",
+      });
+    }
+
+    user.location = {
+      mode: "manual",
+      zone,
+      area,
+      address,
+      coordinates: { lat: null, lng: null },
+      isEnabled: true,
+    };
+
+    await user.save();
+
+    return res.json({
+      success: true,
+      message: "Location saved",
+      location: user.location,
+    });
+
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.saveAutoLocation = async (req, res) => {
+  try {
+    const { userId, zone, area, lat, lng, address } = req.body;
+
+    const user = await User.findById(userId);
+
+    const zoneData = await Zone.findOne({ zone });
+
+    if (!zoneData || !zoneData.areas.includes(area)) {
+      return res.status(400).json({
+        success: false,
+        message: "Not serviceable",
+      });
+    }
+
+    user.location = {
+      mode: "auto",
+      zone,
+      area,
+      address,
+      coordinates: { lat: Number(lat), lng: Number(lng) },
+      isEnabled: true,
+    };
+
+    await user.save();
+
+    return res.json({
+      success: true,
+      message: "Auto location saved",
+      location: user.location,
+    });
+
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.getUserLocation = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId);
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    return res.json({
+      success: true,
+      location: user.location,
+    });
+
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.deleteUserLocation = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId);
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    user.location = {
+      mode: null,
+      zone: null,
+      area: null,
+      address: null,
+      coordinates: { lat: null, lng: null },
+      isEnabled: false,
+    };
+
+    await user.save();
+
+    return res.json({
+      success: true,
+      message: "Location deleted",
+    });
+
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
   }
 };

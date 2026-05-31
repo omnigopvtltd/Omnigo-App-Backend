@@ -9,35 +9,104 @@ const {
   login,
   googleLogin,
   facebookLogin,
+
+  // LOCATION APIs
+  addZone,
+  getZones,
+  checkServiceability,
+  saveManualLocation,
+  saveAutoLocation,
+  getUserLocation,
+  deleteUserLocation,
+
+  // OTP
   sendOTP,
   verifyOTP,
+  sendEmailOTP,
+  verifyEmailOTP,
+
+  // ADMIN / RIDER
   createAdmin,
   createRider,
+
+  // PASSWORD FLOW
+  forgotPassword,
+  verifyForgotPasswordOTP,
+  resetPassword,
 } = require("../controllers/authController");
 
 
-// ================= AUTH =================
-
-// Email Auth
+// ======================================================
+// AUTH
+// ======================================================
 router.post("/signup", signup);
 router.post("/login", login);
 
-// Social Auth
+// SOCIAL LOGIN
 router.post("/google-login", googleLogin);
 router.post("/facebook-login", facebookLogin);
 
-// Phone OTP Auth
-router.post("/send-otp", sendOTP); 
+
+// ======================================================
+// OTP
+// ======================================================
+router.post("/send-otp", sendOTP);
 router.post("/verify-otp", verifyOTP);
 
+// EMAIL OTP (optional)
+// router.post("/send-email-otp", sendEmailOTP);
+// router.post("/verify-email-otp", verifyEmailOTP);
 
-// ================= ADMIN =================
 
-// Create Admin (only superadmin)
-router.post("/admin", auth, authorizeRoles("superadmin"), createAdmin);
+// ======================================================
+// LOCATION APIs
+// ======================================================
+router.post("/location/add-zone", addZone);
+router.get("/location/zones/:userId", getZones);
+router.get("/location/zones", getZones);
 
-// Create Rider (admin only)
-router.post("/rider", auth, authorizeRoles("admin"), createRider);
+router.post("/location/check", checkServiceability);
+
+router.post("/location/manual", saveManualLocation);
+router.post("/location/auto", saveAutoLocation);
+
+router.get("/location/user/:userId", getUserLocation);
+router.delete("/location/delete/:userId", deleteUserLocation);
+
+
+// ======================================================
+// ADMIN
+// ======================================================
+router.post(
+  "/admin",
+  auth,
+  authorizeRoles("superadmin"),
+  createAdmin
+);
+
+
+// ======================================================
+// RIDER
+// ======================================================
+router.post(
+  "/rider",
+  auth,
+  authorizeRoles("admin", "superadmin"),
+  createRider
+);
+
+
+// ======================================================
+// PASSWORD RESET FLOW
+// ======================================================
+router.post("/forgot-password", forgotPassword);
+
+router.post(
+  "/verify-forgot-password-otp",
+  verifyForgotPasswordOTP
+);
+
+router.post("/reset-password", resetPassword);
 
 
 module.exports = router;
