@@ -1,12 +1,15 @@
 const multer = require("multer");
 const path = require("path");
 
-// storage setup
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
+    console.log("DESTINATION HIT");
     cb(null, "uploads/");
   },
+
   filename: (req, file, cb) => {
+    console.log("FILE RECEIVED:", file);
+
     const uniqueName =
       Date.now() + "-" + Math.round(Math.random() * 1e9);
 
@@ -14,8 +17,9 @@ const storage = multer.diskStorage({
   },
 });
 
-// image filter only
 const fileFilter = (req, file, cb) => {
+  console.log("FILTER FILE:", file);
+
   if (file.mimetype.startsWith("image/")) {
     cb(null, true);
   } else {
@@ -23,9 +27,7 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-const upload = multer({
+module.exports = multer({
   storage,
   fileFilter,
 });
-
-module.exports = upload;

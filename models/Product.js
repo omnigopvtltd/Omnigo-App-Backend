@@ -8,46 +8,43 @@ const productSchema = new mongoose.Schema(
       trim: true,
     },
 
+    weight: {
+      type: String,
+      default: "",
+    },
+
     price: {
       type: Number,
       required: true,
     },
 
-    category: {
-      type: String,
-      required: true,
-      index: true,
-    },
-
-    // ✅ IMAGE (already correct but improved comment)
-    image: {
-      type: String,
-      default: "", // stores URL from /uploads OR cloudinary
-    },
-
-    stock: {
+    quantity: {
       type: Number,
       default: 0,
     },
 
-    // ❤️ Likes system (good)
-    likes: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-      },
-    ],
+    category: {
+      type: String,
+      default: "",
+      index: true,
+    },
+
+    image: {
+      type: String,
+      default: "",
+    },
 
     description: {
       type: String,
       default: "",
     },
 
-    // 🆕 OPTIONAL (future upgrade fields)
-    createdBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-    },
+    likes: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
 
     isActive: {
       type: Boolean,

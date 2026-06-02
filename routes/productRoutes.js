@@ -8,30 +8,37 @@ const {
   updateProduct,
   deleteProduct,
   likeProduct,
-  unlikeProduct
+  unlikeProduct,
 } = require("../controllers/productController");
 
+// ================= GET ROUTES =================
 
-// ================= PUBLIC ROUTES =================
+// Get All Products
 router.get("/", getProducts);
+
+// Get Single Product By ID
 router.get("/:id", getProduct);
 
+// ================= CRUD ROUTES =================
 
-// ================= CRUD WITHOUT AUTH =================
-
-// CREATE
+// Create Product
 router.post("/", upload.single("image"), createProduct);
+// Update Product
+router.put(
+  "/:id",
+  upload.single("image"),
+  updateProduct
+);
 
-// UPDATE
-router.put("/:id", upload.single("image"), updateProduct);
-
-// DELETE
+// Delete Product
 router.delete("/:id", deleteProduct);
 
+// ================= LIKE ROUTES =================
 
-// ================= LIKE SYSTEM =================
+// Like Product
 router.post("/:id/like", likeProduct);
-router.post("/:id/unlike", unlikeProduct);
 
+// Unlike Product
+router.post("/:id/unlike", unlikeProduct);
 
 module.exports = router;

@@ -6,27 +6,50 @@ const getImageUrl = (req) => {
   return `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
 };
 
-
 // ================= GET ALL PRODUCTS =================
 exports.getProducts = async (req, res) => {
   try {
     const { category, q } = req.query;
 
-    let filter = {};
+    let filter = {
+      isActive: true,
+    };
 
-    if (category) filter.category = category;
-    if (q) filter.name = { $regex: q, $options: "i" };
+    if (category) {
+      filter.category = category;
+    }
 
-    const products = await Product.find(filter).sort({ createdAt: -1 });
+    if (q) {
+      filter.name = { $regex: q, $options: "i" };
+    }
 
-    res.json(products);
+    const products = await Product.find(filter).sort({
+      createdAt: -1,
+    });
 
+    const formattedProducts = products.map((item) => ({
+      id: item._id,
+      name: item.name,
+      weight: item.weight,
+      image: item.image,
+      description: item.description,
+      price: item.price,
+      quantity: item.quantity,
+      category: item.category,
+      likes: item.likes.length,
+      createdAt: item.createdAt,
+    }));
+
+    res.status(200).json(formattedProducts);
   } catch (error) {
     console.log("❌ GET PRODUCTS ERROR:", error);
-    res.status(500).json({ message: "Server Error", error: error.message });
+
+    res.status(500).json({
+      message: "Server Error",
+      error: error.message,
+    });
   }
 };
-
 
 // ================= GET SINGLE PRODUCT =================
 exports.getProduct = async (req, res) => {
@@ -34,17 +57,32 @@ exports.getProduct = async (req, res) => {
     const product = await Product.findById(req.params.id);
 
     if (!product) {
-      return res.status(404).json({ message: "Product not found" });
+      return res.status(404).json({
+        message: "Product not found",
+      });
     }
 
-    res.json(product);
-
+    res.status(200).json({
+      id: product._id,
+      name: product.name,
+      weight: product.weight,
+      image: product.image,
+      description: product.description,
+      price: product.price,
+      quantity: product.quantity,
+      category: product.category,
+      likes: product.likes.length,
+      createdAt: product.createdAt,
+    });
   } catch (error) {
     console.log("❌ GET PRODUCT ERROR:", error);
-    res.status(500).json({ message: "Server Error", error: error.message });
+
+    res.status(500).json({
+      message: "Server Error",
+      error: error.message,
+    });
   }
 };
-
 
 // ================= CREATE PRODUCT =================
 exports.createProduct = async (req, res) => {
@@ -54,36 +92,56 @@ exports.createProduct = async (req, res) => {
 
     const io = req.app.get("io");
 
-    // 🔥 validation manually
-    if (!req.body.name || !req.body.price || !req.body.category) {
+    if (!req.body) {
       return res.status(400).json({
-        message: "Name, price, category are required ❗"
+        message: "Request body missing",
+      });
+    }
+
+    const {
+      name,
+      weight,
+      price,
+      quantity,
+      category,
+      description,
+    } = req.body;
+
+    if (!name || !price) {
+      return res.status(400).json({
+        message: "Name and price are required",
       });
     }
 
     const product = await Product.create({
-      name: req.body.name,
-      price: Number(req.body.price),
-      category: req.body.category,
-      stock: Number(req.body.stock || 0),
-      description: req.body.description || "",
-      image: getImageUrl(req) || "",
+      name,
+      weight: weight || "",
+      price: Number(price),
+      quantity: Number(quantity || 0),
+      category: category || "",
+      description: description || "",
+      image: getImageUrl(req),
       likes: [],
     });
 
-    if (io) io.emit("product_created", product);
+    if (io) {
+      io.emit("product_created", product);
+    }
 
     res.status(201).json({
+      success: true,
       message: "Product created successfully",
       product,
     });
-
   } catch (error) {
     console.log("❌ CREATE PRODUCT ERROR:", error);
-    res.status(500).json({ message: "Server Error", error: error.message });
+
+    res.status(500).json({
+      message: "Server Error",
+      error: error.message,
+    });
   }
 };
-
 
 // ================= UPDATE PRODUCT =================
 exports.updateProduct = async (req, res) => {
@@ -93,14 +151,17 @@ exports.updateProduct = async (req, res) => {
     const product = await Product.findById(req.params.id);
 
     if (!product) {
-      return res.status(404).json({ message: "Product not found" });
+      return res.status(404).json({
+        message: "Product not found",
+      });
     }
 
     const updatedData = {
       name: req.body.name,
+      weight: req.body.weight,
       price: Number(req.body.price),
+      quantity: Number(req.body.quantity || 0),
       category: req.body.category,
-      stock: Number(req.body.stock || 0),
       description: req.body.description,
     };
 
@@ -111,22 +172,30 @@ exports.updateProduct = async (req, res) => {
     const updatedProduct = await Product.findByIdAndUpdate(
       req.params.id,
       updatedData,
-      { new: true }
+      {
+        new: true,
+        runValidators: true,
+      }
     );
 
-    if (io) io.emit("product_updated", updatedProduct);
+    if (io) {
+      io.emit("product_updated", updatedProduct);
+    }
 
-    res.json({
+    res.status(200).json({
+      success: true,
       message: "Product updated successfully",
       product: updatedProduct,
     });
-
   } catch (error) {
-    console.log("UPDATE ERROR:", error);
-    res.status(500).json({ message: "Server Error", error: error.message });
+    console.log("❌ UPDATE PRODUCT ERROR:", error);
+
+    res.status(500).json({
+      message: "Server Error",
+      error: error.message,
+    });
   }
 };
-
 
 // ================= DELETE PRODUCT =================
 exports.deleteProduct = async (req, res) => {
@@ -136,21 +205,32 @@ exports.deleteProduct = async (req, res) => {
     const product = await Product.findByIdAndDelete(req.params.id);
 
     if (!product) {
-      return res.status(404).json({ message: "Product not found" });
+      return res.status(404).json({
+        message: "Product not found",
+      });
     }
 
-    if (io) io.emit("product_deleted", { id: product._id });
+    if (io) {
+      io.emit("product_deleted", {
+        id: product._id,
+      });
+    }
 
-    res.json({ message: "Product deleted successfully" });
-
+    res.status(200).json({
+      success: true,
+      message: "Product deleted successfully",
+    });
   } catch (error) {
-    console.log("DELETE ERROR:", error);
-    res.status(500).json({ message: "Server Error", error: error.message });
+    console.log("❌ DELETE PRODUCT ERROR:", error);
+
+    res.status(500).json({
+      message: "Server Error",
+      error: error.message,
+    });
   }
 };
 
-
-// ================= LIKE PRODUCT (NO AUTH) =================
+// ================= LIKE PRODUCT =================
 exports.likeProduct = async (req, res) => {
   try {
     const io = req.app.get("io");
@@ -158,10 +238,13 @@ exports.likeProduct = async (req, res) => {
     const product = await Product.findById(req.params.id);
 
     if (!product) {
-      return res.status(404).json({ message: "Product not found" });
+      return res.status(404).json({
+        message: "Product not found",
+      });
     }
 
-    product.likes.push("guest"); 
+    product.likes.push(new Product.base.Types.ObjectId());
+
     await product.save();
 
     if (io) {
@@ -171,16 +254,19 @@ exports.likeProduct = async (req, res) => {
       });
     }
 
-    res.json({
+    res.status(200).json({
+      success: true,
       message: "Liked",
       likes: product.likes.length,
     });
-
   } catch (error) {
-    res.status(500).json({ message: "Server Error" });
+    console.log("❌ LIKE PRODUCT ERROR:", error);
+
+    res.status(500).json({
+      message: "Server Error",
+    });
   }
 };
-
 
 // ================= UNLIKE PRODUCT =================
 exports.unlikeProduct = async (req, res) => {
@@ -190,11 +276,15 @@ exports.unlikeProduct = async (req, res) => {
     const product = await Product.findById(req.params.id);
 
     if (!product) {
-      return res.status(404).json({ message: "Product not found" });
+      return res.status(404).json({
+        message: "Product not found",
+      });
     }
 
-    product.likes.pop(); // simple remove
-    await product.save();
+    if (product.likes.length > 0) {
+      product.likes.pop();
+      await product.save();
+    }
 
     if (io) {
       io.emit("product_unliked", {
@@ -203,12 +293,16 @@ exports.unlikeProduct = async (req, res) => {
       });
     }
 
-    res.json({
+    res.status(200).json({
+      success: true,
       message: "Unliked",
       likes: product.likes.length,
     });
-
   } catch (error) {
-    res.status(500).json({ message: "Server Error" });
+    console.log("❌ UNLIKE PRODUCT ERROR:", error);
+
+    res.status(500).json({
+      message: "Server Error",
+    });
   }
 };
