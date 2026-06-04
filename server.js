@@ -29,6 +29,10 @@ app.use("/api/products", require("./routes/productRoutes"));
 app.use("/api/cart", require("./routes/cartRoutes"));
 app.use("/api/address", require("./routes/addressRoutes"));
 app.use("/api/orders", require("./routes/orderRoutes"));
+app.use(
+  "/api/onboarding",
+  require("./routes/onboardingRoutes")
+);
 
 // ================= SOCKET INIT =================
 const io = initSocket(server);
