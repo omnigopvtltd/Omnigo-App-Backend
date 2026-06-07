@@ -3,7 +3,8 @@ const express = require("express");
 const cors = require("cors");
 const http = require("http");
 const path = require("path");
-
+const wishlistRoutes =
+  require("./routes/wishlistRoutes");
 const connectDB = require("./config/db");
 
 //  SOCKET
@@ -32,6 +33,10 @@ app.use("/api/orders", require("./routes/orderRoutes"));
 app.use(
   "/api/onboarding",
   require("./routes/onboardingRoutes")
+);
+app.use(
+  "/api/wishlist",
+  wishlistRoutes
 );
 
 // ================= SOCKET INIT =================

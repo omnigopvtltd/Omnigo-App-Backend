@@ -76,6 +76,13 @@ const userSchema = new mongoose.Schema(
     isBlocked: { type: Boolean, default: false },
     lastLogin: { type: Date, default: null },
     lastPasswordChanged: { type: Date, default: null },
+
+    favorites: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Product",
+      },
+    ],
   },
   { timestamps: true }
 );

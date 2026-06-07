@@ -23,7 +23,7 @@ router.get("/", getOnboardings);
 router.get("/:id", getOnboardingById);
 
 router.put(
-  "/:id",
+  "/:id", 
   upload.single("image"),
   updateOnboarding
 );
