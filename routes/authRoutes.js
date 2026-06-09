@@ -33,6 +33,12 @@ const {
   forgotPassword,
   verifyForgotPasswordOTP,
   resetPassword,
+
+  addAddress,
+  getAddresses,
+  updateAddress,
+  deleteAddress,
+  setDefaultAddress,
 } = require("../controllers/authController");
 
 
@@ -107,6 +113,13 @@ router.post(
 );
 
 router.post("/reset-password", resetPassword);
+
+
+router.post("/address", auth, addAddress);
+router.get("/address", auth, getAddresses);
+router.put("/address/:addressId", auth, updateAddress);
+router.delete("/address/:addressId", auth, deleteAddress);
+router.put("/address/default/:addressId", auth, setDefaultAddress);
 
 
 module.exports = router;

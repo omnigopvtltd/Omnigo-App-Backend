@@ -9,10 +9,12 @@ const {
   deleteProduct,
   likeProduct,
   unlikeProduct,
+  getCategories,
 } = require("../controllers/productController");
 
 // ================= GET ROUTES =================
 
+router.get("/getcategories", getCategories);
 // Get All Products
 router.get("/", getProducts);
 
@@ -40,5 +42,6 @@ router.post("/:id/like", likeProduct);
 
 // Unlike Product
 router.post("/:id/unlike", unlikeProduct);
+
 
 module.exports = router;

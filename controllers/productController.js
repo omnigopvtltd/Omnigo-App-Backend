@@ -306,3 +306,21 @@ exports.unlikeProduct = async (req, res) => {
     });
   }
 };
+
+// ================= GET ALL CATEGORIES =================
+exports.getCategories = async (req, res) => {
+  try {
+    const categories = await Product.distinct("category", {
+      isActive: true,
+    });
+
+    res.status(200).json(categories);
+  } catch (error) {
+    console.log("❌ GET CATEGORIES ERROR:", error);
+
+    res.status(500).json({
+      message: "Server Error",
+      error: error.message,
+    });
+  }
+};

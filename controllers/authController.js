@@ -1318,3 +1318,177 @@ exports.deleteUserLocation = async (req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 };
+
+
+
+
+
+
+
+
+
+
+exports.addAddress = async (req, res) => {
+  try {
+    const {
+      phone,
+      address,
+      city,
+      zipCode,
+      country,
+    } = req.body;
+
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    user.addresses.push({
+      phone,
+      address,
+      city,
+      zipCode,
+      country,
+    });
+
+    await user.save();
+
+    return res.status(201).json({
+      success: true,
+      message: "Address added successfully",
+      addresses: user.addresses,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+
+exports.getAddresses = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+
+    return res.json({
+      success: true,
+      addresses: user.addresses,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+exports.updateAddress = async (req, res) => {
+  try {
+    const { addressId } = req.params;
+
+    const user = await User.findById(req.user.id);
+
+    const address = user.addresses.id(addressId);
+
+    if (!address) {
+      return res.status(404).json({
+        success: false,
+        message: "Address not found",
+      });
+    }
+
+    address.phone =
+      req.body.phone || address.phone;
+
+    address.address =
+      req.body.address || address.address;
+
+    address.city =
+      req.body.city || address.city;
+
+    address.zipCode =
+      req.body.zipCode || address.zipCode;
+
+    address.country =
+      req.body.country || address.country;
+
+    await user.save();
+
+    return res.json({
+      success: true,
+      message: "Address updated successfully",
+      addresses: user.addresses,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+exports.deleteAddress = async (req, res) => {
+  try {
+    const { addressId } = req.params;
+
+    const user = await User.findById(req.user.id);
+
+    user.addresses.pull(addressId);
+
+    await user.save();
+
+    return res.json({
+      success: true,
+      message: "Address deleted successfully",
+      addresses: user.addresses,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+
+exports.setDefaultAddress = async (req, res) => {
+  try {
+    const { addressId } = req.params;
+
+    const user = await User.findById(req.user.id);
+
+    user.addresses.forEach((addr) => {
+      addr.isDefault = false;
+    });
+
+    const selectedAddress =
+      user.addresses.id(addressId);
+
+    if (!selectedAddress) {
+      return res.status(404).json({
+        success: false,
+        message: "Address not found",
+      });
+    }
+
+    selectedAddress.isDefault = true;
+
+    await user.save();
+
+    return res.json({
+      success: true,
+      message: "Default address updated",
+      addresses: user.addresses,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};

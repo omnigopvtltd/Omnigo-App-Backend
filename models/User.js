@@ -71,7 +71,44 @@ const userSchema = new mongoose.Schema(
 
       isEnabled: { type: Boolean, default: false },
     },
+    addresses: [
+      {
+        phone: {
+          type: String,
+          trim: true,
+          required: true,
+        },
 
+        address: {
+          type: String,
+          trim: true,
+          required: true,
+        },
+
+        city: {
+          type: String,
+          trim: true,
+          required: true,
+        },
+
+        zipCode: {
+          type: String,
+          trim: true,
+          required: true,
+        },
+
+        country: {
+          type: String,
+          trim: true,
+          required: true,
+        },
+
+        isDefault: {
+          type: Boolean,
+          default: false,
+        },
+      },
+    ],
     // STATUS
     isBlocked: { type: Boolean, default: false },
     lastLogin: { type: Date, default: null },
