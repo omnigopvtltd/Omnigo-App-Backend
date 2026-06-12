@@ -21,7 +21,6 @@ exports.addAddress = async (req, res) => {
       userId: req.user.id
     });
 
-    // 🔥 REAL TIME EVENT (USER ROOM)
     io.to(`user_${req.user.id}`).emit("address_added", {
       userId: req.user.id,
       address

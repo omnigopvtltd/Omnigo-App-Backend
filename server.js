@@ -5,7 +5,9 @@ const http = require("http");
 const path = require("path");
 const wishlistRoutes =
   require("./routes/wishlistRoutes");
+const feedbackRoutes = require("./routes/feedbackRoutes");
 const connectDB = require("./config/db");
+
 
 //  SOCKET
 const { initSocket } = require("./socket");
@@ -30,6 +32,7 @@ app.use("/api/products", require("./routes/productRoutes"));
 app.use("/api/cart", require("./routes/cartRoutes"));
 app.use("/api/address", require("./routes/addressRoutes"));
 app.use("/api/orders", require("./routes/orderRoutes"));
+
 app.use(
   "/api/onboarding",
   require("./routes/onboardingRoutes")
@@ -38,6 +41,7 @@ app.use(
   "/api/wishlist",
   wishlistRoutes
 );
+app.use("/api/feedback", feedbackRoutes);
 
 // ================= SOCKET INIT =================
 const io = initSocket(server);

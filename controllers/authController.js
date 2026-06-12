@@ -1371,12 +1371,42 @@ exports.addAddress = async (req, res) => {
 };
 
 
+// exports.getAddresses = async (req, res) => {
+//   try {
+//     const user = await User.findById(req.user.id);
+
+//     return res.json({
+//       success: true,
+//       addresses: user.addresses,
+//     });
+//   } catch (err) {
+//     return res.status(500).json({
+//       success: false,
+//       message: err.message,
+//     });
+//   }
+// };
+
 exports.getAddresses = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
+    const user = await User.findById(req.user.id).select(
+      "name email addresses"
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
 
     return res.json({
       success: true,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+      },
       addresses: user.addresses,
     });
   } catch (err) {
