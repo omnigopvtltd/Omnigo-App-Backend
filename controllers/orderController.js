@@ -1,455 +1,306 @@
-const Cart = require("../models/Cart");
 const Order = require("../models/Order");
-const Address = require("../models/Address");
-const Notification = require("../models/Notification");
+const Cart = require("../models/Cart");
+const User = require("../models/User");
 
-
-// ================= CREATE ORDER =================
+// =====================================
+// CREATE ORDER
+// =====================================
 exports.createOrder = async (req, res) => {
   try {
-    const io = req.app.get("io");
-    const { addressId } = req.body;
+    const {
+      addressId,
+      paymentMethod = "cash_on_delivery",
+      promoDiscount = 0,
+    } = req.body;
 
-    // 1. GET CART
-    const cart = await Cart.findOne({
-      userId: req.user.id,
-    }).populate("items.productId");
+    // USER
+    const user = await User.findById(req.user.id);
 
-    if (!cart || cart.items.length === 0) {
-      return res.status(400).json({
-        message: "Cart is empty",
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
       });
     }
 
-    // 2. GET ADDRESS
-    const address = await Address.findOne({
-      _id: addressId,
-      userId: req.user.id,
-    });
+    // ADDRESS
+    const selectedAddress =
+      user.addresses.id(addressId);
 
-    if (!address) {
+    if (!selectedAddress) {
       return res.status(404).json({
+        success: false,
         message: "Address not found",
       });
     }
 
-    // 3. FORMAT ITEMS
-    const items = cart.items.map((item) => ({
-      productId: item.productId?._id,
-      name: item.productId?.name,
-      price: Number(item.price),
-      quantity: item.quantity,
-      variant: item.variant || "",
-      image: item.productId?.image || "",
-    }));
-
-    // 4. CALCULATE BILL
-    const subtotal = items.reduce(
-      (acc, item) => acc + item.price * item.quantity,
-      0
-    );
-
-    const deliveryFee = 6;
-    const tax = +(subtotal * 0.09).toFixed(2);
-    const total = +(subtotal + deliveryFee + tax).toFixed(2);
-
-    // 5. CREATE ORDER
-    const order = await Order.create({
+    // CART
+    const cart = await Cart.findOne({
       userId: req.user.id,
+    });
+
+    if (!cart || cart.items.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Cart is empty",
+      });
+    }
+
+    let subtotal = 0;
+
+    const items = cart.items.map((item) => {
+      const total =
+        Number(item.price) *
+        Number(item.quantity);
+
+      subtotal += total;
+
+      return {
+        productId: item.productId,
+        name: item.name,
+        image: item.image,
+        category: item.category,
+        weight: item.weight,
+        price: item.price,
+        quantity: item.quantity,
+        total,
+      };
+    });
+
+    // FEES
+    const deliveryFee = 6;
+    const tax = 2.5;
+
+    const totalAmount =
+      subtotal +
+      deliveryFee +
+      tax -
+      promoDiscount;
+
+    // CREATE ORDER
+    const order = await Order.create({
+      orderNumber:
+        "ORD" +
+        Date.now(),
+
+      userId: req.user.id,
+
+      address: {
+        addressId:
+          selectedAddress._id,
+        phone:
+          selectedAddress.phone,
+        address:
+          selectedAddress.address,
+        city:
+          selectedAddress.city,
+        zipCode:
+          selectedAddress.zipCode,
+        country:
+          selectedAddress.country,
+      },
 
       items,
 
-      address: {
-        label: address.label || "Home",
-        fullName: address.fullName,
-        phone: address.phone,
-        street: address.street,
-        city: address.city,
-        country: address.country,
-        zip: address.zip,
-      },
+      paymentMethod,
 
-      bill: {
-        subtotal,
-        deliveryFee,
-        tax,
-        total,
-      },
+      paymentStatus: "pending",
+
+      subtotal,
+      deliveryFee,
+      tax,
+      promoDiscount,
+      totalAmount,
 
       status: "pending",
     });
 
-    // 6. CREATE NOTIFICATION
-    const notification = await Notification.create({
-      userId: req.user.id,
-      orderId: order._id,
-      title: "Order Placed",
-      message: "Your order has been placed successfully",
-      type: "order_placed",
-    });
-
-    // 7. CLEAR CART
+    // CLEAR CART
     cart.items = [];
     await cart.save();
 
-    // 8. SOCKET EVENTS
-    if (io) {
-      // admin
-      io.to("admin_room").emit("new_order", order);
-
-      // user
-      io.to(`user_${req.user.id}`).emit(
-        "order_created",
-        order
-      );
-
-      // notification
-      io.to(`user_${req.user.id}`).emit(
-        "new_notification",
-        notification
-      );
-    }
-
-    // 9. RESPONSE
-    res.status(201).json({
-      message: "Order placed successfully",
-
-      deliveryAddress: {
-        label: order.address.label,
-        address: `${order.address.street}, ${order.address.city}, ${order.address.country}`,
-      },
-
-      products: order.items,
-
-      billDetails: {
-        subtotal: order.bill.subtotal,
-        deliveryFee: order.bill.deliveryFee,
-        tax: order.bill.tax,
-        total: order.bill.total,
-      },
-
-      orderId: order._id,
-      status: order.status,
-    });
-
-  } catch (err) {
-    res.status(500).json({
-      message: "Server Error",
-      error: err.message,
-    });
-  }
-};
-
-
-
-// ================= GET MY ORDERS =================
-exports.getMyOrders = async (req, res) => {
-  try {
-
-    const orders = await Order.find({
-      userId: req.user.id,
-    }).sort({ createdAt: -1 });
-
-    const formattedOrders = orders.map((order) => ({
-      orderId: order._id,
-      status: order.status,
-      total: order.bill.total,
-      createdAt: order.createdAt,
-
-      deliveryAddress: {
-        label: order.address.label,
-        address: `${order.address.street}, ${order.address.city}`,
-      },
-
-      products: order.items,
-    }));
-
-    res.json(formattedOrders);
-
-  } catch (err) {
-    res.status(500).json({
-      message: "Server Error",
-      error: err.message,
-    });
-  }
-};
-
-
-
-// ================= GET SINGLE ORDER =================
-exports.getSingleOrder = async (req, res) => {
-  try {
-
-    const order = await Order.findOne({
-      _id: req.params.id,
-      userId: req.user.id,
-    });
-
-    if (!order) {
-      return res.status(404).json({
-        message: "Order not found",
-      });
-    }
-
-    res.json({
-      orderId: order._id,
-
-      status: order.status,
-
-      deliveryAddress: {
-        label: order.address.label,
-        address: `${order.address.street}, ${order.address.city}, ${order.address.country}`,
-      },
-
-      products: order.items,
-
-      billDetails: order.bill,
-
-      createdAt: order.createdAt,
-    });
-
-  } catch (err) {
-    res.status(500).json({
-      message: "Server Error",
-      error: err.message,
-    });
-  }
-};
-
-
-
-// ================= ADMIN ALL ORDERS =================
-exports.getAllOrders = async (req, res) => {
-  try {
-
-    const orders = await Order.find()
-      .sort({ createdAt: -1 });
-
-    res.json(orders);
-
-  } catch (err) {
-    res.status(500).json({
-      message: "Server Error",
-      error: err.message,
-    });
-  }
-};
-
-
-
-// ================= ASSIGN RIDER =================
-exports.assignRider = async (req, res) => {
-  try {
-
-    const io = req.app.get("io");
-
-    const { orderId, riderId } = req.body;
-
-    const order = await Order.findByIdAndUpdate(
-      orderId,
-      {
-        riderId,
-        status: "assigned",
-      },
-      { new: true }
-    );
-
-    if (!order) {
-      return res.status(404).json({
-        message: "Order not found",
-      });
-    }
-
-    // USER NOTIFICATION
-    const userNotification =
-      await Notification.create({
-        userId: order.userId,
-        orderId: order._id,
-        title: "Rider Assigned",
-        message:
-          "A rider has been assigned to your order",
-        type: "rider_assigned",
-      });
-
-    // RIDER NOTIFICATION
-    const riderNotification =
-      await Notification.create({
-        userId: riderId,
-        orderId: order._id,
-        title: "New Delivery Assigned",
-        message:
-          "A new delivery order has been assigned to you",
-        type: "rider_assigned",
-      });
-
-    // SOCKET EVENTS
-    if (io) {
-
-      io.to(`user_${riderId}`).emit(
-        "order_assigned",
-        order
-      );
-
-      io.to(`user_${order.userId}`).emit(
-        "order_status_updated",
-        order
-      );
-
-      // notifications
-      io.to(`user_${order.userId}`).emit(
-        "new_notification",
-        userNotification
-      );
-
-      io.to(`user_${riderId}`).emit(
-        "new_notification",
-        riderNotification
-      );
-    }
-
-    res.json({
-      message: "Rider assigned successfully",
+    return res.status(201).json({
+      success: true,
+      message:
+        "Order placed successfully",
       order,
     });
-
   } catch (err) {
-    res.status(500).json({
-      message: "Server Error",
-      error: err.message,
+    console.log(
+      "CREATE ORDER ERROR:",
+      err
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
     });
   }
 };
 
-
-
-// ================= RIDER ORDERS =================
-exports.getRiderOrders = async (req, res) => {
+// =====================================
+// GET MY ORDERS
+// =====================================
+exports.getMyOrders = async (
+  req,
+  res
+) => {
   try {
-
-    const orders = await Order.find({
-      riderId: req.user.id,
-    }).sort({ createdAt: -1 });
-
-    res.json(orders);
-
+    const orders =
+      await Order.find({
+        userId: req.user.id,
+      }).sort({
+        createdAt: -1,
+      });
+ 
+    return res.status(200).json({
+      success: true,
+      count: orders.length,
+      orders,
+    });
   } catch (err) {
-    res.status(500).json({
-      message: "Server Error",
-      error: err.message,
+    console.log(
+      "GET ORDERS ERROR:",
+      err
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
     });
   }
 };
 
-
-
-// ================= UPDATE STATUS =================
-exports.updateStatus = async (req, res) => {
+// =====================================
+// GET SINGLE ORDER
+// =====================================
+exports.getOrderById = async (
+  req,
+  res
+) => {
   try {
+    const order =
+      await Order.findById(
+        req.params.id
+      );
 
-    const io = req.app.get("io");
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
 
-    const { status } = req.body;
+    return res.status(200).json({
+      success: true,
+      order,
+    });
+  } catch (err) {
+    console.log(
+      "GET ORDER ERROR:",
+      err
+    );
 
-    const validStatus = [
-      "pending",
-      "confirmed",
-      "assigned",
-      "delivered",
-      "cancelled",
-    ];
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
 
-    if (!validStatus.includes(status)) {
+// =====================================
+// CANCEL ORDER
+// =====================================
+exports.cancelOrder = async (
+  req,
+  res
+) => {
+  try {
+    const order =
+      await Order.findOne({
+        _id: req.params.id,
+        userId: req.user.id,
+      });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    order.status = "cancelled";
+
+    await order.save();
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Order cancelled successfully",
+      order,
+    });
+  } catch (err) {
+    console.log(
+      "CANCEL ORDER ERROR:",
+      err
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};   
+
+// =====================================
+// CONFIRM ORDER
+// =====================================
+exports.confirmOrder = async (
+  req,
+  res
+) => {
+  try {
+    const order =
+      await Order.findOne({
+        _id: req.params.id,
+        userId: req.user.id,
+      });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    // agar pehle se cancelled hai
+    if (order.status === "cancelled") {
       return res.status(400).json({
-        message: "Invalid status",
+        success: false,
+        message:
+          "Cancelled order cannot be confirmed",
       });
     }
 
-    const order = await Order.findByIdAndUpdate(
-      req.params.id,
-      { status },
-      { new: true }
-    );
+    order.status = "confirmed";
 
-    if (!order) {
-      return res.status(404).json({
-        message: "Order not found",
-      });
-    }
+    await order.save();
 
-    // ================= NOTIFICATION LOGIC =================
-
-    let title = "";
-    let message = "";
-    let type = "";
-
-    if (status === "confirmed") {
-      title = "Order Confirmed";
-      message = "Your order has been confirmed";
-      type = "order_confirmed";
-    }
-
-    if (status === "delivered") {
-      title = "Order Delivered";
-      message =
-        "Your order has been delivered successfully";
-      type = "order_delivered";
-    }
-
-    if (status === "cancelled") {
-      title = "Order Cancelled";
-      message = "Your order has been cancelled";
-      type = "order_cancelled";
-    }
-
-    if (status === "assigned") {
-      title = "Order Assigned";
-      message = "Your order has been assigned";
-      type = "rider_assigned";
-    }
-
-    let notification = null;
-
-    if (title) {
-      notification = await Notification.create({
-        userId: order.userId,
-        orderId: order._id,
-        title,
-        message,
-        type,
-      });
-    }
-
-    // ================= SOCKET EVENTS =================
-
-    if (io) {
-
-      io.to(`user_${order.userId}`).emit(
-        "order_status_updated",
-        order
-      );
-
-      io.to("admin_room").emit(
-        "order_status_updated",
-        order
-      );
-
-      if (notification) {
-        io.to(`user_${order.userId}`).emit(
-          "new_notification",
-          notification
-        );
-      }
-    }
-
-    res.json({
-      message: "Order status updated",
+    return res.status(200).json({
+      success: true,
+      message:
+        "Order confirmed successfully",
       order,
     });
-
   } catch (err) {
-    res.status(500).json({
-      message: "Server Error",
-      error: err.message,
+    console.log(
+      "CONFIRM ORDER ERROR:",
+      err
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
     });
   }
 };

@@ -1,50 +1,48 @@
-const router = require("express").Router();
+const express = require("express");
+const router = express.Router();
 
-const auth = require("../middleware/authMiddleware");
-const role = require("../middleware/rolemiddleware");
+const auth =
+  require("../middleware/authMiddleware");
 
 const {
   createOrder,
   getMyOrders,
-  getSingleOrder,
-  getAllOrders,
-  assignRider,
-  getRiderOrders,
-  updateStatus
+  getOrderById,
+  cancelOrder,
+  confirmOrder,
 } = require("../controllers/orderController");
 
+// CREATE ORDER
+router.post(
+  "/create",
+  auth,
+  createOrder
+);
 
-// ================= USER ROUTES =================
+// ALL MY ORDERS
+router.get(
+  "/my-orders",
+  auth,
+  getMyOrders
+);
 
-// Create Order
-router.post("/", auth, createOrder);
+// SINGLE ORDER
+router.get(
+  "/:id",
+  auth,
+  getOrderById
+);
 
-// Get My Orders
-router.get("/my", auth, getMyOrders);
-
-
-// ================= RIDER ROUTES =================
-
-// Get Rider Orders (⚠️ pehle rakho)
-router.get("/rider/my", auth, role("rider"), getRiderOrders);
-
-// Update Order Status
-router.put("/:id/status", auth, role("rider"), updateStatus);
-
-
-// ================= ADMIN ROUTES =================
-
-// Get All Orders
-router.get("/admin/all", auth, role("admin", "superadmin"), getAllOrders);
-
-// Assign Rider
-router.put("/:id/assign", auth, role("admin", "superadmin"), assignRider);
-
-
-// ================= COMMON =================
-
-// Get Single Order (⚠️ hamesha LAST me)
-router.get("/:id", auth, getSingleOrder);
-
-
+// CANCEL ORDER
+router.put(
+  "/cancel/:id",
+  auth,
+  cancelOrder
+);
+// CONFIRM ORDER
+router.put(
+  "/confirm/:id",
+  auth,
+  confirmOrder
+);
 module.exports = router;

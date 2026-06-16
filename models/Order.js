@@ -1,54 +1,107 @@
 const mongoose = require("mongoose");
 
-const orderItemSchema = new mongoose.Schema({
-  productId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Product",
-  },
+const orderSchema = new mongoose.Schema(
+  {
+    orderNumber: {
+      type: String,
+      unique: true,
+    },
 
-  name: String,          // snapshot
-  price: Number,
-  quantity: Number,
-  variant: String,       // e.g. 500g
-  image: String
-});
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
 
-const orderSchema = new mongoose.Schema({
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
-  },
+    address: {
+      addressId: String,
+      phone: String,
+      address: String,
+      city: String,
+      zipCode: String,
+      country: String,
+    },
 
-  items: [orderItemSchema],
+    items: [
+      {
+        productId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Product",
+        },
 
-  address: {
-    fullName: String,
-    phone: String,
-    street: String,
-    city: String,
-    country: String,
-    zip: String
-  },
+        name: String,
+        image: String,
+        category: String,
+        weight: String,
 
-  bill: {
+        price: Number,
+        quantity: Number,
+
+        total: Number,
+      },
+    ],
+
+    paymentMethod: {
+      type: String,
+      enum: ["cash_on_delivery", "card", "wallet"],
+      default: "cash_on_delivery",
+    },
+
+    paymentStatus: {
+      type: String,
+      enum: ["pending", "paid", "failed"],
+      default: "pending",
+    },
+
     subtotal: Number,
-    deliveryFee: Number,
-    tax: Number,
-    total: Number
-  },
 
-  status: {
-    type: String,
-    enum: ["pending", "confirmed", "assigned", "delivered", "cancelled"],
-    default: "pending"
-  },
+    deliveryFee: {
+      type: Number,
+      default: 0,
+    },
 
-  riderId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
-    default: null
+    tax: {
+      type: Number,
+      default: 0,
+    },
+
+    promoDiscount: {
+      type: Number,
+      default: 0,
+    },
+
+    totalAmount: Number,
+
+    status: {
+      type: String,
+      enum: [
+        "pending",
+        "confirmed",
+        "preparing",
+        "out_for_delivery",
+        "delivered",
+        "cancelled",
+      ],
+      default: "pending",
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+orderSchema.pre("save", function (next) {
+  if (!this.orderNumber) {
+    this.orderNumber =
+      "ORD" +
+      Date.now() +
+      Math.floor(Math.random() * 1000);
   }
 
-}, { timestamps: true });
+  
+});
 
-module.exports = mongoose.model("Order", orderSchema);
+module.exports = mongoose.model(
+  "Order",
+  orderSchema
+);

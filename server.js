@@ -7,6 +7,8 @@ const wishlistRoutes =
   require("./routes/wishlistRoutes");
 const feedbackRoutes = require("./routes/feedbackRoutes");
 const connectDB = require("./config/db");
+const orderRoutes =
+require("./routes/orderRoutes");
 
 
 //  SOCKET
@@ -31,7 +33,11 @@ app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/products", require("./routes/productRoutes"));
 app.use("/api/cart", require("./routes/cartRoutes"));
 app.use("/api/address", require("./routes/addressRoutes"));
-app.use("/api/orders", require("./routes/orderRoutes"));
+
+app.use(
+  "/api/orders",
+  orderRoutes
+);
 
 app.use(
   "/api/onboarding",
