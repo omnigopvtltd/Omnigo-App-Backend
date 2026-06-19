@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
 
-const auth =
-  require("../middleware/authMiddleware");
+  const auth = require("../middleware/authMiddleware");
+const role = require("../middleware/rolemiddleware");
 
 const {
   createOrder,
@@ -10,7 +10,27 @@ const {
   getOrderById,
   cancelOrder,
   confirmOrder,
+  getOngoingOrders,
+  getAvailableOrders,
+  acceptOrder,
+  getRiderOrders,
+  markDelivered,
+  getOrderDetails,
+  reorder
+
 } = require("../controllers/orderController");
+
+router.get(
+  "/ongoing",
+  auth,
+  getOngoingOrders
+);
+
+router.get(
+  "/details/:id",
+  auth,
+  getOrderDetails
+);
 
 // CREATE ORDER
 router.post(
@@ -33,6 +53,12 @@ router.get(
   getOrderById
 );
 
+router.get(
+  "/ongoing",
+  auth,
+  getOngoingOrders
+);
+
 // CANCEL ORDER
 router.put(
   "/cancel/:id",
@@ -45,4 +71,34 @@ router.put(
   auth,
   confirmOrder
 );
+
+router.get(
+  "/rider/available",
+  auth,
+  role("rider"),
+  getAvailableOrders
+);
+
+router.put(
+  "/rider/accept/:id",
+  auth,
+  role("rider"),
+  acceptOrder
+);
+
+router.get(
+  "/rider/my-orders",
+  auth,
+  role("rider"),
+  getRiderOrders
+);
+
+router.put(
+  "/rider/deliver/:id",
+  auth,
+  role("rider"),
+  markDelivered
+);
+router.post("/reorder/:id", auth, reorder);
+
 module.exports = router;

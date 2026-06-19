@@ -821,8 +821,22 @@ exports.createRider = async (req, res) => {
   try {
     const { name, email, password, phone } = req.body;
 
+    // Check existing rider
+    const existingUser = await User.findOne({
+      $or: [{ email }, { phone }],
+    });
+
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: "Email or phone already exists",
+      });
+    }
+
+    // Hash Password
     const hash = await bcrypt.hash(password, 12);
 
+    // Create Rider
     const rider = await User.create({
       name,
       email,
@@ -831,9 +845,35 @@ exports.createRider = async (req, res) => {
       role: "rider",
     });
 
-    return res.json({ success: true, rider });
+    // Generate JWT Token
+    const token = jwt.sign(
+      {
+        id: rider._id,
+        role: rider.role,
+      },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: "30d",
+      }
+    );
+
+    return res.status(201).json({
+      success: true,
+      message: "Rider created successfully",
+      token,
+      rider: {
+        _id: rider._id,
+        name: rider.name,
+        email: rider.email,
+        phone: rider.phone,
+        role: rider.role,
+      },
+    });
   } catch (err) {
-    return res.status(500).json({ message: err.message });
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
   }
 };
 
@@ -1320,14 +1360,6 @@ exports.deleteUserLocation = async (req, res) => {
 };
 
 
-
-
-
-
-
-
-
-
 exports.addAddress = async (req, res) => {
   try {
     const {
@@ -1360,6 +1392,13 @@ exports.addAddress = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: "Address added successfully",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+      },
       addresses: user.addresses,
     });
   } catch (err) {
@@ -1390,7 +1429,7 @@ exports.addAddress = async (req, res) => {
 exports.getAddresses = async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select(
-      "name email addresses"
+      "name email phone role addresses"
     );
 
     if (!user) {
@@ -1406,6 +1445,8 @@ exports.getAddresses = async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        phone: user.phone,
+        role: user.role,
       },
       addresses: user.addresses,
     });
@@ -1423,6 +1464,13 @@ exports.updateAddress = async (req, res) => {
 
     const user = await User.findById(req.user.id);
 
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
     const address = user.addresses.id(addressId);
 
     if (!address) {
@@ -1432,26 +1480,24 @@ exports.updateAddress = async (req, res) => {
       });
     }
 
-    address.phone =
-      req.body.phone || address.phone;
-
-    address.address =
-      req.body.address || address.address;
-
-    address.city =
-      req.body.city || address.city;
-
-    address.zipCode =
-      req.body.zipCode || address.zipCode;
-
-    address.country =
-      req.body.country || address.country;
+    address.phone = req.body.phone || address.phone;
+    address.address = req.body.address || address.address;
+    address.city = req.body.city || address.city;
+    address.zipCode = req.body.zipCode || address.zipCode;
+    address.country = req.body.country || address.country;
 
     await user.save();
 
     return res.json({
       success: true,
       message: "Address updated successfully",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+      },
       addresses: user.addresses,
     });
   } catch (err) {
@@ -1468,6 +1514,22 @@ exports.deleteAddress = async (req, res) => {
 
     const user = await User.findById(req.user.id);
 
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const address = user.addresses.id(addressId);
+
+    if (!address) {
+      return res.status(404).json({
+        success: false,
+        message: "Address not found",
+      });
+    }
+
     user.addresses.pull(addressId);
 
     await user.save();
@@ -1475,6 +1537,13 @@ exports.deleteAddress = async (req, res) => {
     return res.json({
       success: true,
       message: "Address deleted successfully",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+      },
       addresses: user.addresses,
     });
   } catch (err) {
@@ -1485,19 +1554,20 @@ exports.deleteAddress = async (req, res) => {
   }
 };
 
-
 exports.setDefaultAddress = async (req, res) => {
   try {
     const { addressId } = req.params;
 
     const user = await User.findById(req.user.id);
 
-    user.addresses.forEach((addr) => {
-      addr.isDefault = false;
-    });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
 
-    const selectedAddress =
-      user.addresses.id(addressId);
+    const selectedAddress = user.addresses.id(addressId);
 
     if (!selectedAddress) {
       return res.status(404).json({
@@ -1506,13 +1576,24 @@ exports.setDefaultAddress = async (req, res) => {
       });
     }
 
+    user.addresses.forEach((addr) => {
+      addr.isDefault = false;
+    });
+
     selectedAddress.isDefault = true;
 
     await user.save();
 
     return res.json({
       success: true,
-      message: "Default address updated",
+      message: "Default address updated successfully",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+      },
       addresses: user.addresses,
     });
   } catch (err) {

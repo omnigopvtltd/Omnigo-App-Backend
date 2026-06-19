@@ -113,6 +113,9 @@ exports.createOrder = async (req, res) => {
       totalAmount,
 
       status: "pending",
+      riderId: null,
+      isAssigned: false,
+      acceptedAt: null,
     });
 
     // CLEAR CART
@@ -123,7 +126,6 @@ exports.createOrder = async (req, res) => {
       success: true,
       message:
         "Order placed successfully",
-      order,
     });
   } catch (err) {
     console.log(
@@ -152,7 +154,7 @@ exports.getMyOrders = async (
       }).sort({
         createdAt: -1,
       });
- 
+
     return res.status(200).json({
       success: true,
       count: orders.length,
@@ -250,7 +252,7 @@ exports.cancelOrder = async (
       message: err.message,
     });
   }
-};   
+};
 
 // =====================================
 // CONFIRM ORDER
@@ -297,6 +299,318 @@ exports.confirmOrder = async (
       "CONFIRM ORDER ERROR:",
       err
     );
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// =====================================
+// GET ONGOING ORDERS
+// =====================================
+exports.getOngoingOrders = async (req, res) => {
+  try {
+    const orders = await Order.find({
+      status: "ongoing",
+    })
+      .populate("userId", "name email phone")
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      count: orders.length,
+      orders,
+    });
+  } catch (err) {
+    console.log("GET ONGOING ORDERS ERROR:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+exports.getAvailableOrders = async (req, res) => {
+  try {
+    const orders = await Order.find({
+      status: "pending",
+      isAssigned: false,
+    })
+      .populate("userId", "name email phone")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: orders.length,
+      orders,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+exports.acceptOrder = async (req, res) => {
+  try {
+    const order = await Order.findOne({
+      _id: req.params.id,
+      status: "pending",
+      isAssigned: false,
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order already assigned",
+      });
+    }
+
+    order.riderId = req.user.id;
+    order.isAssigned = true;
+    order.acceptedAt = new Date();
+    order.status = "ongoing";
+
+    await order.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Order accepted successfully",
+      order,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+exports.getRiderOrders = async (req, res) => {
+  try {
+    const orders = await Order.find({
+      riderId: req.user.id,
+    })
+      .populate("userId", "name email phone")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: orders.length,
+      orders,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+exports.markDelivered = async (req, res) => {
+  try {
+    const order = await Order.findOne({
+      _id: req.params.id,
+      riderId: req.user.id,
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    order.status = "delivered";
+
+    await order.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Order delivered successfully",
+      order,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+exports.getOrderDetails = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id)
+      .populate(
+        "userId",
+        "name email phone"
+      )
+      .populate(
+        "riderId",
+        "name email phone"
+      );
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      order: {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+
+        customer: order.userId,
+
+        rider: order.riderId
+          ? {
+              ...order.riderId.toObject(),
+              assignedAt:
+                order.acceptedAt,
+            }
+          : null,
+
+        address: order.address,
+
+        items: order.items,
+
+        paymentMethod:
+          order.paymentMethod,
+
+        paymentStatus:
+          order.paymentStatus,
+
+        subtotal: order.subtotal,
+        deliveryFee:
+          order.deliveryFee,
+        tax: order.tax,
+        promoDiscount:
+          order.promoDiscount,
+
+        totalAmount:
+          order.totalAmount,
+
+        status: order.status,
+
+        isAssigned:
+          order.isAssigned,
+
+        createdAt:
+          order.createdAt,
+
+        updatedAt:
+          order.updatedAt,
+
+        acceptedAt:
+          order.acceptedAt,
+      },
+    });
+  } catch (err) {
+    console.log(
+      "GET ORDER DETAILS ERROR:",
+      err
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// =====================================
+// REORDER ORDER (CREATE NEW ORDER FROM OLD)
+// =====================================
+exports.reorder = async (req, res) => {
+  try {
+    const oldOrder = await Order.findOne({
+      _id: req.params.id,
+      userId: req.user.id,
+    });
+
+    if (!oldOrder) {
+      return res.status(404).json({
+        success: false,
+        message: "Original order not found",
+      });
+    }
+
+    if (!oldOrder.items || oldOrder.items.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Order has no items to reorder",
+      });
+    }
+
+    // Recalculate subtotal from old items
+    let subtotal = 0;
+
+    const newItems = oldOrder.items.map((item) => {
+      const total =
+        Number(item.price) * Number(item.quantity);
+
+      subtotal += total;
+
+      return {
+        productId: item.productId,
+        name: item.name,
+        image: item.image,
+        category: item.category,
+        weight: item.weight,
+        price: item.price,
+        quantity: item.quantity,
+        total,
+      };
+    });
+
+    // fees same as original logic
+    const deliveryFee = oldOrder.deliveryFee || 6;
+    const tax = oldOrder.tax || 2.5;
+    const promoDiscount = 0; // optional: usually reset on reorder
+
+    const totalAmount =
+      subtotal + deliveryFee + tax - promoDiscount;
+
+    // create new order
+    const newOrder = await Order.create({
+      orderNumber: "ORD" + Date.now(),
+
+      userId: req.user.id,
+
+      address: oldOrder.address,
+
+      items: newItems,
+
+      paymentMethod: oldOrder.paymentMethod,
+
+      paymentStatus: "pending",
+
+      subtotal,
+      deliveryFee,
+      tax,
+      promoDiscount,
+      totalAmount,
+
+      status: "pending",
+      riderId: null,
+      isAssigned: false,
+      acceptedAt: null,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Order reordered successfully",
+      order: newOrder,
+    });
+  } catch (err) {
+    console.log("REORDER ERROR:", err);
 
     return res.status(500).json({
       success: false,

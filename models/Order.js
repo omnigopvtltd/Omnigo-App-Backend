@@ -13,6 +13,23 @@ const orderSchema = new mongoose.Schema(
       required: true,
     },
 
+    // Rider Assignment
+    riderId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
+    isAssigned: {
+      type: Boolean,
+      default: false,
+    },
+
+    acceptedAt: {
+      type: Date,
+      default: null,
+    },
+
     address: {
       addressId: String,
       phone: String,
@@ -78,7 +95,7 @@ const orderSchema = new mongoose.Schema(
         "pending",
         "confirmed",
         "preparing",
-        "out_for_delivery",
+        "ongoing",
         "delivered",
         "cancelled",
       ],
@@ -97,11 +114,6 @@ orderSchema.pre("save", function (next) {
       Date.now() +
       Math.floor(Math.random() * 1000);
   }
-
-  
 });
 
-module.exports = mongoose.model(
-  "Order",
-  orderSchema
-);
+module.exports = mongoose.model("Order", orderSchema);
