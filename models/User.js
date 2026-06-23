@@ -54,6 +54,10 @@ const userSchema = new mongoose.Schema(
     // LOCATION
     // ===============================
     location: {
+      _id: {
+        type: mongoose.Schema.Types.ObjectId,
+        default: () => new mongoose.Types.ObjectId(),
+      },
       mode: {
         type: String,
         enum: ["auto", "manual"],
@@ -102,7 +106,10 @@ const userSchema = new mongoose.Schema(
           trim: true,
           required: true,
         },
-
+        isSave: {
+          type: Boolean,
+          default: false,
+        },
         isDefault: {
           type: Boolean,
           default: false,

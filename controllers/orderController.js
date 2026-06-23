@@ -538,76 +538,14 @@ exports.reorder = async (req, res) => {
     if (!oldOrder) {
       return res.status(404).json({
         success: false,
-        message: "Original order not found",
+        message: "Order not found",
       });
     }
 
-    if (!oldOrder.items || oldOrder.items.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Order has no items to reorder",
-      });
-    }
-
-    // Recalculate subtotal from old items
-    let subtotal = 0;
-
-    const newItems = oldOrder.items.map((item) => {
-      const total =
-        Number(item.price) * Number(item.quantity);
-
-      subtotal += total;
-
-      return {
-        productId: item.productId,
-        name: item.name,
-        image: item.image,
-        category: item.category,
-        weight: item.weight,
-        price: item.price,
-        quantity: item.quantity,
-        total,
-      };
-    });
-
-    // fees same as original logic
-    const deliveryFee = oldOrder.deliveryFee || 6;
-    const tax = oldOrder.tax || 2.5;
-    const promoDiscount = 0; // optional: usually reset on reorder
-
-    const totalAmount =
-      subtotal + deliveryFee + tax - promoDiscount;
-
-    // create new order
-    const newOrder = await Order.create({
-      orderNumber: "ORD" + Date.now(),
-
-      userId: req.user.id,
-
-      address: oldOrder.address,
-
-      items: newItems,
-
-      paymentMethod: oldOrder.paymentMethod,
-
-      paymentStatus: "pending",
-
-      subtotal,
-      deliveryFee,
-      tax,
-      promoDiscount,
-      totalAmount,
-
-      status: "pending",
-      riderId: null,
-      isAssigned: false,
-      acceptedAt: null,
-    });
-
-    return res.status(201).json({
+    return res.status(200).json({
       success: true,
-      message: "Order reordered successfully",
-      order: newOrder,
+      message: "Previous order fetched successfully",
+      order: oldOrder,
     });
   } catch (err) {
     console.log("REORDER ERROR:", err);

@@ -1,5 +1,5 @@
 require("dotenv").config();
-
+const mongoose = require("mongoose");
 const User = require("../models/User");
 const OTP = require("../models/OTP");
 const Zone = require("../models/Zone");
@@ -740,6 +740,7 @@ exports.enableCurrentLocation = async (req, res) => {
     const user = await User.findById(req.user.id);
 
     user.location = {
+      _id: new mongoose.Types.ObjectId(),
       type: "auto",
       coordinates: { lat: Number(lat), lng: Number(lng) },
       zone,
@@ -770,6 +771,7 @@ exports.selectManualLocation = async (req, res) => {
     const user = await User.findById(req.user.id);
 
     user.location = {
+      _id: new mongoose.Types.ObjectId(),
       type: "manual",
       zone,
       area,
@@ -1254,6 +1256,7 @@ exports.saveManualLocation = async (req, res) => {
     }
 
     user.location = {
+      _id: new mongoose.Types.ObjectId(),
       mode: "manual",
       zone,
       area,
@@ -1291,6 +1294,7 @@ exports.saveAutoLocation = async (req, res) => {
     }
 
     user.location = {
+      _id: new mongoose.Types.ObjectId(),
       mode: "auto",
       zone,
       area,
@@ -1368,6 +1372,7 @@ exports.addAddress = async (req, res) => {
       city,
       zipCode,
       country,
+      isSave,
     } = req.body;
 
     const user = await User.findById(req.user.id);
@@ -1385,6 +1390,10 @@ exports.addAddress = async (req, res) => {
       city,
       zipCode,
       country,
+        isSave:
+    typeof isSave === "boolean"
+      ? isSave
+      : false,
     });
 
     await user.save();
@@ -1392,13 +1401,6 @@ exports.addAddress = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: "Address added successfully",
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
-      },
       addresses: user.addresses,
     });
   } catch (err) {
@@ -1408,7 +1410,6 @@ exports.addAddress = async (req, res) => {
     });
   }
 };
-
 
 // exports.getAddresses = async (req, res) => {
 //   try {
@@ -1428,9 +1429,7 @@ exports.addAddress = async (req, res) => {
 
 exports.getAddresses = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select(
-      "name email phone role addresses"
-    );
+    const user = await User.findById(req.user.id);
 
     if (!user) {
       return res.status(404).json({
@@ -1439,16 +1438,14 @@ exports.getAddresses = async (req, res) => {
       });
     }
 
+    const savedAddresses =
+      user.addresses.filter(
+        (addr) => addr.isSave === true
+      );
+
     return res.json({
       success: true,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
-      },
-      addresses: user.addresses,
+      addresses: savedAddresses,
     });
   } catch (err) {
     return res.status(500).json({

@@ -102,7 +102,6 @@ exports.createProduct = async (req, res) => {
       name,
       weight,
       price,
-      quantity,
       category,
       description,
     } = req.body;
@@ -117,7 +116,7 @@ exports.createProduct = async (req, res) => {
       name,
       weight: weight || "",
       price: Number(price),
-      quantity: Number(quantity || 0),
+      quantity: 1,
       category: category || "",
       description: description || "",
       image: getImageUrl(req),
@@ -160,7 +159,10 @@ exports.updateProduct = async (req, res) => {
       name: req.body.name,
       weight: req.body.weight,
       price: Number(req.body.price),
-      quantity: Number(req.body.quantity || 0),
+      quantity:
+        req.body.quantity !== undefined
+          ? Number(req.body.quantity)
+          : product.quantity,
       category: req.body.category,
       description: req.body.description,
     };
