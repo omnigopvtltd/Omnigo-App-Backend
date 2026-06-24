@@ -64,20 +64,18 @@ const sendResponse = (res, message, user) => {
       lastLogin: user.lastLogin || null,
 
       location: {
-        _id: new mongoose.Types.ObjectId(),
-        type: user.location?.type || null,
+        id: user.location?._id || null,
+        type: user.location?.type || user.location?.mode || null,
         coordinates: user.location?.coordinates || { lat: null, lng: null },
         zone: user.location?.zone || "",
         area: user.location?.area || "",
         address: user.location?.address || "",
         isEnabled: user.location?.isEnabled || false,
       },
-
       hasLocation: user?.location?.isEnabled || false,
     },
   });
 };
-
 
 // ======================================================
 // OTP GENERATOR
@@ -1391,10 +1389,10 @@ exports.addAddress = async (req, res) => {
       city,
       zipCode,
       country,
-        isSave:
-    typeof isSave === "boolean"
-      ? isSave
-      : false,
+      isSave:
+        typeof isSave === "boolean"
+          ? isSave
+          : false,
     });
 
     await user.save();
