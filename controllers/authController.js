@@ -64,6 +64,7 @@ const sendResponse = (res, message, user) => {
       lastLogin: user.lastLogin || null,
 
       location: {
+        _id: new mongoose.Types.ObjectId(),
         type: user.location?.type || null,
         coordinates: user.location?.coordinates || { lat: null, lng: null },
         zone: user.location?.zone || "",
