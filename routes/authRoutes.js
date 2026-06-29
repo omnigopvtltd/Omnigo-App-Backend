@@ -75,7 +75,6 @@ router.post("/location/check", checkServiceability);
 
 router.post("/location/manual", saveManualLocation);
 router.post("/location/auto", saveAutoLocation);
-
 router.get("/location/user/:userId", getUserLocation);
 router.delete("/location/delete/:userId", deleteUserLocation);
 

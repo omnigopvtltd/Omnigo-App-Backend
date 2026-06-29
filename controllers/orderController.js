@@ -469,7 +469,7 @@ exports.reorder = async (req, res) => {
     if (!oldOrder) {
       return res.status(404).json({
         success: false,
-        message: "Original order not found",
+        message: "Order not found",
       });
     }
 
@@ -535,8 +535,8 @@ exports.reorder = async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: "Order reordered successfully",
-      order: newOrder,
+      message: "Previous order fetched successfully",
+      order: oldOrder,
     });
   } catch (err) {
     console.log("REORDER ERROR:", err);
