@@ -1,6 +1,8 @@
 const Order = require("../models/Order");
 const Cart = require("../models/Cart");
 const User = require("../models/User");
+const { getIO } = require("../socket");
+// const { getIO } = require("../socket");
 
 // =====================================
 // CREATE ORDER
@@ -24,8 +26,7 @@ exports.createOrder = async (req, res) => {
     }
 
     // ADDRESS
-    const selectedAddress =
-      user.addresses.id(addressId);
+    const selectedAddress = user.addresses.id(addressId);
 
     if (!selectedAddress) {
       return res.status(404).json({
@@ -49,9 +50,7 @@ exports.createOrder = async (req, res) => {
     let subtotal = 0;
 
     const items = cart.items.map((item) => {
-      const total =
-        Number(item.price) *
-        Number(item.quantity);
+      const total = Number(item.price) * Number(item.quantity);
 
       subtotal += total;
 
@@ -71,33 +70,21 @@ exports.createOrder = async (req, res) => {
     const deliveryFee = 6;
     const tax = 2.5;
 
-    const totalAmount =
-      subtotal +
-      deliveryFee +
-      tax -
-      promoDiscount;
+    const totalAmount = subtotal + deliveryFee + tax - promoDiscount;
 
     // CREATE ORDER
     const order = await Order.create({
-      orderNumber:
-        "ORD" +
-        Date.now(),
+      orderNumber: "ORD" + Date.now(),
 
       userId: req.user.id,
 
       address: {
-        addressId:
-          selectedAddress._id,
-        phone:
-          selectedAddress.phone,
-        address:
-          selectedAddress.address,
-        city:
-          selectedAddress.city,
-        zipCode:
-          selectedAddress.zipCode,
-        country:
-          selectedAddress.country,
+        addressId: selectedAddress._id,
+        phone: selectedAddress.phone,
+        address: selectedAddress.address,
+        city: selectedAddress.city,
+        zipCode: selectedAddress.zipCode,
+        country: selectedAddress.country,
       },
 
       items,
@@ -124,14 +111,10 @@ exports.createOrder = async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message:
-        "Order placed successfully",
+      message: "Order placed successfully",
     });
   } catch (err) {
-    console.log(
-      "CREATE ORDER ERROR:",
-      err
-    );
+    console.log("CREATE ORDER ERROR:", err);
 
     return res.status(500).json({
       success: false,
@@ -143,17 +126,13 @@ exports.createOrder = async (req, res) => {
 // =====================================
 // GET MY ORDERS
 // =====================================
-exports.getMyOrders = async (
-  req,
-  res
-) => {
+exports.getMyOrders = async (req, res) => {
   try {
-    const orders =
-      await Order.find({
-        userId: req.user.id,
-      }).sort({
-        createdAt: -1,
-      });
+    const orders = await Order.find({
+      userId: req.user.id,
+    }).sort({
+      createdAt: -1,
+    });
 
     return res.status(200).json({
       success: true,
@@ -161,10 +140,7 @@ exports.getMyOrders = async (
       orders,
     });
   } catch (err) {
-    console.log(
-      "GET ORDERS ERROR:",
-      err
-    );
+    console.log("GET ORDERS ERROR:", err);
 
     return res.status(500).json({
       success: false,
@@ -176,15 +152,9 @@ exports.getMyOrders = async (
 // =====================================
 // GET SINGLE ORDER
 // =====================================
-exports.getOrderById = async (
-  req,
-  res
-) => {
+exports.getOrderById = async (req, res) => {
   try {
-    const order =
-      await Order.findById(
-        req.params.id
-      );
+    const order = await Order.findById(req.params.id);
 
     if (!order) {
       return res.status(404).json({
@@ -198,10 +168,7 @@ exports.getOrderById = async (
       order,
     });
   } catch (err) {
-    console.log(
-      "GET ORDER ERROR:",
-      err
-    );
+    console.log("GET ORDER ERROR:", err);
 
     return res.status(500).json({
       success: false,
@@ -213,16 +180,12 @@ exports.getOrderById = async (
 // =====================================
 // CANCEL ORDER
 // =====================================
-exports.cancelOrder = async (
-  req,
-  res
-) => {
+exports.cancelOrder = async (req, res) => {
   try {
-    const order =
-      await Order.findOne({
-        _id: req.params.id,
-        userId: req.user.id,
-      });
+    const order = await Order.findOne({
+      _id: req.params.id,
+      userId: req.user.id,
+    });
 
     if (!order) {
       return res.status(404).json({
@@ -237,15 +200,11 @@ exports.cancelOrder = async (
 
     return res.status(200).json({
       success: true,
-      message:
-        "Order cancelled successfully",
+      message: "Order cancelled successfully",
       order,
     });
   } catch (err) {
-    console.log(
-      "CANCEL ORDER ERROR:",
-      err
-    );
+    console.log("CANCEL ORDER ERROR:", err);
 
     return res.status(500).json({
       success: false,
@@ -257,16 +216,12 @@ exports.cancelOrder = async (
 // =====================================
 // CONFIRM ORDER
 // =====================================
-exports.confirmOrder = async (
-  req,
-  res
-) => {
+exports.confirmOrder = async (req, res) => {
   try {
-    const order =
-      await Order.findOne({
-        _id: req.params.id,
-        userId: req.user.id,
-      });
+    const order = await Order.findOne({
+      _id: req.params.id,
+      userId: req.user.id,
+    });
 
     if (!order) {
       return res.status(404).json({
@@ -279,8 +234,7 @@ exports.confirmOrder = async (
     if (order.status === "cancelled") {
       return res.status(400).json({
         success: false,
-        message:
-          "Cancelled order cannot be confirmed",
+        message: "Cancelled order cannot be confirmed",
       });
     }
 
@@ -290,15 +244,11 @@ exports.confirmOrder = async (
 
     return res.status(200).json({
       success: true,
-      message:
-        "Order confirmed successfully",
+      message: "Order confirmed successfully",
       order,
     });
   } catch (err) {
-    console.log(
-      "CONFIRM ORDER ERROR:",
-      err
-    );
+    console.log("CONFIRM ORDER ERROR:", err);
 
     return res.status(500).json({
       success: false,
@@ -445,14 +395,8 @@ exports.markDelivered = async (req, res) => {
 exports.getOrderDetails = async (req, res) => {
   try {
     const order = await Order.findById(req.params.id)
-      .populate(
-        "userId",
-        "name email phone"
-      )
-      .populate(
-        "riderId",
-        "name email phone"
-      );
+      .populate("userId", "name email phone")
+      .populate("riderId", "name email phone");
 
     if (!order) {
       return res.status(404).json({
@@ -472,8 +416,7 @@ exports.getOrderDetails = async (req, res) => {
         rider: order.riderId
           ? {
               ...order.riderId.toObject(),
-              assignedAt:
-                order.acceptedAt,
+              assignedAt: order.acceptedAt,
             }
           : null,
 
@@ -481,42 +424,30 @@ exports.getOrderDetails = async (req, res) => {
 
         items: order.items,
 
-        paymentMethod:
-          order.paymentMethod,
+        paymentMethod: order.paymentMethod,
 
-        paymentStatus:
-          order.paymentStatus,
+        paymentStatus: order.paymentStatus,
 
         subtotal: order.subtotal,
-        deliveryFee:
-          order.deliveryFee,
+        deliveryFee: order.deliveryFee,
         tax: order.tax,
-        promoDiscount:
-          order.promoDiscount,
+        promoDiscount: order.promoDiscount,
 
-        totalAmount:
-          order.totalAmount,
+        totalAmount: order.totalAmount,
 
         status: order.status,
 
-        isAssigned:
-          order.isAssigned,
+        isAssigned: order.isAssigned,
 
-        createdAt:
-          order.createdAt,
+        createdAt: order.createdAt,
 
-        updatedAt:
-          order.updatedAt,
+        updatedAt: order.updatedAt,
 
-        acceptedAt:
-          order.acceptedAt,
+        acceptedAt: order.acceptedAt,
       },
     });
   } catch (err) {
-    console.log(
-      "GET ORDER DETAILS ERROR:",
-      err
-    );
+    console.log("GET ORDER DETAILS ERROR:", err);
 
     return res.status(500).json({
       success: false,
@@ -553,8 +484,7 @@ exports.reorder = async (req, res) => {
     let subtotal = 0;
 
     const newItems = oldOrder.items.map((item) => {
-      const total =
-        Number(item.price) * Number(item.quantity);
+      const total = Number(item.price) * Number(item.quantity);
 
       subtotal += total;
 
@@ -575,8 +505,7 @@ exports.reorder = async (req, res) => {
     const tax = oldOrder.tax || 2.5;
     const promoDiscount = 0; // optional: usually reset on reorder
 
-    const totalAmount =
-      subtotal + deliveryFee + tax - promoDiscount;
+    const totalAmount = subtotal + deliveryFee + tax - promoDiscount;
 
     // create new order
     const newOrder = await Order.create({
@@ -612,6 +541,118 @@ exports.reorder = async (req, res) => {
   } catch (err) {
     console.log("REORDER ERROR:", err);
 
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// =======================
+// Track ORDER
+// =======================
+exports.trackOrder = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id).populate(
+      "riderId",
+      "name phone",
+    );
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+
+      tracking: {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        status: order.status,
+
+        rider: order.riderId,
+
+        timeline: {
+          orderPlaced: order.createdAt,
+
+          riderAssigned: order.acceptedAt,
+
+          updatedAt: order.updatedAt,
+        },
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// =======================
+// UPDATE ORDER STATUS
+// =======================
+exports.updateOrderStatus = async (req, res) => {
+  try {
+    const { status } = req.body;
+    const io = getIO();
+
+    const allowedStatuses = [
+      "pending",
+        "confirmed",
+        "preparing",
+        "ongoing",
+        "delivered",
+        "cancelled",
+    ];
+
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid status",
+      });
+    }
+    
+    const order = await Order.findById(req.params.id);
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    order.status = status;
+
+    await order.save();
+
+
+console.log("================================");
+console.log("ORDER STATUS UPDATED");
+console.log("Order ID:", order._id.toString());
+console.log("User ID:", order.userId.toString());
+console.log("Status:", order.status);
+
+io.to(`user_${order.userId}`)
+  .emit("orderStatusUpdated", {
+    orderId: order._id,
+    status: order.status
+  });
+
+console.log(
+  `Event emitted to room: user_${order.userId}`
+);
+console.log("================================");
+
+    return res.status(200).json({
+      success: true,
+      message: "Status updated",
+      order,
+    });
+  } catch (err) {
     return res.status(500).json({
       success: false,
       message: err.message,

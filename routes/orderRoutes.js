@@ -16,7 +16,9 @@ const {
   getRiderOrders,
   markDelivered,
   getOrderDetails,
-  reorder
+  reorder,
+  trackOrder,
+  updateOrderStatus,
 
 } = require("../controllers/orderController");
 
@@ -99,6 +101,21 @@ router.put(
   role("rider"),
   markDelivered
 );
-router.post("/reorder/:id", auth, reorder);
+router.post(
+  "/reorder/:id", 
+  auth, 
+  reorder
+);
+router.get(
+  "/track/:id", 
+  auth, 
+  trackOrder
+);
+// router.put("/status/:id", auth, updateOrderStatus);
+router.patch(
+  "/status/:id",
+  auth,
+  updateOrderStatus
+);
 
 module.exports = router;
