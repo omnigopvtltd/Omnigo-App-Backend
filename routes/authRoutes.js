@@ -84,8 +84,8 @@ router.delete("/location/delete/:userId", deleteUserLocation);
 // ======================================================
 router.post(
   "/admin",
-  // auth,
-  // authorizeRoles("superadmin"),
+  auth,
+  authorizeRoles("superadmin"),
   createAdmin
 );
 
