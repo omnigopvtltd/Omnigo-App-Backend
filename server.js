@@ -6,6 +6,7 @@ const path = require("path");
 const wishlistRoutes =
   require("./routes/wishlistRoutes");
 const feedbackRoutes = require("./routes/feedbackRoutes");
+const chatRoutes = require("./routes/chatRoutes");
 const connectDB = require("./config/db");
 const orderRoutes =
 require("./routes/orderRoutes");
@@ -48,6 +49,7 @@ app.use(
   wishlistRoutes
 );
 app.use("/api/feedback", feedbackRoutes);
+app.use("/api/chat", chatRoutes);
 
 // ================= SOCKET INIT =================
 const io = initSocket(server);
