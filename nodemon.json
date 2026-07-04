@@ -1,0 +1,8 @@
+{
+  "ignore":[
+    "customer.js",
+    "rider.js",
+    "test*.js",
+    "*.log"
+  ]
+}
