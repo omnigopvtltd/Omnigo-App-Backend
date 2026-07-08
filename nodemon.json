@@ -2,6 +2,8 @@
   "ignore":[
     "customer.js",
     "rider.js",
+    "customer-order-track.js",
+    "rider-order-track.js",
     "test*.js",
     "*.log"
   ]

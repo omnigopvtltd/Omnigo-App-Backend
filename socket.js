@@ -25,6 +25,10 @@ const initSocket = (server) => {
   // Chat Socket Sub-module initializes here
   const chatSocket = require("./chatSocket");
   chatSocket(io);
+  
+   // Chat Socket Sub-module initializes here
+  const OrderTrackSocket = require("./order-track-socket");
+  OrderTrackSocket(io);
 
   return io;
 };

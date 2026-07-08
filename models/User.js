@@ -38,6 +38,8 @@ const userSchema = new mongoose.Schema(
       enum: ["superadmin", "admin", "rider", "user"],
       default: "user",
     },
+    //Token for push notifications
+    fcmToken: { type: String, default: null },
 
     // ===============================
     // SERVICE ZONES (INSIDE USER)

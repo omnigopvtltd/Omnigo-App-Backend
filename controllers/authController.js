@@ -573,7 +573,7 @@ exports.signup = [
         });
       }
 
-      const { name, email, password } = req.body;
+      const { name, email, password, role } = req.body;
 
       // CHECK EXISTING USER
       const exists = await User.findOne({ email });
@@ -593,7 +593,7 @@ exports.signup = [
         name,
         email,
         password: hash,
-        role: "user",
+        role: role ||"user",
 
         // ✅ AUTO VERIFIED
         isEmailVerified: true,

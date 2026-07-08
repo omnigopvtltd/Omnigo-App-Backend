@@ -327,6 +327,27 @@ exports.acceptOrder = async (req, res) => {
 
     await order.save();
 
+    // ========================================================
+    // 🌟 ADDED: SOCKET EMIT FOR REAL-TIME RIDER ASSIGNMENT
+    // ========================================================
+    const io = req.app.get("io");
+    if (io) {
+      // 1. Customer ke personal room ko status update bhejein
+      io.to(`user_${order.userId}`).emit("orderStatusUpdated", {
+        orderId: order._id,
+        status: order.status,
+      });
+
+      // 2. Dedicated order tracking room ko event bhejein (Rider details ke sath)
+      io.to(`order_${order._id}`).emit("riderAssignedLive", {
+        orderId: order._id,
+        status: order.status,
+        riderId: order.riderId,
+        acceptedAt: order.acceptedAt,
+      });
+    }
+    //=============================================================
+
     res.status(200).json({
       success: true,
       message: "Order accepted successfully",
@@ -378,6 +399,26 @@ exports.markDelivered = async (req, res) => {
     order.status = "delivered";
 
     await order.save();
+
+    // ========================================================
+    // 🌟 ADDED: SOCKET EMIT FOR REAL-TIME DELIVERY STATUS
+    // ========================================================
+    const io = req.app.get("io");
+    if (io) {
+      // Customer ko timeline update bhejein
+      io.to(`order_${order._id}`).emit("orderTrackingStatusLive", {
+        orderId: order._id,
+        status: order.status,
+        updatedAt: new Date(),
+      });
+
+      // Global status change alert
+      io.to(`user_${order.userId}`).emit("orderStatusUpdated", {
+        orderId: order._id,
+        status: order.status,
+      });
+    }
+    // ========================================================
 
     res.status(200).json({
       success: true,
@@ -572,6 +613,7 @@ exports.trackOrder = async (req, res) => {
         orderId: order._id,
         orderNumber: order.orderNumber,
         status: order.status,
+        location: order.address.address || null,
 
         rider: order.riderId,
 
@@ -595,57 +637,121 @@ exports.trackOrder = async (req, res) => {
 // =======================
 // UPDATE ORDER STATUS
 // =======================
+// exports.updateOrderStatus = async (req, res) => {
+//   try {
+//     const { status } = req.body;
+//     const io = getIO();
+
+//     const allowedStatuses = [
+//       "pending",
+//         "confirmed",
+//         "preparing",
+//         "ongoing",
+//         "delivered",
+//         "cancelled",
+//     ];
+
+//     if (!allowedStatuses.includes(status)) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid status",
+//       });
+//     }
+
+//     const order = await Order.findById(req.params.id);
+
+//     if (!order) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Order not found",
+//       });
+//     }
+
+//     order.status = status;
+
+//     await order.save();
+
+// console.log("================================");
+// console.log("ORDER STATUS UPDATED");
+// console.log("Order ID:", order._id.toString());
+// console.log("User ID:", order.userId.toString());
+// console.log("Status:", order.status);
+
+// io.to(`user_${order.userId}`)
+//   .emit("orderStatusUpdated", {
+//     orderId: order._id,
+//     status: order.status
+//   });
+
+// console.log(
+//   `Event emitted to room: user_${order.userId}`
+// );
+// console.log("================================");
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Status updated",
+//       order,
+//     });
+//   } catch (err) {
+//     return res.status(500).json({
+//       success: false,
+//       message: err.message,
+//     });
+//   }
+// };
+// =======================
+// UPDATE ORDER STATUS
+// =======================
 exports.updateOrderStatus = async (req, res) => {
   try {
     const { status } = req.body;
-    const io = getIO();
+
+    // Ensure ke app.set('io') Express se link ho raha hai
+    const io = req.app.get("io");
 
     const allowedStatuses = [
       "pending",
-        "confirmed",
-        "preparing",
-        "ongoing",
-        "delivered",
-        "cancelled",
+      "confirmed",
+      "preparing",
+      "ongoing",
+      "delivered",
+      "cancelled",
     ];
-
     if (!allowedStatuses.includes(status)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid status",
-      });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid status" });
     }
-    
-    const order = await Order.findById(req.params.id);
 
+    const order = await Order.findById(req.params.id);
     if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: "Order not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
     }
 
     order.status = status;
-
     await order.save();
 
+    console.log("================================");
+    console.log("ORDER STATUS UPDATED:", order._id.toString());
 
-console.log("================================");
-console.log("ORDER STATUS UPDATED");
-console.log("Order ID:", order._id.toString());
-console.log("User ID:", order.userId.toString());
-console.log("Status:", order.status);
+    // 1️⃣ Global User Channel Event (Aapka existing logic)
+    io.to(`user_${order.userId}`).emit("orderStatusUpdated", {
+      orderId: order._id,
+      status: order.status,
+    });
 
-io.to(`user_${order.userId}`)
-  .emit("orderStatusUpdated", {
-    orderId: order._id,
-    status: order.status
-  });
+    // 2️⃣ 🌟 ADDED: Dedicated Order Tracking Room Event (Real-time Timeline screen update ke liye)
+    io.to(`order_${order._id}`).emit("orderTrackingStatusLive", {
+      orderId: order._id,
+      status: order.status,
+      updatedAt: new Date(),
+    });
 
-console.log(
-  `Event emitted to room: user_${order.userId}`
-);
-console.log("================================");
+    console.log(`Event emitted to specific tracking room: order_${order._id}`);
+    console.log("================================");
 
     return res.status(200).json({
       success: true,
@@ -653,9 +759,6 @@ console.log("================================");
       order,
     });
   } catch (err) {
-    return res.status(500).json({
-      success: false,
-      message: err.message,
-    });
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
