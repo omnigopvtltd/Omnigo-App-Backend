@@ -1,7 +1,7 @@
 const Order = require("../models/Order");
 const Cart = require("../models/Cart");
 const User = require("../models/User");
-
+const sendNotification = require("../utils/sendNotification");
 // =====================================
 // CREATE ORDER
 // =====================================
@@ -355,6 +355,9 @@ exports.getAvailableOrders = async (req, res) => {
   }
 };
 
+
+
+
 exports.acceptOrder = async (req, res) => {
   try {
     const order = await Order.findOne({
@@ -370,6 +373,9 @@ exports.acceptOrder = async (req, res) => {
       });
     }
 
+    // Rider ki details lo
+    const rider = await User.findById(req.user.id);
+
     order.riderId = req.user.id;
     order.isAssigned = true;
     order.acceptedAt = new Date();
@@ -377,10 +383,32 @@ exports.acceptOrder = async (req, res) => {
 
     await order.save();
 
+    const customer = await User.findById(order.userId);
+
+    if (customer?.fcmToken) {
+      await sendNotification(
+        customer.fcmToken,
+        "Order Accepted",
+        `Rider ${rider.name} has accepted your order #${order.orderNumber}`,
+        {
+          riderId: rider._id.toString(),
+          riderName: rider.name || "",
+          riderEmail: rider.email || "",
+          riderPhone: rider.phone || "",
+        }
+      );
+    }
+
     res.status(200).json({
       success: true,
       message: "Order accepted successfully",
       order,
+      rider: {
+        id: rider._id,
+        name: rider.name,
+        email: rider.email,
+        phone: rider.phone,
+      },
     });
   } catch (err) {
     res.status(500).json({
@@ -471,10 +499,10 @@ exports.getOrderDetails = async (req, res) => {
 
         rider: order.riderId
           ? {
-              ...order.riderId.toObject(),
-              assignedAt:
-                order.acceptedAt,
-            }
+            ...order.riderId.toObject(),
+            assignedAt:
+              order.acceptedAt,
+          }
           : null,
 
         address: order.address,

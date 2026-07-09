@@ -9,6 +9,7 @@ const feedbackRoutes = require("./routes/feedbackRoutes");
 const connectDB = require("./config/db");
 const orderRoutes =
 require("./routes/orderRoutes");
+require("./config/firebase");
 
 
 //  SOCKET

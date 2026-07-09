@@ -143,7 +143,21 @@ const generateOtp = () => {
 //     });
 //   }
 // };
+//---------------------------- Save token ----------------------------------------
 
+exports.saveToken = async (req, res) => {
+  const { fcmToken } = req.body;
+
+  await User.findByIdAndUpdate(
+    req.user.id,
+    { fcmToken }
+  );
+
+  res.status(200).json({
+    success: true,
+    message: "Token saved",
+  });
+};
 exports.sendOTP = async (req, res) => {
   try {
 
@@ -1591,6 +1605,163 @@ exports.setDefaultAddress = async (req, res) => {
         role: user.role,
       },
       addresses: user.addresses,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+
+
+//------------------------------------  Rider Otps -------------------------------------
+
+exports.sendRiderOTP = async (req, res) => {
+  try {
+    const { phone, password } = req.body;
+
+    if (!phone || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "phone and password required",
+      });
+    }
+
+    const rider = await User.findOne({
+      phone,
+      role: "rider",
+    });
+
+    if (!rider) {
+      return res.status(404).json({
+        success: false,
+        message: "Rider not found",
+      });
+    }
+
+    const match = await bcrypt.compare(
+      password,
+      rider.password
+    );
+
+    if (!match) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid password",
+      });
+    }
+
+    const otp = generateOtp();
+
+    await OTP.findOneAndUpdate(
+      {
+        phone,
+        purpose: "rider-login",
+      },
+      {
+        userId: rider._id,
+        phone,
+        otp,
+        type: "phone",
+        purpose: "rider-login",
+        verified: false,
+        isUsed: false,
+        expiresAt: Date.now() + 5 * 60 * 1000,
+      },
+      {
+        upsert: true,
+        new: true,
+      }
+    );
+
+    console.log("RIDER OTP:", otp);
+
+    return res.status(200).json({
+      success: true,
+      message: "OTP sent successfully",
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};     
+
+
+
+exports.verifyRiderOTP = async (req, res) => {
+  try {
+    const { phone, otp } = req.body;
+
+    if (!phone || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: "phone and otp required",
+      });
+    }
+
+    const record = await OTP.findOne({
+      phone,
+      purpose: "rider-login",
+    });
+
+    if (!record) {
+      return res.status(400).json({
+        success: false,
+        message: "OTP not found",
+      });
+    }
+
+    if (record.expiresAt < Date.now()) {
+      return res.status(400).json({
+        success: false,
+        message: "OTP expired",
+      });
+    }
+
+    if (record.otp !== otp) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid OTP",
+      });
+    }
+
+    record.verified = true;
+    record.isUsed = true;
+
+    await record.save();
+
+    const rider = await User.findOne({
+      _id: record.userId,
+      role: "rider",
+    });
+
+    if (!rider) {
+      return res.status(404).json({
+        success: false,
+        message: "Rider not found",
+      });
+    }
+
+    rider.lastLogin = new Date();
+    await rider.save();
+
+    const token = generateToken(rider);
+
+    return res.status(200).json({
+      success: true,
+      message: "Rider login successful",
+      token,
+      rider: {
+        id: rider._id,
+        name: rider.name,
+        email: rider.email,
+        phone: rider.phone,
+        role: rider.role,
+      },
     });
   } catch (err) {
     return res.status(500).json({

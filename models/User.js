@@ -15,7 +15,10 @@ const userSchema = new mongoose.Schema(
     },
 
     password: { type: String, default: null },
-
+    fcmToken: {
+      type: String,
+      default: "",
+    },
     phone: {
       type: String,
       unique: true,
