@@ -28,9 +28,10 @@ const {
   // ADMIN / RIDER
   createAdmin,
   createRider,
-sendRiderOTP,
-verifyRiderOTP,
+  sendRiderOTP,
+  verifyRiderOTP,
   saveToken,
+  completeRiderProfile,
 
   // PASSWORD FLOW
   forgotPassword,
@@ -113,6 +114,12 @@ router.post(
 router.post("/rider/send-otp", sendRiderOTP);
 
 router.post("/rider/verify-otp", verifyRiderOTP);
+
+
+router.post(
+  "/rider/complete-profile",
+  completeRiderProfile
+);
 
 // ======================================================
 // PASSWORD RESET FLOW

@@ -1770,3 +1770,63 @@ exports.verifyRiderOTP = async (req, res) => {
     });
   }
 };
+
+exports.completeRiderProfile = async (req, res) => {
+  try {
+    const {
+      riderId,
+      name,
+      email,
+      phone,
+      cnicNumber,
+      paymentMethod,
+      vehicleNumber,
+      drivingLicenseNumber,
+      vehicleCategory,
+      vehicleModel,
+      profilePicture,
+      vehiclePicture
+    } = req.body;
+
+    const rider = await User.findById(riderId);
+
+    if (!rider || rider.role !== "rider") {
+      return res.status(404).json({
+        success: false,
+        message: "Rider not found"
+      });
+    }
+
+    rider.name = name;
+    rider.email = email;
+    rider.phone = phone;
+
+    rider.cnicNumber = cnicNumber;
+    rider.paymentMethod = paymentMethod;
+
+    rider.vehicleNumber = vehicleNumber;
+    rider.drivingLicenseNumber = drivingLicenseNumber;
+
+    rider.vehicleCategory = vehicleCategory;
+    rider.vehicleModel = vehicleModel;
+
+    rider.profilePicture = profilePicture;
+    rider.vehiclePicture = vehiclePicture;
+
+    rider.isProfileCompleted = true;
+
+    await rider.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Rider profile completed successfully",
+      rider
+    });
+
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message
+    });
+  }
+};

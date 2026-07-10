@@ -27,6 +27,29 @@ const userSchema = new mongoose.Schema(
       default: null,
     },
 
+    cnicNumber: String,
+    profilePicture: String,
+
+    paymentMethod: {
+      type: String,
+      enum: ["cash", "jazzcash", "easypaisa", "bank"]
+    },
+
+    vehicleNumber: String,
+    drivingLicenseNumber: String,
+
+    vehicleCategory: {
+      type: String,
+      enum: ["bike", "car", "van"]
+    },
+
+    vehicleModel: String,
+    vehiclePicture: String,
+
+    isProfileCompleted: {
+      type: Boolean,
+      default: false
+    },
     // SOCIAL LOGIN
     googleId: { type: String, default: null },
     facebookId: { type: String, default: null },
