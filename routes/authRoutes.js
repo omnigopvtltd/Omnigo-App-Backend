@@ -115,9 +115,9 @@ router.post("/rider/send-otp", sendRiderOTP);
 
 router.post("/rider/verify-otp", verifyRiderOTP);
 
-
-router.post(
-  "/rider/complete-profile",
+router.put(
+  "/complete-profile",
+  auth,
   completeRiderProfile
 );
 

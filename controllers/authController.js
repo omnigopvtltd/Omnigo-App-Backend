@@ -1770,22 +1770,24 @@ exports.verifyRiderOTP = async (req, res) => {
     });
   }
 };
-
 exports.completeRiderProfile = async (req, res) => {
   try {
+    const riderId = req.user.id; // Token se rider id
+
     const {
-      riderId,
       name,
       email,
       phone,
       cnicNumber,
+      cnicPicture,
       paymentMethod,
       vehicleNumber,
       drivingLicenseNumber,
-      vehicleCategory,
+      drivingLicensePicture,
       vehicleModel,
+      vehicleEngineSize,
       profilePicture,
-      vehiclePicture
+      vehiclePicture,
     } = req.body;
 
     const rider = await User.findById(riderId);
@@ -1793,23 +1795,32 @@ exports.completeRiderProfile = async (req, res) => {
     if (!rider || rider.role !== "rider") {
       return res.status(404).json({
         success: false,
-        message: "Rider not found"
+        message: "Rider not found",
       });
     }
 
+    // Personal Information
     rider.name = name;
     rider.email = email;
     rider.phone = phone;
 
+    // CNIC
     rider.cnicNumber = cnicNumber;
+    rider.cnicPicture = cnicPicture;
+
+    // Payment
     rider.paymentMethod = paymentMethod;
 
+    // Vehicle
     rider.vehicleNumber = vehicleNumber;
-    rider.drivingLicenseNumber = drivingLicenseNumber;
-
-    rider.vehicleCategory = vehicleCategory;
     rider.vehicleModel = vehicleModel;
+    rider.vehicleEngineSize = vehicleEngineSize;
 
+    // License
+    rider.drivingLicenseNumber = drivingLicenseNumber;
+    rider.drivingLicensePicture = drivingLicensePicture;
+
+    // Images
     rider.profilePicture = profilePicture;
     rider.vehiclePicture = vehiclePicture;
 
@@ -1820,13 +1831,12 @@ exports.completeRiderProfile = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Rider profile completed successfully",
-      rider
+      rider,
     });
-
   } catch (err) {
     return res.status(500).json({
       success: false,
-      message: err.message
+      message: err.message,
     });
   }
 };
