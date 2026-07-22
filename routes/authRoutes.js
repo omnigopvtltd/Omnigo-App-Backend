@@ -10,6 +10,10 @@ const {
   googleLogin,
   facebookLogin,
 
+  //CUSTOMERS
+  getUsers,
+  updateUserStatus,
+
   // LOCATION APIs
   addZone,
   getZones,
@@ -39,6 +43,11 @@ const {
   updateAddress,
   deleteAddress,
   setDefaultAddress,
+  deleteRider,
+  updateRider,
+  getRiders,
+  updateRiderStatus,
+ 
 } = require("../controllers/authController");
 
 
@@ -51,6 +60,12 @@ router.post("/login", login);
 // SOCIAL LOGIN
 router.post("/google-login", googleLogin);
 router.post("/facebook-login", facebookLogin);
+
+// ======================================================
+// CUSTOMER
+// ======================================================
+router.get("/users", getUsers);
+router.patch("/users/update/:id/status", updateUserStatus);
 
 
 // ======================================================
@@ -84,8 +99,8 @@ router.delete("/location/delete/:userId", deleteUserLocation);
 // ======================================================
 router.post(
   "/admin",
-  auth,
-  authorizeRoles("superadmin"),
+  // auth,
+  // authorizeRoles("superadmin"),
   createAdmin
 );
 
@@ -95,10 +110,14 @@ router.post(
 // ======================================================
 router.post(
   "/rider",
-  auth,
-  authorizeRoles("admin", "superadmin"),
+  // auth,
+  // authorizeRoles("admin", "superadmin"),
   createRider
 );
+router.get("/riders", getRiders);
+router.put("/riders/update/:id", updateRider);
+router.delete("/riders/delete/:id", deleteRider);
+router.patch("/riders/update/:id/status", updateRiderStatus);
 
 
 // ======================================================

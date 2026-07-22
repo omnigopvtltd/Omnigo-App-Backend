@@ -10,6 +10,13 @@ const chatRoutes = require("./routes/chatRoutes");
 const connectDB = require("./config/db");
 const orderRoutes =
 require("./routes/orderRoutes");
+const restaurantRoutes =
+require("./routes/restaurantRoutes");
+const couponRoutes =
+require("./routes/couponRoutes");
+const campaignRoutes =
+require("./routes/campaignRoutes");
+const financeRoutes = require("./routes/financeRoutes");
 
 
 //  SOCKET
@@ -34,10 +41,31 @@ app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/products", require("./routes/productRoutes"));
 app.use("/api/cart", require("./routes/cartRoutes"));
 
+// ================= RIDERS =================
+app.use("/api/admin", require("./routes/adminRoutes"));
+
+// ================= RIDERS =================
+app.use("/api/riders", require("./routes/riderRoutes"));
+app.use("/api/riders/verification", require("./routes/riderVerificationRoutes"));
+app.use("/api/riders/wallet", require("./routes/riderWalletRoutes"));
+app.use("/api/riders/orders", require("./routes/riderOrderFlowRoutes"));
+app.use("/api/riders/sessions", require("./routes/riderSessionRoutes"));
+// ================= Payments =================
+const paymentRoutes = require("./routes/paymentRoutes");
+app.use("/api/payments", paymentRoutes);
+app.use("/api/finance", financeRoutes);
+// ================= Tracking  =================
+const trackingRoutes = require("./routes/trackingRoutes");
+const AdminSettings = require("./models/AdminSettings");
+app.use("/api/tracking", trackingRoutes);
 
 app.use(
   "/api/orders",
   orderRoutes
+);
+app.use(
+  "/api/restaurants",
+  restaurantRoutes
 );
 
 app.use(
@@ -50,6 +78,10 @@ app.use(
 );
 app.use("/api/feedback", feedbackRoutes);
 app.use("/api/chat", chatRoutes);
+app.use("/api/coupons", couponRoutes);
+app.use("/api/campaigns", campaignRoutes);
+app.use("/api/settings", AdminSettings);
+
 
 // ================= SOCKET INIT =================
 const io = initSocket(server);

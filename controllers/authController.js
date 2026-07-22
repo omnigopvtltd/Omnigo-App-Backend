@@ -12,12 +12,10 @@ const nodemailer = require("nodemailer");
 const { OAuth2Client } = require("google-auth-library");
 const { body, validationResult } = require("express-validator");
 
-
 // ======================================================
 // GOOGLE CLIENT
 // ======================================================
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-
 
 // ======================================================
 // NODEMAILER
@@ -30,18 +28,14 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-
 // ======================================================
 // GENERATE TOKEN
 // ======================================================
 const generateToken = (user) => {
-  return jwt.sign(
-    { id: user._id, role: user.role },
-    process.env.JWT_SECRET,
-    { expiresIn: "7d" }
-  );
+  return jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
+    expiresIn: "7d",
+  });
 };
-
 
 // ======================================================
 // SEND RESPONSE
@@ -83,7 +77,6 @@ const sendResponse = (res, message, user) => {
 const generateOtp = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
-
 
 // ======================================================
 // PHONE OTP
@@ -146,29 +139,16 @@ const generateOtp = () => {
 
 exports.sendOTP = async (req, res) => {
   try {
+    const { userId, type, value, purpose } = req.body;
 
-    const {
-      userId,
-      type,
-      value,
-      purpose,
-    } = req.body;
-
-    if (
-      !userId ||
-      !type ||
-      !value ||
-      !purpose
-    ) {
+    if (!userId || !type || !value || !purpose) {
       return res.status(400).json({
         success: false,
-        message:
-          "userId, type, value and purpose required",
+        message: "userId, type, value and purpose required",
       });
     }
 
-    const user =
-      await User.findById(userId);
+    const user = await User.findById(userId);
 
     if (!user) {
       return res.status(404).json({
@@ -186,9 +166,7 @@ exports.sendOTP = async (req, res) => {
       purpose,
       verified: false,
       isUsed: false,
-      expiresAt:
-        Date.now() +
-        5 * 60 * 1000,
+      expiresAt: Date.now() + 5 * 60 * 1000,
     };
 
     if (type === "phone") {
@@ -208,11 +186,10 @@ exports.sendOTP = async (req, res) => {
       {
         upsert: true,
         new: true,
-      }
+      },
     );
 
     if (type === "email") {
-
       await transporter.sendMail({
         from: process.env.EMAIL_USER,
         to: value,
@@ -224,34 +201,24 @@ exports.sendOTP = async (req, res) => {
         `,
       });
 
-      console.log(
-        `${purpose} EMAIL OTP:`,
-        otp
-      );
+      console.log(`${purpose} EMAIL OTP:`, otp);
     }
 
     if (type === "phone") {
-      console.log(
-        `${purpose} PHONE OTP:`,
-        otp
-      );
+      console.log(`${purpose} PHONE OTP:`, otp);
     }
 
     return res.status(200).json({
       success: true,
       message: "OTP sent successfully",
     });
-
   } catch (err) {
-
     return res.status(500).json({
       success: false,
       message: err.message,
     });
-
   }
 };
-
 
 // ======================================================
 // VERIFY PHONE OTP
@@ -305,7 +272,7 @@ exports.sendOTP = async (req, res) => {
 //     }
 
 //     user.phone = phone;
-//     user.isPhoneVerified = true; 
+//     user.isPhoneVerified = true;
 //     await user.save();
 
 //     return res.json({
@@ -324,30 +291,19 @@ exports.sendOTP = async (req, res) => {
 
 exports.verifyOTP = async (req, res) => {
   try {
+    const { userId, otp, purpose } = req.body;
 
-    const {
-      userId,
-      otp,
-      purpose,
-    } = req.body;
-
-    if (
-      !userId ||
-      !otp ||
-      !purpose
-    ) {
+    if (!userId || !otp || !purpose) {
       return res.status(400).json({
         success: false,
-        message:
-          "userId, otp, purpose required",
+        message: "userId, otp, purpose required",
       });
     }
 
-    const record =
-      await OTP.findOne({
-        userId,
-        purpose,
-      });
+    const record = await OTP.findOne({
+      userId,
+      purpose,
+    });
 
     if (!record) {
       return res.status(400).json({
@@ -356,19 +312,14 @@ exports.verifyOTP = async (req, res) => {
       });
     }
 
-    if (
-      record.expiresAt <
-      Date.now()
-    ) {
+    if (record.expiresAt < Date.now()) {
       return res.status(400).json({
         success: false,
         message: "OTP expired",
       });
     }
 
-    if (
-      record.otp !== otp
-    ) {
+    if (record.otp !== otp) {
       return res.status(400).json({
         success: false,
         message: "Invalid OTP",
@@ -379,8 +330,7 @@ exports.verifyOTP = async (req, res) => {
 
     await record.save();
 
-    const user =
-      await User.findById(userId);
+    const user = await User.findById(userId);
 
     if (!user) {
       return res.status(404).json({
@@ -389,52 +339,37 @@ exports.verifyOTP = async (req, res) => {
       });
     }
 
-    if (
-      purpose ===
-      "phone-verification"
-    ) {
+    if (purpose === "phone-verification") {
+      user.phone = record.phone;
 
-      user.phone =
-        record.phone;
-
-      user.isPhoneVerified =
-        true;
+      user.isPhoneVerified = true;
 
       await user.save();
 
       return res.json({
         success: true,
-        message:
-          "Phone verified successfully",
+        message: "Phone verified successfully",
         user,
       });
     }
 
-    if (
-      purpose ===
-      "forgot-password"
-    ) {
+    if (purpose === "forgot-password") {
       return res.json({
         success: true,
         userId,
-        message:
-          "OTP verified successfully",
+        message: "OTP verified successfully",
       });
     }
 
     return res.json({
       success: true,
-      message:
-        "OTP verified successfully",
+      message: "OTP verified successfully",
     });
-
   } catch (err) {
-
     return res.status(500).json({
       success: false,
       message: err.message,
     });
-
   }
 };
 // ======================================================
@@ -494,8 +429,6 @@ exports.verifyOTP = async (req, res) => {
 //   }
 // };
 
-
-
 // ======================================================
 // VERIFY EMAIL OTP (FIXED BUG BRACE)
 // ======================================================
@@ -553,7 +486,6 @@ exports.verifyOTP = async (req, res) => {
 //   }
 // };
 
-
 // ======================================================
 // SIGNUP
 // ======================================================
@@ -600,7 +532,6 @@ exports.signup = [
       });
 
       return sendResponse(res, "Signup successful", user);
-
     } catch (err) {
       return res.status(500).json({
         success: false,
@@ -610,13 +541,11 @@ exports.signup = [
   },
 ];
 
-
 // ======================================================
 // LOGIN
 // ======================================================
 exports.login = async (req, res) => {
   try {
-
     const { email, password } = req.body;
 
     // FIND USER
@@ -648,17 +577,13 @@ exports.login = async (req, res) => {
     await user.save();
 
     return sendResponse(res, "Login successful", user);
-
   } catch (err) {
-
     return res.status(500).json({
       success: false,
       message: err.message,
     });
-
   }
 };
-
 
 // ======================================================
 // GOOGLE LOGIN
@@ -694,7 +619,6 @@ exports.googleLogin = async (req, res) => {
   }
 };
 
-
 // ======================================================
 // FACEBOOK LOGIN
 // ======================================================
@@ -703,7 +627,7 @@ exports.facebookLogin = async (req, res) => {
     const { accessToken } = req.body;
 
     const response = await axios.get(
-      `https://graph.facebook.com/me?fields=id,name,email&access_token=${accessToken}`
+      `https://graph.facebook.com/me?fields=id,name,email&access_token=${accessToken}`,
     );
 
     const { id, name, email } = response.data;
@@ -727,7 +651,6 @@ exports.facebookLogin = async (req, res) => {
     });
   }
 };
-
 
 // ======================================================
 // LOCATION (FIXED)
@@ -759,7 +682,6 @@ exports.enableCurrentLocation = async (req, res) => {
   }
 };
 
-
 // ======================================================
 // MANUAL LOCATION
 // ======================================================
@@ -790,7 +712,6 @@ exports.selectManualLocation = async (req, res) => {
   }
 };
 
-
 // ======================================================
 // ADMIN
 // ======================================================
@@ -813,7 +734,6 @@ exports.createAdmin = async (req, res) => {
     return res.status(500).json({ message: err.message });
   }
 };
-
 
 // ======================================================
 // RIDER
@@ -855,7 +775,7 @@ exports.createRider = async (req, res) => {
       process.env.JWT_SECRET,
       {
         expiresIn: "30d",
-      }
+      },
     );
 
     return res.status(201).json({
@@ -878,6 +798,163 @@ exports.createRider = async (req, res) => {
   }
 };
 
+// ==========================================
+// 1. GET ALL RIDERS (With Search & Status)
+// ==========================================
+exports.getRiders = async (req, res) => {
+  try {
+    const { search, status } = req.query;
+
+    // Sirf riders ko fetch karna hai
+    const filter = { role: "rider" };
+
+    // Status filtering
+    if (status && status !== "all") {
+      if (status === "blocked") filter.isBlocked = true;
+      if (status === "active") filter.isBlocked = false;
+    }
+
+    // Search query (Name, Email, or Phone)
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { phone: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    const riders = await User.find(filter).sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      riders,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ==========================================
+// 2. UPDATE RIDER (Basic Info & Service Zones)
+// ==========================================
+exports.updateRider = async (req, res) => {
+  try {
+    const { name, email, phone, serviceZones, location } = req.body;
+    const { id } = req.params;
+
+    // Email or Phone conflict check (excluing current rider)
+    const conflict = await User.findOne({
+      _id: { $ne: id },
+      $or: [{ email }, { phone }],
+    });
+
+    if (conflict) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Email or phone number is already registered to another account",
+      });
+    }
+
+    const updatedRider = await User.findByIdAndUpdate(
+      id,
+      {
+        $set: {
+          name,
+          email,
+          phone,
+          serviceZones,
+          location,
+        },
+      },
+      { new: true, runValidators: true },
+    );
+
+    if (!updatedRider) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Rider not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Rider details updated successfully",
+      rider: updatedRider,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// =====================================
+// UPDATE Rider STATUS (unblock / block)
+// =====================================
+exports.updateRiderStatus = async (req, res) => {
+  try {
+    const { isBlocked } = req.body;
+console.log(isBlocked);
+
+    // Check if isBlocked is explicitly a boolean
+    if (typeof isBlocked !== "boolean") {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid payload. 'isBlocked' must be a boolean value (true/false).",
+      });
+    }
+
+    const updatedRider = await User.findOneAndUpdate(
+      { _id: req.params.id, role: "rider" },
+      { $set: { isBlocked } },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedRider) {
+      return res.status(404).json({
+        success: false,
+        message: "Rider not found or user is not a rider.",
+      });
+    }
+
+    const statusText = isBlocked ? "blocked" : "unblocked";
+
+    return res.status(200).json({
+      success: true,
+      message: `Rider account has been successfully ${statusText}.`,
+      user: updatedRider,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// ==========================================
+// 3. DELETE RIDER
+// ==========================================
+exports.deleteRider = async (req, res) => {
+  try {
+    const rider = await User.findOneAndDelete({
+      _id: req.params.id,
+      role: "rider",
+    });
+
+    if (!rider) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Rider not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Rider account deleted successfully",
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 // ======================================================
 // FORGOT PASSWORD - SEND OTP
 // ======================================================
@@ -893,10 +970,7 @@ exports.forgotPassword = async (req, res) => {
     }
 
     const user = await User.findOne({
-      $or: [
-        ...(email ? [{ email }] : []),
-        ...(phone ? [{ phone }] : []),
-      ],
+      $or: [...(email ? [{ email }] : []), ...(phone ? [{ phone }] : [])],
     });
 
     if (!user) {
@@ -910,7 +984,6 @@ exports.forgotPassword = async (req, res) => {
 
     // EMAIL OTP
     if (email) {
-
       await OTP.findOneAndUpdate(
         {
           userId: user._id,
@@ -926,7 +999,7 @@ exports.forgotPassword = async (req, res) => {
           isUsed: false,
           expiresAt: Date.now() + 5 * 60 * 1000,
         },
-        { upsert: true, new: true }
+        { upsert: true, new: true },
       );
 
       await transporter.sendMail({
@@ -952,7 +1025,6 @@ exports.forgotPassword = async (req, res) => {
 
     // PHONE OTP
     if (phone) {
-
       await OTP.findOneAndUpdate(
         {
           userId: user._id,
@@ -968,7 +1040,7 @@ exports.forgotPassword = async (req, res) => {
           isUsed: false,
           expiresAt: Date.now() + 5 * 60 * 1000,
         },
-        { upsert: true, new: true }
+        { upsert: true, new: true },
       );
 
       console.log("PHONE RESET OTP:", otp);
@@ -980,7 +1052,6 @@ exports.forgotPassword = async (req, res) => {
         message: "OTP sent to phone",
       });
     }
-
   } catch (err) {
     return res.status(500).json({
       success: false,
@@ -1051,7 +1122,6 @@ exports.verifyForgotPasswordOTP = async (req, res) => {
       userId: user._id, // ✅ USER ID
       message: "OTP verified successfully",
     });
-
   } catch (err) {
     return res.status(500).json({
       success: false,
@@ -1059,7 +1129,6 @@ exports.verifyForgotPasswordOTP = async (req, res) => {
     });
   }
 };
-
 
 // ======================================================
 // RESET PASSWORD
@@ -1118,7 +1187,6 @@ exports.resetPassword = async (req, res) => {
       userId: user._id, // ✅ USER ID
       message: "Password reset successful",
     });
-
   } catch (err) {
     return res.status(500).json({
       success: false,
@@ -1126,7 +1194,6 @@ exports.resetPassword = async (req, res) => {
     });
   }
 };
-
 
 exports.addZone = async (req, res) => {
   try {
@@ -1149,10 +1216,7 @@ exports.addZone = async (req, res) => {
     if (existingZone) {
       if (areas && areas.length > 0) {
         existingZone.areas = [
-          ...new Set([
-            ...existingZone.areas,
-            ...areas.map(a => a.trim()),
-          ]),
+          ...new Set([...existingZone.areas, ...areas.map((a) => a.trim())]),
         ];
       }
 
@@ -1170,7 +1234,7 @@ exports.addZone = async (req, res) => {
     // =========================
     const newZone = await Zone.create({
       zone: zone.trim(),
-      areas: (areas || []).map(a => a.trim()),
+      areas: (areas || []).map((a) => a.trim()),
       isActive: true,
     });
 
@@ -1179,7 +1243,6 @@ exports.addZone = async (req, res) => {
       message: "Zone added successfully",
       zone: newZone,
     });
-
   } catch (err) {
     return res.status(500).json({
       success: false,
@@ -1196,7 +1259,6 @@ exports.getZones = async (req, res) => {
       success: true,
       zones,
     });
-
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -1231,7 +1293,6 @@ exports.checkServiceability = async (req, res) => {
       zone,
       area,
     });
-
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -1242,7 +1303,9 @@ exports.saveManualLocation = async (req, res) => {
 
     const user = await User.findById(userId);
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
     }
 
     const zoneData = await Zone.findOne({ zone });
@@ -1271,7 +1334,6 @@ exports.saveManualLocation = async (req, res) => {
       message: "Location saved",
       location: user.location,
     });
-
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -1309,7 +1371,6 @@ exports.saveAutoLocation = async (req, res) => {
       message: "Auto location saved",
       location: user.location,
     });
-
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -1320,14 +1381,15 @@ exports.getUserLocation = async (req, res) => {
     const user = await User.findById(req.params.userId);
 
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
     }
 
     return res.json({
       success: true,
       location: user.location,
     });
-
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -1338,7 +1400,9 @@ exports.deleteUserLocation = async (req, res) => {
     const user = await User.findById(req.params.userId);
 
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
     }
 
     user.location = {
@@ -1356,23 +1420,14 @@ exports.deleteUserLocation = async (req, res) => {
       success: true,
       message: "Location deleted",
     });
-
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
 };
 
-
 exports.addAddress = async (req, res) => {
   try {
-    const {
-      phone,
-      address,
-      city,
-      zipCode,
-      country,
-      isSave,
-    } = req.body;
+    const { phone, address, city, zipCode, country, isSave } = req.body;
 
     const user = await User.findById(req.user.id);
 
@@ -1389,10 +1444,7 @@ exports.addAddress = async (req, res) => {
       city,
       zipCode,
       country,
-      isSave:
-        typeof isSave === "boolean"
-          ? isSave
-          : false,
+      isSave: typeof isSave === "boolean" ? isSave : false,
     });
 
     await user.save();
@@ -1437,10 +1489,9 @@ exports.getAddresses = async (req, res) => {
       });
     }
 
-    const savedAddresses =
-      user.addresses.filter(
-        (addr) => addr.isSave === true
-      );
+    const savedAddresses = user.addresses.filter(
+      (addr) => addr.isSave === true,
+    );
 
     return res.json({
       success: true,
@@ -1591,6 +1642,78 @@ exports.setDefaultAddress = async (req, res) => {
         role: user.role,
       },
       addresses: user.addresses,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// =======================
+// Get All Users
+// =======================
+exports.getUsers = async (req, res) => {
+  try {
+    const { status, search } = req.query;
+
+    // 👇 Direct role 'user' filter add kar dein taake admins/riders na aein
+    const filter = { role: "user" };
+
+    if (status && status !== "all") {
+      // isBlocked status handle karne ke liye (agar dynamic state query ho)
+      if (status === "blocked") filter.isBlocked = true;
+      if (status === "active") filter.isBlocked = false;
+    }
+
+    const users = await User.find(filter).sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      users,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// =====================================
+// UPDATE USER STATUS (unblock / block)
+// =====================================
+exports.updateUserStatus = async (req, res) => {
+  try {
+    const { isBlocked } = req.body;
+    console.log("Status", isBlocked);
+    // const allowedStatuses = ["blocked", "unblock", "blocked"];
+
+    // if (!allowedStatuses.includes(status)) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Invalid status",
+    //   });
+    // }
+
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { isBlocked },
+      { new: true },
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `User marked as ${isBlocked}`,
+      user,
     });
   } catch (err) {
     return res.status(500).json({

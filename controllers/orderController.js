@@ -194,6 +194,30 @@ exports.cancelOrder = async (req, res) => {
       });
     }
 
+    // NEW — refund any wallet float the rider fronted for this order
+    if (order.riderId && order.riderFloatAmount > 0 && !order.riderFloatSettled) {
+      const User = require("../models/User");
+      const WalletTransaction = require("../models/WalletTransaction");
+
+      const rider = await User.findById(order.riderId);
+      if (rider) {
+        const newBalance = (rider.wallet?.balance || 0) + order.riderFloatAmount;
+        rider.wallet = { balance: newBalance };
+        await rider.save();
+
+        await WalletTransaction.create({
+          userId: rider._id,
+          type: "credit",
+          amount: order.riderFloatAmount,
+          reason: `Float refunded — ${order.orderNumber} was cancelled`,
+          balanceAfter: newBalance,
+          source: "order_refund",
+          orderId: order._id,
+        });
+      }
+      order.riderFloatSettled = true;
+    }
+
     order.status = "cancelled";
 
     await order.save();
@@ -602,11 +626,11 @@ exports.updateOrderStatus = async (req, res) => {
 
     const allowedStatuses = [
       "pending",
-        "confirmed",
-        "preparing",
-        "ongoing",
-        "delivered",
-        "cancelled",
+      "confirmed",
+      "preparing",
+      "ongoing",
+      "delivered",
+      "cancelled",
     ];
 
     if (!allowedStatuses.includes(status)) {
@@ -615,7 +639,7 @@ exports.updateOrderStatus = async (req, res) => {
         message: "Invalid status",
       });
     }
-    
+
     const order = await Order.findById(req.params.id);
 
     if (!order) {
@@ -629,23 +653,19 @@ exports.updateOrderStatus = async (req, res) => {
 
     await order.save();
 
+    console.log("================================");
+    console.log("ORDER STATUS UPDATED");
+    console.log("Order ID:", order._id.toString());
+    console.log("User ID:", order.userId.toString());
+    console.log("Status:", order.status);
 
-console.log("================================");
-console.log("ORDER STATUS UPDATED");
-console.log("Order ID:", order._id.toString());
-console.log("User ID:", order.userId.toString());
-console.log("Status:", order.status);
+    io.to(`user_${order.userId}`).emit("orderStatusUpdated", {
+      orderId: order._id,
+      status: order.status,
+    });
 
-io.to(`user_${order.userId}`)
-  .emit("orderStatusUpdated", {
-    orderId: order._id,
-    status: order.status
-  });
-
-console.log(
-  `Event emitted to room: user_${order.userId}`
-);
-console.log("================================");
+    console.log(`Event emitted to room: user_${order.userId}`);
+    console.log("================================");
 
     return res.status(200).json({
       success: true,
@@ -657,5 +677,79 @@ console.log("================================");
       success: false,
       message: err.message,
     });
+  }
+};
+
+// // =======================
+// // Get All Orders
+// // =======================
+// exports.getAllOrders = async (req, res) => {
+//   try {
+
+//     // const orders = await Order.find()
+//     //   // .populate("userId", "name")
+//     //   // .populate("riderId", "name")
+//     //   .sort({ createdAt: -1 });
+
+//     const { status, search } = req.query;
+// console.log(status, search);
+
+// const filter = {};
+
+// if (status && status !== "all") {
+//   filter.status = status;
+//   filter.search = search
+// }
+
+// console.log(filter);
+//     const orders = await Order.find(filter)
+//       .sort({ createdAt: -1 });
+
+//     // console.log(orders);
+//     res.json({
+//       success: true,
+//       orders,
+//     });
+//   } catch (err) {
+//     res.status(500).json({
+//       success: false,
+//       message: err.message,
+//     });
+//   }
+// };
+
+exports.getAllOrders = async (req, res) => {
+  try {
+    const { status, search } = req.query;
+    const filter = {};
+
+    if (status && status !== "all") {
+      filter.status = status;
+    }
+
+    console.log(search);
+    if (search && search.trim() !== "") {
+      const searchRegex = new RegExp(search.trim(), "i");
+console.log(searchRegex);
+
+      filter.$or = [
+        { orderNumber: searchRegex },
+        { "address.phone": searchRegex },
+        { "address.address": searchRegex },
+        { "address.city": searchRegex },
+        { "items.name": searchRegex },
+        { "items.category": searchRegex },
+      ];
+    }
+
+    const orders = await Order.find(filter).sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      count: orders.length,
+      orders,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 };
