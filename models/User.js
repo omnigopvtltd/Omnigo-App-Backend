@@ -177,8 +177,71 @@ const userSchema = new mongoose.Schema(
         ref: "Product",
       },
     ],
+
+    //////////////////////////////////////////
+    // isBlocked: { type: Boolean, default: false },
+
+    wallet: {
+      balance: { type: Number, default: 0 },
+    },
+
+    riderProfile: {
+      vehicleType: {
+        type: String,
+        enum: ["bike", "car", "van"],
+        default: "bike",
+      },
+      vehiclePlate: { type: String, default: "" },
+      vehicleModel: { type: String, default: "" },
+      isOnline: { type: Boolean, default: false },
+      currentLocation: {
+        lat: Number,
+        lng: Number,
+        updatedAt: Date,
+      },
+      rating: {
+        average: { type: Number, default: 0 },
+        count: { type: Number, default: 0 },
+      },
+
+      cnicVerification: {
+        cnicNumber: { type: String, default: "" },
+        frontImage: { type: String, default: "" },
+        backImage: { type: String, default: "" },
+        status: {
+          type: String,
+          enum: ["not_submitted", "pending", "verified", "rejected"],
+          default: "not_submitted",
+        },
+        submittedAt: Date,
+        verifiedAt: Date,
+        verifiedBy: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+          default: null,
+        },
+        rejectionReason: { type: String, default: "" },
+      },
+
+      faceVerification: {
+        image: { type: String, default: "" },
+        status: {
+          type: String,
+          enum: ["not_submitted", "pending", "verified", "rejected"],
+          default: "not_submitted",
+        },
+        submittedAt: Date,
+        verifiedAt: Date,
+        verifiedBy: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+          default: null,
+        },
+        rejectionReason: { type: String, default: "" },
+      },
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 module.exports = mongoose.model("User", userSchema);

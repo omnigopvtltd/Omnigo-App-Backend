@@ -20,19 +20,26 @@ const messageSchema = new mongoose.Schema(
       required: true,
     },
 
-    message: {
-      type: String,
-      required: true,
-    },
-
-    isRead: {
-      type: Boolean,
-      default: false,
-    },
+    message: [
+      {
+        message: {
+          type: String,
+          required: true,
+        },
+        timestamp: {
+          type: Date,
+          default: Date.now,
+        },
+        isRead: {
+          type: Boolean,
+          default: false,
+        },
+      },
+    ],
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 module.exports = mongoose.model("Message", messageSchema);

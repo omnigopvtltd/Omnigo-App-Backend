@@ -389,6 +389,30 @@ exports.cancelOrder = async (req, res) => {
       });
     }
 
+    // NEW — refund any wallet float the rider fronted for this order
+    if (order.riderId && order.riderFloatAmount > 0 && !order.riderFloatSettled) {
+      const User = require("../models/User");
+      const WalletTransaction = require("../models/WalletTransaction");
+
+      const rider = await User.findById(order.riderId);
+      if (rider) {
+        const newBalance = (rider.wallet?.balance || 0) + order.riderFloatAmount;
+        rider.wallet = { balance: newBalance };
+        await rider.save();
+
+        await WalletTransaction.create({
+          userId: rider._id,
+          type: "credit",
+          amount: order.riderFloatAmount,
+          reason: `Float refunded — ${order.orderNumber} was cancelled`,
+          balanceAfter: newBalance,
+          source: "order_refund",
+          orderId: order._id,
+        });
+      }
+      order.riderFloatSettled = true;
+    }
+
     order.status = "cancelled";
 
     await order.save();
@@ -984,5 +1008,79 @@ exports.updateOrderStatus = async (req, res) => {
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// // =======================
+// // Get All Orders
+// // =======================
+// exports.getAllOrders = async (req, res) => {
+//   try {
+
+//     // const orders = await Order.find()
+//     //   // .populate("userId", "name")
+//     //   // .populate("riderId", "name")
+//     //   .sort({ createdAt: -1 });
+
+//     const { status, search } = req.query;
+// console.log(status, search);
+
+// const filter = {};
+
+// if (status && status !== "all") {
+//   filter.status = status;
+//   filter.search = search
+// }
+
+// console.log(filter);
+//     const orders = await Order.find(filter)
+//       .sort({ createdAt: -1 });
+
+//     // console.log(orders);
+//     res.json({
+//       success: true,
+//       orders,
+//     });
+//   } catch (err) {
+//     res.status(500).json({
+//       success: false,
+//       message: err.message,
+//     });
+//   }
+// };
+
+exports.getAllOrders = async (req, res) => {
+  try {
+    const { status, search } = req.query;
+    const filter = {};
+
+    if (status && status !== "all") {
+      filter.status = status;
+    }
+
+    console.log(search);
+    if (search && search.trim() !== "") {
+      const searchRegex = new RegExp(search.trim(), "i");
+console.log(searchRegex);
+
+      filter.$or = [
+        { orderNumber: searchRegex },
+        { "address.phone": searchRegex },
+        { "address.address": searchRegex },
+        { "address.city": searchRegex },
+        { "items.name": searchRegex },
+        { "items.category": searchRegex },
+      ];
+    }
+
+    const orders = await Order.find(filter).sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      count: orders.length,
+      orders,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 };

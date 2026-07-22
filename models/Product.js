@@ -1,42 +1,99 @@
+// const mongoose = require("mongoose");
+
+// const productSchema = new mongoose.Schema(
+//   {
+//     name: {
+//       type: String,
+//       required: true,
+//       trim: true,
+//     },
+
+//     weight: {
+//       type: String,
+//       default: "",
+//     },
+
+//     price: {
+//       type: Number,
+//       required: true,
+//     },
+
+//     quantity: {
+//       type: Number,
+//       default: 0,
+//     },
+
+//     category: {
+//       type: String,
+//       default: "",
+//       index: true,
+//     },
+
+//     image: {
+//       type: String,
+//       default: "",
+//     },
+
+//     description: {
+//       type: String,
+//       default: "",
+//     },
+
+//     likes: [
+//       {
+//         type: mongoose.Schema.Types.ObjectId,
+//         ref: "User",
+//       },
+//     ],
+
+//     isActive: {
+//       type: Boolean,
+//       default: true,
+//     },
+//   },
+//   { timestamps: true }
+// );
+
+// module.exports = mongoose.model("Product", productSchema);
+
 const mongoose = require("mongoose");
 
 const productSchema = new mongoose.Schema(
   {
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-
-    weight: {
-      type: String,
-      default: "",
-    },
-
-    price: {
-      type: Number,
+    name: { type: String, required: true, trim: true },
+    description: { type: String, default: "" },
+    images: [{ type: String }], // first image is treated as the primary/cover photo
+    weight: { type: String, default: "" },
+    quantity: { type: Number, default: 0 },
+    
+    restaurantId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Restaurant",
       required: true,
     },
 
-    quantity: {
-      type: Number,
-      default: 0,
-    },
+    category: { type: String, required: true, trim: true }, // e.g. "Pizza", "Beverages"
+    subcategory: { type: String, default: "" }, // e.g. "Thin Crust"
 
-    category: {
-      type: String,
-      default: "",
-      index: true,
-    },
+    price: { type: Number, required: true, min: 0 },
+    discountPrice: { type: Number, default: null, min: 0 },
 
-    image: {
-      type: String,
-      default: "",
-    },
+    addOns: [
+      {
+        name: String,
+        price: { type: Number, default: 0 },
+      },
+    ],
 
-    description: {
-      type: String,
-      default: "",
+    isVeg: { type: Boolean, default: false },
+    tags: [{ type: String }], // e.g. "Bestseller", "New", "Spicy"
+
+    isAvailable: { type: Boolean, default: true }, // stock / sold-out toggle
+    preparationTime: { type: Number, default: 15 }, // minutes
+
+    rating: {
+      average: { type: Number, default: 0 },
+      count: { type: Number, default: 0 },
     },
 
     likes: [
@@ -46,12 +103,25 @@ const productSchema = new mongoose.Schema(
       },
     ],
 
-    isActive: {
-      type: Boolean,
-      default: true,
+    status: {
+      type: String,
+      enum: ["active", "inactive"],
+      default: "active",
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
+
+// productSchema.pre("validate", function (next) {
+productSchema.pre("validate", function () {
+  if (this.discountPrice != null && this.discountPrice >= this.price) {
+    return next(
+      new Error("Discount price must be less than the regular price"),
+    );
+  }
+  // next();
+});
+
+productSchema.index({ name: "text", category: "text", tags: "text" });
 
 module.exports = mongoose.model("Product", productSchema);
