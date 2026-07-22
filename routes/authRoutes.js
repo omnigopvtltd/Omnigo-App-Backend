@@ -32,7 +32,11 @@ const {
   verifyRiderOTP,
   saveToken,
   completeRiderProfile,
-
+  uploadVerificationSelfie,
+  submitVerification,
+  getVerificationStatus,
+  approveRiderVerification,
+  rejectRiderVerification,
   // PASSWORD FLOW
   forgotPassword,
   verifyForgotPasswordOTP,
@@ -120,6 +124,46 @@ router.put(
   auth,
   completeRiderProfile
 );
+
+
+
+
+router.post(
+  "/rider/verification/upload",
+  auth,
+  uploadVerificationSelfie
+);
+
+router.post(
+  "/rider/verification/submit",
+  auth,
+  submitVerification
+);
+
+router.get(
+  "/rider/verification/status",
+  auth,
+  getVerificationStatus
+);
+
+router.put(
+  "/admin/rider/:riderId/approve",
+  auth,
+  authorizeRoles("admin", "superadmin"),
+  approveRiderVerification
+);
+
+router.put(
+  "/admin/rider/:riderId/reject",
+  auth,
+  authorizeRoles("admin", "superadmin"),
+  rejectRiderVerification
+);
+
+
+
+
+
 
 // ======================================================
 // PASSWORD RESET FLOW

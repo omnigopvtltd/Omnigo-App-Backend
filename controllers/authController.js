@@ -1840,3 +1840,173 @@ exports.completeRiderProfile = async (req, res) => {
     });
   }
 };
+
+exports.uploadVerificationSelfie = async (req, res) => {
+  try {
+    const riderId = req.user.id;
+
+    const rider = await User.findById(riderId);
+
+    if (!rider || rider.role !== "rider") {
+      return res.status(404).json({
+        success: false,
+        message: "Rider not found",
+      });
+    }
+
+    const { selfieUrl } = req.body;
+
+    if (!selfieUrl) {
+      return res.status(400).json({
+        success: false,
+        message: "Selfie image required",
+      });
+    }
+
+    rider.verificationSelfie = selfieUrl;
+    rider.verificationStatus = "pending";
+
+    await rider.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Selfie uploaded successfully",
+      verificationStatus: rider.verificationStatus,
+      selfieUrl,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+exports.submitVerification = async (req, res) => {
+  try {
+    const riderId = req.user.id;
+
+    const rider = await User.findById(riderId);
+
+    if (!rider || rider.role !== "rider") {
+      return res.status(404).json({
+        success: false,
+        message: "Rider not found",
+      });
+    }
+
+    if (!rider.verificationSelfie) {
+      return res.status(400).json({
+        success: false,
+        message: "Please upload selfie first",
+      });
+    }
+
+    rider.verificationStatus = "pending";
+
+    await rider.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Verification submitted successfully",
+      status: rider.verificationStatus,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+
+exports.getVerificationStatus = async (req, res) => {
+  try {
+    const riderId = req.user.id;
+
+    const rider = await User.findById(riderId);
+
+    if (!rider || rider.role !== "rider") {
+      return res.status(404).json({
+        success: false,
+        message: "Rider not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      verificationStatus: rider.verificationStatus,
+      verificationReason: rider.verificationReason,
+      verifiedAt: rider.verifiedAt,
+      verificationSelfie: rider.verificationSelfie,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+
+exports.approveRiderVerification = async (req, res) => {
+  try {
+    const { riderId } = req.params;
+
+    const rider = await User.findById(riderId);
+
+    if (!rider || rider.role !== "rider") {
+      return res.status(404).json({
+        success: false,
+        message: "Rider not found",
+      });
+    }
+
+    rider.verificationStatus = "approved";
+    rider.verificationReason = null;
+    rider.verifiedAt = new Date();
+
+    await rider.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Verification approved successfully",
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+exports.rejectRiderVerification = async (req, res) => {
+  try {
+    const { riderId } = req.params;
+    const { reason } = req.body;
+
+    const rider = await User.findById(riderId);
+
+    if (!rider || rider.role !== "rider") {
+      return res.status(404).json({
+        success: false,
+        message: "Rider not found",
+      });
+    }
+
+    rider.verificationStatus = "rejected";
+    rider.verificationReason = reason;
+
+    await rider.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Verification rejected",
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};

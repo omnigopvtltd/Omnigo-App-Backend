@@ -50,6 +50,28 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false
     },
+
+    verificationSelfie: {
+      type: String,
+      default: null,
+    },
+
+    verificationStatus: {
+      type: String,
+      enum: ["not_submitted", "pending", "approved", "rejected"],
+      default: "not_submitted",
+    },
+
+    verificationReason: {
+      type: String,
+      default: null,
+    },
+
+    verifiedAt: {
+      type: Date,
+      default: null,
+    },
+
     // SOCIAL LOGIN
     googleId: { type: String, default: null },
     facebookId: { type: String, default: null },
