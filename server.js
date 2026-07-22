@@ -8,6 +8,7 @@ const wishlistRoutes =
 const feedbackRoutes = require("./routes/feedbackRoutes");
 const chatRoutes = require("./routes/chatRoutes");
 const connectDB = require("./config/db");
+require("./config/firebase");
 const orderRoutes =
 require("./routes/orderRoutes");
 const restaurantRoutes =
@@ -17,6 +18,7 @@ require("./routes/couponRoutes");
 const campaignRoutes =
 require("./routes/campaignRoutes");
 const financeRoutes = require("./routes/financeRoutes");
+require("./config/firebase");
 
 
 //  SOCKET

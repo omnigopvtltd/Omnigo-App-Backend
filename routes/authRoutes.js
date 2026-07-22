@@ -32,11 +32,20 @@ const {
   // ADMIN / RIDER
   createAdmin,
   createRider,
-
+  sendRiderOTP,
+  verifyRiderOTP,
+  saveToken,
+  completeRiderProfile,
+  uploadVerificationSelfie,
+  submitVerification,
+  getVerificationStatus,
+  approveRiderVerification,
+  rejectRiderVerification,
   // PASSWORD FLOW
   forgotPassword,
   verifyForgotPasswordOTP,
   resetPassword,
+
 
   addAddress,
   getAddresses,
@@ -104,6 +113,11 @@ router.post(
   createAdmin
 );
 
+router.post(
+  "/save-token",
+  auth,
+  saveToken
+);
 
 // ======================================================
 // RIDER
@@ -118,6 +132,56 @@ router.get("/riders", getRiders);
 router.put("/riders/update/:id", updateRider);
 router.delete("/riders/delete/:id", deleteRider);
 router.patch("/riders/update/:id/status", updateRiderStatus);
+
+
+router.post("/rider/send-otp", sendRiderOTP);
+
+router.post("/rider/verify-otp", verifyRiderOTP);
+
+router.put(
+  "/complete-profile",
+  auth,
+  completeRiderProfile
+);
+
+
+
+
+router.post(
+  "/rider/verification/upload",
+  auth,
+  uploadVerificationSelfie
+);
+
+router.post(
+  "/rider/verification/submit",
+  auth,
+  submitVerification
+);
+
+router.get(
+  "/rider/verification/status",
+  auth,
+  getVerificationStatus
+);
+
+router.put(
+  "/admin/rider/:riderId/approve",
+  auth,
+  authorizeRoles("admin", "superadmin"),
+  approveRiderVerification
+);
+
+router.put(
+  "/admin/rider/:riderId/reject",
+  auth,
+  authorizeRoles("admin", "superadmin"),
+  rejectRiderVerification
+);
+
+
+
+
 
 
 // ======================================================

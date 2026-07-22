@@ -1,6 +1,42 @@
 const Conversation = require("../models/Conversation");
 const Message = require("../models/Message");
 const Order = require("../models/Order");
+const admin = require("firebase-admin");
+
+// It checks if the receiver is online in the chat room or not. If not, it sends a push notification to the receiver using Firebase Cloud Messaging (FCM).
+async function handleOfflineNotification(receiverId, messageText, senderName) {
+  try {
+    // 1. Database se Receiver (Rider) ka FCM Token nikalen (Jo uske phone se save hua tha)
+    const user = await User.findById(receiverId);
+    const fcmToken = user?.fcmToken; 
+
+    if (!fcmToken) {
+      console.log("User target belongs to no registered FCM token.");
+      return;
+    }
+
+    // 2. Notification Packet Payload banayein
+    const payload = {
+      token: fcmToken,
+      notification: {
+        title: senderName || "New Message Received",
+        body: messageText.length > 60 ? messageText.substring(0, 60) + "..." : messageText,
+      },
+      data: {
+        click_action: "FLUTTER_NOTIFICATION_CLICK",
+        type: "chat",
+        conversationId: "6a463bd674f1e5793327c41f" // Open Direct Chat in Flutter app
+      }
+    };
+
+    // 3. Send via Firebase
+    await admin.messaging().send(payload);
+    console.log("🚀 Push Notification sent successfully!");
+
+  } catch (error) {
+    console.error("Error sending push notification:", error);
+  }
+}
 
 // ================= CREATE CONVERSATION =================
 exports.createConversation = async (req, res) => {

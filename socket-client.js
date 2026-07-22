@@ -22,30 +22,7 @@ socket.on("connect", () => {
     "conversationId",
   );
 
-  // Send Message
-
-  socket.emit(
-    "sendMessage",
-
-    {
-      conversationId: "...",
-
-      sender: "customerId",
-
-      receiver: "riderId",
-
-      message: "Hello Rider",
-    },
-  );
-
-  // Recieve Message
-  socket.on(
-    "receiveMessage",
-
-    (data) => {
-      console.log(data);
-    },
-  );
+  // Track Order Status Updates
 });
 
 socket.onAny((event, data) => {

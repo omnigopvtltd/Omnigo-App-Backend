@@ -1,11 +1,60 @@
-
-// chat-socket.js
+const admin = require("firebase-admin");
+require("./config/firebase");
+// const { initializeApp, cert, getApps } = require("firebase-admin/app");
+const { getMessaging } = require("firebase-admin/messaging")
+const path = require("path");
 const Message = require("./models/Message");
 const Conversation = require("./models/Conversation");
-const CallLog = require("./models/CallLog"); // New Model Include
+const CallLog = require("./models/CallLog");
+const User = require("./models/User"); 
+
+const serviceAccountPath = path.join(
+  __dirname,
+  "serviceAccountKey.json",
+);
+
+async function handleOfflineNotification(
+  receiverId,
+  messageText,
+  senderId,
+  messageType,
+) {
+  try {
+    // 1. Find token of Receiver 
+    const user = await User.findById(receiverId);
+    const fcmToken =
+      "cb3sjZ5J9QIxGNWRk4lMFE:APA91bGHjkGgfP3D4Y8IvP6KeGwI636astufuR44zxZ0JMXkEPb6bo_gdxfn_Nbq6UVgaw0jEfS92_SXwm97DxYw9LZLqstqTliNLgys0gw2mgEqvV-e0E4"; // Hardcoded for testing purposes
+
+    if (!fcmToken) {
+      console.log(
+        `[FCM Notification Skip]: No token found for User ID: ${receiverId}`,
+      );
+      return;
+    }
+
+    // 2. Construct Notification Data Payload
+    const payload = {
+      token: fcmToken,
+      notification: {
+        title: "New Message Received",
+        body: messageType === "text" ? messageText : "Sent an attachment",
+      },
+      data: {
+        click_action: "FLUTTER_NOTIFICATION_CLICK",
+        type: "chat",
+        senderId: String(senderId),
+      },
+    };
+
+    // 3. Send out message using Firebase Messaging engine
+    const response = await getMessaging().send(payload);
+    console.log("Firebase Push Notification sent successfully:", response);
+  } catch (error) {
+    console.error("Firebase Messaging System Error:", error.message);
+  }
+}
 
 const onlineUsers = new Map();
-// Live active call structural monitoring pointer
 const activeCallSessions = new Map();
 
 const chatSocket = (io) => {
@@ -25,7 +74,13 @@ const chatSocket = (io) => {
 
     // ================= SAFE SEND MESSAGE PIPELINE =================
     socket.on("sendMessage", async (data) => {
-      const { conversationId, sender, receiver, message, messageType = "text" } = data;
+      const {
+        conversationId,
+        sender,
+        receiver,
+        message,
+        messageType = "text",
+      } = data;
       try {
         const newMessage = await Message.create({
           conversationId,
@@ -40,7 +95,35 @@ const chatSocket = (io) => {
           lastMessageAt: new Date(),
         });
 
-        io.to(receiver).emit("receiveMessage", newMessage);
+        // 2. Check if Receiver is active in the chat room?
+        const roomClients = io.sockets.adapter.rooms.get(data.conversationId);
+
+        // Dynamic Room Checking System logic adjustment
+        let isReceiverInRoom = false;
+        if (roomClients) {
+          // Check if receiver's socket ID is linked and present in room array
+          const targetSocketId = onlineUsers.get(data.receiver);
+          if (targetSocketId && roomClients.has(targetSocketId)) {
+            isReceiverInRoom = true;
+          }
+        }
+
+        if (isReceiverInRoom) {
+          // if active so send message through socket
+          io.to(data.conversationId).emit("receiveMessage", newMessage);
+        } else {
+          // if not active so send message through socket + background push notification
+          io.to(data.conversationId).emit("receiveMessage", newMessage);
+
+          // Trigger Firebase push notification flawlessly now
+          await handleOfflineNotification(
+            data.receiver,
+            data.message,
+            data.sender,
+            data.messageType,
+          );
+        }
+
         io.to(sender).emit("messageSent", newMessage);
       } catch (err) {
         console.error("⚠️ DATABASE ERROR CATCH:", err.message);
@@ -52,25 +135,27 @@ const chatSocket = (io) => {
     });
 
     // ================= MONGO INTEGRATED CALL SIGNALING =================
-
-    // 1. Initiate Call & Create "Missed" Entry in DB Initially
     socket.on("initiateCall", async (data) => {
-      const { conversationId, callerId, receiverId, signalData, callType = "audio" } = data;
-      
+      const {
+        conversationId,
+        callerId,
+        receiverId,
+        signalData,
+        callType = "audio",
+      } = data;
+
       try {
-        // Initial state log structure create in DB (Default status is 'missed')
         const newCallRecord = await CallLog.create({
           conversationId,
           caller: callerId,
           receiver: receiverId,
           callType,
-          status: "missed"
+          status: "missed",
         });
 
-        // Memory pointer track create for end session state  
         activeCallSessions.set(conversationId, {
           dbRecordId: newCallRecord._id,
-          startedTime: new Date()
+          startedTime: new Date(),
         });
 
         io.to(receiverId).emit("incomingCall", {
@@ -78,60 +163,61 @@ const chatSocket = (io) => {
           callerId,
           signalData,
           callType,
-          callLogId: newCallRecord._id // Flutter payload confirmation logic tracker
+          callLogId: newCallRecord._id,
         });
       } catch (error) {
-        console.error("Failed to write initial call tracking state:", error.message);
+        console.error(
+          "Failed to write initial call tracking state:",
+          error.message,
+        );
       }
     });
 
-    // 2. Target Answers Call -> Update DB Status to "connected"
     socket.on("answerCall", async (data) => {
       const { conversationId, receiverId, callerId, signalData } = data;
-      
+
       try {
         const session = activeCallSessions.get(conversationId);
         if (session) {
-          await CallLog.findByIdAndUpdate(session.dbRecordId, { 
+          await CallLog.findByIdAndUpdate(session.dbRecordId, {
             status: "connected",
-            startedAt: new Date() // Reset to exact stream connection moment
+            startedAt: new Date(),
           });
         }
-        
+
         io.to(callerId).emit("callAccepted", { receiverId, signalData });
       } catch (error) {
         console.error("Answer state sync crash:", error.message);
       }
     });
 
-    // 3. Reject or Hang Up Call -> Calculate Duration & Save to DB
     socket.on("endCall", async (data) => {
       const { conversationId, targetId, reason } = data;
-      
+
       try {
         const session = activeCallSessions.get(conversationId);
         if (session) {
           const endTime = new Date();
           const record = await CallLog.findById(session.dbRecordId);
-          
+
           let finalStatus = "ended";
           let totalDuration = 0;
 
           if (reason === "rejected") {
             finalStatus = "rejected";
           } else if (record && record.status === "connected") {
-            // Seconds runtime diff algorithm 
-            totalDuration = Math.round((endTime - new Date(session.startedTime)) / 1000);
+            totalDuration = Math.round(
+              (endTime - new Date(session.startedTime)) / 1000,
+            );
             finalStatus = "ended";
           }
 
           await CallLog.findByIdAndUpdate(session.dbRecordId, {
             status: finalStatus,
             endedAt: endTime,
-            durationInSeconds: totalDuration
+            durationInSeconds: totalDuration,
           });
 
-          // Memory clear out
           activeCallSessions.delete(conversationId);
         }
 
@@ -141,7 +227,6 @@ const chatSocket = (io) => {
       }
     });
 
-    // Handle sudden disconnect clean up configurations
     socket.on("disconnect", () => {
       if (socket.userId) onlineUsers.delete(socket.userId);
     });
