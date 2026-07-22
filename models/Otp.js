@@ -24,6 +24,7 @@ const otpSchema = new mongoose.Schema(
         "forgot-password",
         "phone-verification",
         "email-verification",
+        "rider-login",
       ],
       required: true,
     },

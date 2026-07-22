@@ -11,6 +11,7 @@ const connectDB = require("./config/db");
 require("./config/firebase");
 const orderRoutes =
 require("./routes/orderRoutes");
+require("./config/firebase");
 
 
 //  SOCKET

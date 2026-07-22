@@ -15,12 +15,60 @@ const userSchema = new mongoose.Schema(
     },
 
     password: { type: String, default: null },
-
+    fcmToken: {
+      type: String,
+      default: "",
+    },
     phone: {
       type: String,
       unique: true,
       sparse: true,
       trim: true,
+      default: null,
+    },
+
+    cnicNumber: String,
+    profilePicture: String,
+
+    paymentMethod: {
+      type: String,
+      enum: ["cash", "jazzcash", "easypaisa", "bank"]
+    },
+
+    vehicleNumber: String,
+    drivingLicenseNumber: String,
+
+    vehicleCategory: {
+      type: String,
+      enum: ["bike", "car", "van"]
+    },
+
+    vehicleModel: String,
+    vehiclePicture: String,
+
+    isProfileCompleted: {
+      type: Boolean,
+      default: false
+    },
+
+    verificationSelfie: {
+      type: String,
+      default: null,
+    },
+
+    verificationStatus: {
+      type: String,
+      enum: ["not_submitted", "pending", "approved", "rejected"],
+      default: "not_submitted",
+    },
+
+    verificationReason: {
+      type: String,
+      default: null,
+    },
+
+    verifiedAt: {
+      type: Date,
       default: null,
     },
 
