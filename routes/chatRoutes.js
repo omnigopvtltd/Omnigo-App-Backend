@@ -1,17 +1,21 @@
 const express = require("express");
 const router = express.Router();
-const auth = require("../middleware/authMiddleware");
 
 const {
-createConversation,
-sendMessage,
-getMessages,
-myConversations
-} = require("../controllers/chatController");
+  getContactsController,
+  getConversations,
+  getMessages,
+  getOrCreateConversation,
+  sendMessage,
+  markConversationRead,
+} = require("../controllers/chatController.js");
 
-router.post("/create-conversation",auth,createConversation);
-router.post("/send-message",auth,sendMessage);
-router.get("/messages/:conversationId",auth,getMessages);
-router.get("/my-conversations",auth,myConversations);
+// Make sure none of these handlers are undefined!
+router.get("/contacts", getContactsController);
+router.get("/conversations", getConversations);
+router.get("/conversations/:id/messages", getMessages);
+router.post("/conversations", getOrCreateConversation);
+router.post("/conversations/:id/messages", sendMessage);
+router.patch("/conversations/:id/read", markConversationRead);
 
 module.exports = router;

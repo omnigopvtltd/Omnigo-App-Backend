@@ -58,6 +58,7 @@ const {
   updateRiderStatus,
  
 } = require("../controllers/authController");
+const { getRiderById } = require("../controllers/riderController");
 
 
 // ======================================================
@@ -129,6 +130,7 @@ router.post(
   createRider
 );
 router.get("/riders", getRiders);
+router.get("/riders/:id", getRiderById);
 router.put("/riders/update/:id", updateRider);
 router.delete("/riders/delete/:id", deleteRider);
 router.patch("/riders/update/:id/status", updateRiderStatus);

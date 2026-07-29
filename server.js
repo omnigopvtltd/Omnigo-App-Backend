@@ -3,23 +3,17 @@ const express = require("express");
 const cors = require("cors");
 const http = require("http");
 const path = require("path");
-const wishlistRoutes =
-  require("./routes/wishlistRoutes");
+const wishlistRoutes = require("./routes/wishlistRoutes");
 const feedbackRoutes = require("./routes/feedbackRoutes");
 const chatRoutes = require("./routes/chatRoutes");
 const connectDB = require("./config/db");
 require("./config/firebase");
-const orderRoutes =
-require("./routes/orderRoutes");
-const restaurantRoutes =
-require("./routes/restaurantRoutes");
-const couponRoutes =
-require("./routes/couponRoutes");
-const campaignRoutes =
-require("./routes/campaignRoutes");
+const orderRoutes = require("./routes/orderRoutes");
+const restaurantRoutes = require("./routes/restaurantRoutes");
+const couponRoutes = require("./routes/couponRoutes");
+const campaignRoutes = require("./routes/campaignRoutes");
 const financeRoutes = require("./routes/financeRoutes");
 require("./config/firebase");
-
 
 //  SOCKET
 const { initSocket } = require("./socket");
@@ -48,7 +42,10 @@ app.use("/api/admin", require("./routes/adminRoutes"));
 
 // ================= RIDERS =================
 app.use("/api/riders", require("./routes/riderRoutes"));
-app.use("/api/riders/verification", require("./routes/riderVerificationRoutes"));
+app.use(
+  "/api/riders/verification",
+  require("./routes/riderVerificationRoutes"),
+);
 app.use("/api/riders/wallet", require("./routes/riderWalletRoutes"));
 app.use("/api/riders/orders", require("./routes/riderOrderFlowRoutes"));
 app.use("/api/riders/sessions", require("./routes/riderSessionRoutes"));
@@ -61,29 +58,19 @@ const trackingRoutes = require("./routes/trackingRoutes");
 const AdminSettings = require("./models/AdminSettings");
 app.use("/api/tracking", trackingRoutes);
 
-app.use(
-  "/api/orders",
-  orderRoutes
-);
-app.use(
-  "/api/restaurants",
-  restaurantRoutes
-);
+app.use("/api/orders", orderRoutes);
+app.use("/api/restaurants", restaurantRoutes);
 
-app.use(
-  "/api/onboarding",
-  require("./routes/onboardingRoutes")
-);
-app.use(
-  "/api/wishlist",
-  wishlistRoutes
-);
+app.use("/api/onboarding", require("./routes/onboardingRoutes"));
+app.use("/api/wishlist", wishlistRoutes);
 app.use("/api/feedback", feedbackRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/coupons", couponRoutes);
 app.use("/api/campaigns", campaignRoutes);
 app.use("/api/settings", AdminSettings);
 
+app.use("/api/chat", require("./routes/chatRoutes"));
+app.use("/api/calls", require("./routes/callRoutes"));
 
 // ================= SOCKET INIT =================
 const io = initSocket(server);

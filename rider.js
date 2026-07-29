@@ -1,7 +1,7 @@
 const io = require("socket.io-client");
 const socket = io("http://localhost:5000");
 
-const RIDER_ID = "6a35a742e8c8ea4bae1926a4";
+const RIDER_ID = "6a5ef0677d6222708621d39f";
 const CONVERSATION_ID = "6a463bd674f1e5793327c41f";
 const CUSTOMER_ID = "6a22b6644a4b879e3c210f02";
 
@@ -15,7 +15,7 @@ socket.on("connect", () => {
 
 // Helper function to send replies easily
 function sendRiderMessage(text) {
-  console.log(`💬 Rider Replying: "${text}"`);
+  console.log(`Rider Replying: "${text}"`);
   socket.emit("sendMessage", {
     conversationId: CONVERSATION_ID,
     sender: RIDER_ID,
