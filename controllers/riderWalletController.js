@@ -64,6 +64,7 @@ exports.topUpWallet = async (req, res) => {
 
     const rider = await User.findOne({ _id: req.user.id, role: "rider" });
     if (!rider) return res.status(404).json({ success: false, message: "Rider not found" });
+console.log(rider.wallet?.balance, Number(amount));
 
     const newBalance = (rider.wallet?.balance || 0) + Number(amount);
     rider.wallet = { balance: newBalance };

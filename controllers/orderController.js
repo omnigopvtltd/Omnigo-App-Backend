@@ -1084,3 +1084,56 @@ console.log(searchRegex);
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
+
+exports.handleOrderAssignment = async (req, res) => {
+  // orderId, io
+  const {orderId} = req.body;
+  const settings = await Settings.findOne();
+  const order = await Order.findById(orderId).populate("restaurantId");
+
+  // Broadcast order to all online riders for manual acceptance
+  io.to("role:riders").emit("order:newAvailable", order);
+
+  // If Auto-Assign is enabled globally
+  if (settings?.autoAssignRider) {
+    const restaurantCoords = order.restaurantId.location.coordinates; // [lng, lat]
+
+    // Find closest available online rider within max distance radius
+    const nearestRider = await User.findOne({
+      role: "rider",
+      isOnline: true,
+      isBlocked: false,
+      "riderProfile.isAutoAssignEnabled": true,
+      "riderProfile.isBusy": false,
+      "location.coordinates": {
+        $near: {
+          $geometry: { type: "Point", coordinates: restaurantCoords },
+          $maxDistance: (User.maxRiderSearchRadiusKm || 10) * 1000, // meters
+        },
+      },
+    });
+
+    if (nearestRider) {
+      order.riderId = nearestRider._id;
+      order.status = "RIDER_ASSIGNED";
+      await order.save();
+
+      // Mark rider busy
+      nearestRider.riderProfile.isBusy = true;
+      await nearestRider.save();
+
+      // Notify Rider and Customer instantly
+      io.to(`user:${nearestRider._id}`).emit("order:autoAssigned", order);
+      io.to(`order:${order._id}`).emit("order:statusUpdated", {
+        orderId: order._id,
+        status: "RIDER_ASSIGNED",
+        rider: {
+          id: nearestRider._id,
+          name: nearestRider.name,
+          phone: nearestRider.phone,
+        },
+      });
+    }
+  }
+}
