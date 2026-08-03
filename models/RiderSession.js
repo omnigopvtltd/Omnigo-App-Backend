@@ -4,7 +4,12 @@ const riderSessionSchema = new mongoose.Schema(
   {
     title: { type: String, required: true, trim: true },
     description: { type: String, default: "" },
-
+    status: {
+      type: String,
+      enum: ["in_progress", "booked", "completed", "expired", "cancelled"],
+      default: "in_progress",
+    },
+    
     requiredOrders: { type: Number, required: true, min: 1, default: 6 },
     bonusAmount: { type: Number, required: true, min: 0 },
 
@@ -19,14 +24,15 @@ const riderSessionSchema = new mongoose.Schema(
     startDate: { type: Date, required: true },
     endDate: { type: Date, required: true },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-riderSessionSchema.pre("validate", function (next) {
+// riderSessionSchema.pre("validate", function (next) {
+riderSessionSchema.pre("validate", function () {
   if (this.endDate < this.startDate) {
     return next(new Error("endDate must be after startDate"));
   }
-  next();
+  // next();
 });
 
 riderSessionSchema.methods.isCurrentlyJoinable = function () {

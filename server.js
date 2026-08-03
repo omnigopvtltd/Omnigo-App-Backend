@@ -13,6 +13,7 @@ const restaurantRoutes = require("./routes/restaurantRoutes");
 const couponRoutes = require("./routes/couponRoutes");
 const campaignRoutes = require("./routes/campaignRoutes");
 const financeRoutes = require("./routes/financeRoutes");
+const foodCategoryRoutes = require("./routes/foodCategoryRoutes");
 require("./config/firebase");
 
 //  SOCKET
@@ -41,6 +42,7 @@ app.use("/api/cart", require("./routes/cartRoutes"));
 app.use("/api/admin", require("./routes/adminRoutes"));
 
 // ================= RIDERS =================
+app.use("/api/riders/sessions", require("./routes/riderSessionRoutes"));
 app.use("/api/riders", require("./routes/riderRoutes"));
 app.use(
   "/api/riders/verification",
@@ -48,7 +50,6 @@ app.use(
 );
 app.use("/api/riders/wallet", require("./routes/riderWalletRoutes"));
 app.use("/api/riders/orders", require("./routes/riderOrderFlowRoutes"));
-app.use("/api/riders/sessions", require("./routes/riderSessionRoutes"));
 // ================= Payments =================
 const paymentRoutes = require("./routes/paymentRoutes");
 app.use("/api/payments", paymentRoutes);
@@ -58,8 +59,10 @@ const trackingRoutes = require("./routes/trackingRoutes");
 const AdminSettings = require("./models/AdminSettings");
 app.use("/api/tracking", trackingRoutes);
 
+//  ================= Restaurant ===========================
 app.use("/api/orders", orderRoutes);
 app.use("/api/restaurants", restaurantRoutes);
+app.use("/api/categories", foodCategoryRoutes);
 
 app.use("/api/onboarding", require("./routes/onboardingRoutes"));
 app.use("/api/wishlist", wishlistRoutes);
