@@ -13,7 +13,7 @@ const {
 
 router.get("/", auth, role("admin"), getAllRiders);
 router.post("/create", auth, role("admin"), createRider);
-router.get("/:id", auth, role("admin"), getRiderById);
+router.get("/:id", auth,  getRiderById);
 router.put("/update/:id", auth, role("admin"), updateRider);
 router.patch("/update/:id/block", auth, role("admin"), updateRiderBlockStatus);
 router.delete("/delete/:id", auth, role("admin"), deleteRider);

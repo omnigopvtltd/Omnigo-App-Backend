@@ -15,7 +15,7 @@ const riderSessionParticipationSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["in_progress", "completed", "abandoned"],
+      enum: ["in_progress", "booked", "completed", "expired", "cancelled", "abandoned"],
       default: "in_progress",
     },
 
