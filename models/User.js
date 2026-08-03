@@ -277,12 +277,12 @@ const userSchema = new mongoose.Schema(
 
     paymentMethod: {
       type: String,
-      enum: ["cash", "jazzcash", "easypaisa", "bank"]
+      enum: ["cash", "jazzcash", "easypaisa", "bank"],
     },
 
     role: {
       type: String,
-      enum: ["superadmin", "admin", "rider", "customer"],
+      enum: ["superadmin", "admin", "rider", "customer", "user"],
       default: "customer",
     },
 
@@ -348,6 +348,11 @@ const userSchema = new mongoose.Schema(
         type: String,
         enum: ["not_submitted", "pending", "approved", "rejected"],
         default: "not_submitted",
+      },
+
+      autoAcceptOrders: {
+        type: Boolean,
+        default: false,
       },
     },
   },
