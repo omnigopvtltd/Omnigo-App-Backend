@@ -20,6 +20,7 @@ const {
   trackOrder,
   updateOrderStatus,
   getAllOrders,
+  toggleAutoAccept,
 } = require("../controllers/orderController");
 
 router.get("/all-orders", auth, role("admin", "superadmin"), getAllOrders);
@@ -44,7 +45,9 @@ router.put("/cancel/:id", auth, cancelOrder);
 // CONFIRM ORDER
 router.put("/confirm/:id", auth, confirmOrder);
 
-router.get("/rider/available", auth, role("rider"), getAvailableOrders);
+router.get("/rider/available", auth, getAvailableOrders)
+;
+router.patch("/rider/auto-accept", auth, toggleAutoAccept);
 
 router.put("/rider/accept/:id", auth, role("rider"), acceptOrder);
 

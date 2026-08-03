@@ -31,7 +31,7 @@ const orderSchema = new mongoose.Schema(
     },
 
     address: {
-      addressId: String,
+      // addressId: String,
       phone: String,
       address: String,
       city: String,
