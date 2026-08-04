@@ -1,6 +1,7 @@
 const Order = require("../models/Order");
 const Cart = require("../models/Cart");
 const User = require("../models/User");
+// const {dispatchOrderToNearestRider} = require("../helpers/dispatchOrderToNearestRider")
 const { getIO } = require("../socket");
 // const { getIO } = require("../socket");
 
@@ -144,180 +145,351 @@ const sendNotification = require("../utils/sendNotification");
 // };
 
 
+// ===================================================
+// DISPATCH: AUTO-ASSIGN TO NEAREST AUTO-ACCEPT RIDER
+// ===================================================
+
+
 exports.createOrder = async (req, res) => {
+
   try {
+
     const {
+
       addressId,
+
       locationId,
+
       paymentMethod = "cash_on_delivery",
+
       promoDiscount = 0,
+
     } = req.body;
 
+
+
     // USER
+
     const user = await User.findById(req.user.id);
 
+
+
     if (!user) {
+
       return res.status(404).json({
+
         success: false,
+
         message: "User not found",
+
       });
+
     }
 
-    // =========================
-    // ADDRESS OR LOCATION
-    // =========================
+
 
     // =========================
+
     // ADDRESS OR LOCATION
+
     // =========================
+
+
 
     let orderAddress = null;
+
     let orderLocation = null;
 
+
+
     if (!addressId) {
+
       return res.status(400).json({
+
         success: false,
+
         message: "addressId is required",
+
       });
+
     }
+
+
 
     // Pehle addresses me check karo
+
     const selectedAddress = user.addresses.find(
+
       (addr) => addr._id.toString() === addressId
+
     );
 
+
+
     if (selectedAddress) {
+
       orderAddress = {
+
         addressId: selectedAddress._id,
+
         phone: selectedAddress.phone,
+
         address: selectedAddress.address,
+
         city: selectedAddress.city,
+
         zipCode: selectedAddress.zipCode,
+
         country: selectedAddress.country,
+
       };
-    }
-    else if (
-      user.location &&
-      user.location._id &&
-      user.location._id.toString() === addressId
-    ) {
-      orderLocation = {
-        locationId: user.location._id,
-        type: user.location.type || user.location.mode,
-        zone: user.location.zone,
-        area: user.location.area,
-        address: user.location.address,
-        coordinates: user.location.coordinates,
-      };
-    }
-    else {
-      return res.status(404).json({
-        success: false,
-        message: "Address or Location not found",
-      });
+
     }
 
+    else if (
+
+      user.location &&
+
+      user.location._id &&
+
+      user.location._id.toString() === addressId
+
+    ) {
+
+      orderLocation = {
+
+        locationId: user.location._id,
+
+        type: user.location.type || user.location.mode,
+
+        zone: user.location.zone,
+
+        area: user.location.area,
+
+        address: user.location.address,
+
+        coordinates: user.location.coordinates,
+
+      };
+
+    }
+
+    else {
+
+      return res.status(404).json({
+
+        success: false,
+
+        message: "Address or Location not found",
+
+      });
+
+    }
+
+
+
     // =========================
+
     // CART
+
     // =========================
+
+
 
     const cart = await Cart.findOne({
+
       userId: req.user.id,
+
     });
 
+
+
     if (!cart || cart.items.length === 0) {
+
       return res.status(400).json({
+
         success: false,
+
         message: "Cart is empty",
+
       });
+
     }
+
+
 
     let subtotal = 0;
 
+
+
     const items = cart.items.map((item) => {
+
       const total = Number(item.price) * Number(item.quantity);
+
+
 
       subtotal += total;
 
+
+
       return {
+
         productId: item.productId,
+
         name: item.name,
+
         image: item.image,
+
         category: item.category,
+
         weight: item.weight,
+
         price: item.price,
+
         quantity: item.quantity,
+
         total,
+
       };
+
     });
 
-    // =========================
-    // FEES
+
+
     // =========================
 
+    // FEES
+
+    // =========================
+
+
+
     const deliveryFee = 6;
+
     const tax = 2.5;
+
+
 
     const totalAmount = subtotal + deliveryFee + tax - promoDiscount;
 
-    // =========================
-    // CREATE ORDER
+
+
     // =========================
 
+    // CREATE ORDER
+
+    // =========================
+
+
+
     const order = await Order.create({
+
       orderNumber:
+
         "ORD" + Date.now(),
+
+
 
       userId: req.user.id,
 
+
+
       address: orderAddress,
+
+
 
       location: orderLocation,
 
+
+
       items,
+
+
 
       paymentMethod,
 
+
+
       paymentStatus: "pending",
 
+
+
       subtotal,
+
       deliveryFee,
+
       tax,
+
       promoDiscount,
+
       totalAmount,
+
+
 
       status: "pending",
 
+
+
       riderId: null,
+
+
 
       isAssigned: false,
 
+
+
       acceptedAt: null,
+
     });
 
+
+
     // =========================
+
     // CLEAR CART
+
     // =========================
+
+
 
     cart.items = [];
+
     await cart.save();
 
+
+
     return res.status(201).json({
+
       success: true,
+
       message:
+
         "Order placed successfully",
+
          order,
+
          orderId: order._id,
+
     });
+
   } catch (err) {
+
     console.log("CREATE ORDER ERROR:", err);
 
+
+
     return res.status(500).json({
+
       success: false,
+
       message: err.message,
+
     });
+
   }
+
 };
+
 // =====================================
 // GET MY ORDERS
 // =====================================
@@ -524,11 +696,131 @@ exports.getAvailableOrders = async (req, res) => {
   }
 };
 
+// =====================================
+// RIDER: TOGGLE AUTO-ACCEPT SETTING
+// =====================================
+exports.toggleAutoAccept = async (req, res) => {
+  try {
+    const riderId = req.user.id;
+    const { autoAcceptOrders } = req.body; // Expects boolean: true / false
 
+    if (typeof autoAcceptOrders !== "boolean") {
+      return res.status(400).json({
+        success: false,
+        message: "autoAcceptOrders must be a boolean value (true or false).",
+      });
+    }
 
+    const rider = await User.findOneAndUpdate(
+      { _id: riderId, role: "rider" },
+      { autoAcceptOrders },
+      { new: true }
+    ).select("-password");
+
+    if (!rider) {
+      return res.status(404).json({
+        success: false,
+        message: "Rider not found.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Auto accept orders has been ${autoAcceptOrders ? "enabled" : "disabled"}.`,
+      autoAcceptOrders: rider.autoAcceptOrders,
+    });
+  } catch (err) {
+    console.error("TOGGLE AUTO ACCEPT ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// exports.acceptOrder = async (req, res) => {
+//   try {
+//     const order = await Order.findOne({
+//       _id: req.params.id,
+//       status: "pending",
+//       isAssigned: false,
+//     });
+
+//     if (!order) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Order already assigned",
+//       });
+//     }
+
+//     // Rider details 
+//     const rider = await User.findById(req.user.id);
+
+//     order.riderId = req.user.id;
+//     order.isAssigned = true;
+//     order.acceptedAt = new Date();
+//     order.status = "ongoing";
+
+//     await order.save();
+
+//     // ========================================================
+//     // 🌟 ADDED: SOCKET EMIT FOR REAL-TIME RIDER ASSIGNMENT
+//     // ========================================================
+//     const io = req.app.get("io");
+//     if (io) {
+//       // 1. Customer ke personal room ko status update bhejein
+//       io.to(`user_${order.userId}`).emit("orderStatusUpdated", {
+//         orderId: order._id,
+//         status: order.status,
+//       });
+
+//       // 2. Dedicated order tracking room ko event bhejein (Rider details ke sath)
+//       io.to(`order_${order._id}`).emit("riderAssignedLive", {
+//         orderId: order._id,
+//         status: order.status,
+//         riderId: order.riderId,
+//         acceptedAt: order.acceptedAt,
+//       });
+//     }
+//     //=============================================================
+//     const customer = await User.findById(order.userId);
+
+//     if (customer?.fcmToken) {
+//       await sendNotification(
+//         customer.fcmToken,
+//         "Order Accepted",
+//         `Rider ${rider.name} has accepted your order #${order.orderNumber}`,
+//         {
+//           riderId: rider._id.toString(),
+//           riderName: rider.name || "",
+//           riderEmail: rider.email || "",
+//           riderPhone: rider.phone || "",
+//         }
+//       );
+//     }
+
+//     res.status(200).json({
+//       success: true,
+//       message: "Order accepted successfully",
+//       order,
+//       rider: {
+//         id: rider._id,
+//         name: rider.name,
+//         email: rider.email,
+//         phone: rider.phone,
+//       },
+//     });
+//   } catch (err) {
+//     res.status(500).json({
+//       success: false,
+//       message: err.message,
+//     });
+//   }
+// };
 
 exports.acceptOrder = async (req, res) => {
   try {
+    // 1. Find pending and unassigned order
     const order = await Order.findOne({
       _id: req.params.id,
       status: "pending",
@@ -538,13 +830,20 @@ exports.acceptOrder = async (req, res) => {
     if (!order) {
       return res.status(404).json({
         success: false,
-        message: "Order already assigned",
+        message: "Order already assigned or not found",
       });
     }
 
-    // Rider ki details lo
+    // 2. Get Rider details
     const rider = await User.findById(req.user.id);
+    if (!rider) {
+      return res.status(404).json({
+        success: false,
+        message: "Rider not found",
+      });
+    }
 
+    // 3. Update order attributes
     order.riderId = req.user.id;
     order.isAssigned = true;
     order.acceptedAt = new Date();
@@ -553,7 +852,20 @@ exports.acceptOrder = async (req, res) => {
     await order.save();
 
     // ========================================================
-    // 🌟 ADDED: SOCKET EMIT FOR REAL-TIME RIDER ASSIGNMENT
+    // 🌟 ADDED: SESSION ORDER COUNTER INCREMENT
+    // ========================================================
+    const activeParticipation = await RiderSessionParticipation.findOne({
+      riderId: rider._id,
+      status: "in_progress",
+    });
+
+    if (activeParticipation) {
+      activeParticipation.completedOrders = (activeParticipation.completedOrders || 0) + 1;
+      await activeParticipation.save();
+    }
+
+    // ========================================================
+    // 🌟 SOCKET EMIT FOR REAL-TIME RIDER ASSIGNMENT
     // ========================================================
     const io = req.app.get("io");
     if (io) {
@@ -571,7 +883,10 @@ exports.acceptOrder = async (req, res) => {
         acceptedAt: order.acceptedAt,
       });
     }
-    //=============================================================
+
+    // ========================================================
+    // FCM PUSH NOTIFICATION TO CUSTOMER
+    // ========================================================
     const customer = await User.findById(order.userId);
 
     if (customer?.fcmToken) {
@@ -588,7 +903,7 @@ exports.acceptOrder = async (req, res) => {
       );
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Order accepted successfully",
       order,
@@ -600,7 +915,8 @@ exports.acceptOrder = async (req, res) => {
       },
     });
   } catch (err) {
-    res.status(500).json({
+    console.error("ACCEPT ORDER ERROR:", err);
+    return res.status(500).json({
       success: false,
       message: err.message,
     });

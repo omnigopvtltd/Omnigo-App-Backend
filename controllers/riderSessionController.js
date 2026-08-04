@@ -52,14 +52,14 @@ exports.getAllSessions = async (req, res) => {
     const { isActive, page = 1, limit = 20 } = req.query;
     const query = {};
 
-    if (req.user.role !== "admin") {
-      const now = new Date();
-      query.isActive = true;
-      query.startDate = { $lte: now };
-      query.endDate = { $gte: now };
-    } else if (isActive !== undefined) {
-      query.isActive = isActive === "true";
-    }
+    // if (req.user.role !== "admin") {
+    //   const now = new Date();
+    //   query.isActive = true;
+    //   query.startDate = { $lte: now };
+    //   query.endDate = { $gte: now };
+    // } else if (isActive !== undefined) {
+    //   query.isActive = isActive === "true";
+    // }
 
     const pageNum = Math.max(parseInt(page, 10) || 1, 1);
     const limitNum = Math.max(parseInt(limit, 10) || 20, 1);
@@ -145,8 +145,79 @@ exports.deleteSession = async (req, res) => {
   }
 };
 
+// // =====================================
+// // RIDER: JOIN SESSION
+// // =====================================
+// exports.joinSession = async (req, res) => {
+//   try {
+//     const rider = await User.findOne({ _id: req.user.id, role: "rider" });
+//     if (!rider) return res.status(404).json({ success: false, message: "Rider not found" });
+
+//     if (rider.isBlocked) {
+//       return res.status(403).json({ success: false, message: "Your account is blocked" });
+//     }
+//     if (!isFullyVerified(rider)) {
+//       return res.status(403).json({
+//         success: false,
+//         message: "Complete CNIC and face verification before joining a session",
+//       });
+//     }
+
+//     const existingActive = await RiderSessionParticipation.findOne({
+//       riderId: rider._id,
+//       status: "in_progress",
+//     });
+//     if (existingActive) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "You're already in an active session. Finish or leave it before joining another.",
+//       });
+//     }
+
+//     const session = await RiderSession.findById(req.params.id);
+//     if (!session) return res.status(404).json({ success: false, message: "Session not found" });
+//     if (!session.isCurrentlyJoinable()) {
+//       return res.status(400).json({ success: false, message: "This session isn't currently open to join" });
+//     }
+
+//     const walletBalance = rider.wallet?.balance || 0;
+//     if (walletBalance < session.minWalletBalance) {
+//       return res.status(400).json({
+//         success: false,
+//         message: `You need at least ${session.minWalletBalance} in your wallet to join this session`,
+//         requiredAmount: session.minWalletBalance,
+//         currentBalance: walletBalance,
+//       });
+//     }
+
+//     const expiresAt = session.timeLimitHours
+//       ? new Date(Date.now() + session.timeLimitHours * 60 * 60 * 1000)
+//       : null;
+
+//     const participation = await RiderSessionParticipation.create({
+//       sessionId: session._id,
+//       riderId: rider._id,
+//       bonusAmount: session.bonusAmount,
+//       requiredOrders: session.requiredOrders,
+//       expiresAt,
+//     });
+
+//     return res.status(201).json({
+//       success: true,
+//       message: `Joined session — complete ${session.requiredOrders} orders to earn ${session.bonusAmount}`,
+//       participation,
+//     });
+//   } catch (err) {
+//     if (err.code === 11000) {
+//       return res.status(400).json({ success: false, message: "You're already in an active session" });
+//     }
+//     console.log("JOIN SESSION ERROR:", err);
+//     return res.status(500).json({ success: false, message: err.message });
+//   }
+// };
+
 // =====================================
-// RIDER: JOIN SESSION
+// RIDER: JOIN / BOOK SESSION
 // =====================================
 exports.joinSession = async (req, res) => {
   try {
@@ -156,29 +227,38 @@ exports.joinSession = async (req, res) => {
     if (rider.isBlocked) {
       return res.status(403).json({ success: false, message: "Your account is blocked" });
     }
-    if (!isFullyVerified(rider)) {
-      return res.status(403).json({
-        success: false,
-        message: "Complete CNIC and face verification before joining a session",
-      });
-    }
+    // if (!isFullyVerified(rider)) {
+    //   return res.status(403).json({
+    //     success: false,
+    //     message: "Complete CNIC and face verification before joining a session",
+    //   });
+    // }
 
+    // 1. Check for active or already booked session
     const existingActive = await RiderSessionParticipation.findOne({
       riderId: rider._id,
       status: "in_progress",
     });
-    if (existingActive) {
+
+    const existingBooked = await RiderSessionParticipation.findOne({
+      riderId: rider._id,
+      status: "booked",
+    });
+
+    // Prevent booking more than 1 session in advance
+    if (existingActive && existingBooked) {
       return res.status(400).json({
         success: false,
-        message: "You're already in an active session. Finish or leave it before joining another.",
+        message: "You already have an active session AND a booked session queued up.",
       });
     }
-
     const session = await RiderSession.findById(req.params.id);
+    console.log(session);
     if (!session) return res.status(404).json({ success: false, message: "Session not found" });
-    if (!session.isCurrentlyJoinable()) {
-      return res.status(400).json({ success: false, message: "This session isn't currently open to join" });
-    }
+
+    // if (!session.isCurrentlyJoinable()) {
+    //   return res.status(400).json({ success: false, message: "This session isn't currently open to join" });
+    // }
 
     const walletBalance = rider.wallet?.balance || 0;
     if (walletBalance < session.minWalletBalance) {
@@ -190,28 +270,162 @@ exports.joinSession = async (req, res) => {
       });
     }
 
-    const expiresAt = session.timeLimitHours
+    // Prevent booking the exact same session twice
+    const alreadyParticipating = await RiderSessionParticipation.findOne({
+      sessionId: session._id,
+      riderId: rider._id,
+      status: { $in: ["in_progress", "booked"] },
+    });
+    if (alreadyParticipating) {
+      return res.status(400).json({
+        success: false,
+        message: "You are already in or have booked this exact session.",
+      });
+    }
+
+    // 2. Determine initial status & start time
+    const isBookedMode = !!existingActive; // If actively in a session, mark this one as 'booked'
+    const status = isBookedMode ? "booked" : "in_progress";
+    const startedAt = isBookedMode ? null : new Date();
+
+    // Timer only calculates if it starts immediately
+    const expiresAt = (!isBookedMode && session.timeLimitHours)
       ? new Date(Date.now() + session.timeLimitHours * 60 * 60 * 1000)
       : null;
 
     const participation = await RiderSessionParticipation.create({
       sessionId: session._id,
       riderId: rider._id,
+      status,
       bonusAmount: session.bonusAmount,
       requiredOrders: session.requiredOrders,
+      startedAt,
       expiresAt,
     });
 
     return res.status(201).json({
       success: true,
-      message: `Joined session — complete ${session.requiredOrders} orders to earn ${session.bonusAmount}`,
+      message: isBookedMode
+        ? `Session booked successfully! It will automatically start once your current session ends.`
+        : `Joined session — complete ${session.requiredOrders} orders to earn ${session.bonusAmount}`,
       participation,
     });
   } catch (err) {
     if (err.code === 11000) {
-      return res.status(400).json({ success: false, message: "You're already in an active session" });
+      return res.status(400).json({ success: false, message: "You already have a participation record for this session." });
     }
     console.log("JOIN SESSION ERROR:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// helpers/sessionHelper.js
+exports.activateNextBookedSession = async (riderId) => {
+  const bookedSession = await RiderSessionParticipation.findOne({
+    riderId,
+    status: "booked",
+  }).populate("sessionId");
+
+  if (!bookedSession) return null;
+
+  const session = bookedSession.sessionId;
+  const now = new Date();
+  
+  // Calculate expiry based on the activation time
+  const expiresAt = session?.timeLimitHours
+    ? new Date(now.getTime() + session.timeLimitHours * 60 * 60 * 1000)
+    : null;
+
+  bookedSession.status = "in_progress";
+  bookedSession.startedAt = now;
+  bookedSession.expiresAt = expiresAt;
+
+  await bookedSession.save();
+  return bookedSession;
+};
+
+// =====================================
+// RIDER: COMPLETE SESSION
+// =====================================
+exports.completeSession = async (req, res) => {
+  try {
+    // 1. Verify rider existence and status
+    const rider = await User.findOne({ _id: req.user.id, role: "rider" });
+    if (!rider) {
+      return res.status(404).json({ success: false, message: "Rider not found" });
+    }
+
+    if (rider.isBlocked) {
+      return res.status(403).json({ success: false, message: "Your account is blocked" });
+    }
+
+    // 2. Find current active session
+    const currentParticipation = await RiderSessionParticipation.findOne({
+      riderId: rider._id,
+      status: "in_progress",
+    });
+
+    if (!currentParticipation) {
+      return res.status(404).json({
+        success: false,
+        message: "No active session found to complete.",
+      });
+    }
+
+    // 3. Check for expiration
+    if (currentParticipation.expiresAt && new Date() > new Date(currentParticipation.expiresAt)) {
+      currentParticipation.status = "expired";
+      await currentParticipation.save();
+
+      // Even if expired, try activating the next booked session
+      const nextSession = await activateNextBookedSession(rider._id);
+
+      return res.status(400).json({
+        success: false,
+        message: "Session time limit has expired. Bonus cannot be claimed.",
+        nextSessionStarted: !!nextSession,
+      });
+    }
+
+    // 4. Verify completion condition (Required orders met)
+    if (currentParticipation.completedOrders < currentParticipation.requiredOrders) {
+      return res.status(400).json({
+        success: false,
+        message: `You haven't reached the required orders yet. (${currentParticipation.completedOrders}/${currentParticipation.requiredOrders})`,
+        completedOrders: currentParticipation.completedOrders,
+        requiredOrders: currentParticipation.requiredOrders,
+      });
+    }
+
+    // 5. Update session status
+    currentParticipation.status = "completed";
+    currentParticipation.completedAt = new Date();
+    await currentParticipation.save();
+
+    // 6. Credit bonus to rider's wallet
+    const bonusAmount = currentParticipation.bonusAmount || 0;
+    if (bonusAmount > 0) {
+      if (!rider.wallet) {
+        rider.wallet = { balance: 0 };
+      }
+      rider.wallet.balance = (rider.wallet.balance || 0) + bonusAmount;
+      await rider.save();
+    }
+
+    // 7. Activate the next queued/booked session
+    const newActiveSession = await activateNextBookedSession(rider._id);
+
+    return res.status(200).json({
+      success: true,
+      message: `Session completed successfully! Added ${bonusAmount} to your wallet.`,
+      bonusEarned: bonusAmount,
+      updatedWalletBalance: rider.wallet.balance,
+      completedSession: currentParticipation,
+      nextSessionStarted: !!newActiveSession,
+      nextSession: newActiveSession || null,
+    });
+  } catch (err) {
+    console.error("COMPLETE SESSION ERROR:", err);
     return res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -250,6 +464,7 @@ exports.leaveSession = async (req, res) => {
 // =====================================
 exports.getMySessionStatus = async (req, res) => {
   try {
+
     const participation = await RiderSessionParticipation.findOne({
       riderId: req.user.id,
       status: "in_progress",
@@ -307,5 +522,124 @@ exports.getSessionParticipants = async (req, res) => {
   } catch (err) {
     console.log("GET SESSION PARTICIPANTS ERROR:", err);
     return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// =====================================
+// RIDER: GET BOOKED SESSIONS
+// =====================================
+exports.getBookedSessions = async (req, res) => {
+  try {
+    const riderId = req.user.id;
+
+    // Fetch all participation records where status is 'booked' (queued)
+    const bookedSessions = await RiderSessionParticipation.find({
+      riderId,
+      status: "booked",
+    })
+      .populate("sessionId") 
+      .sort({ createdAt: 1 }); 
+
+    return res.status(200).json({
+      success: true,
+      count: bookedSessions.length,
+      data: bookedSessions,
+    });
+  } catch (err) {
+    console.error("GET BOOKED SESSIONS ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// =====================================
+// ADMIN: GET COMINNG SOON SESSIONS 
+// =====================================
+exports.getComingSoonSessions = async (req, res) => {
+  try {
+    const riderId = req.user.id;
+    const now = new Date();
+
+    // 1. Get IDs of sessions the rider is actively in or has booked
+    const activeOrBookedParticipations = await RiderSessionParticipation.find({
+      riderId,
+      status: { $in: ["in_progress", "booked"] },
+    }).select("sessionId");
+
+    const excludeSessionIds = activeOrBookedParticipations.map(
+      (p) => p.sessionId
+    );
+
+    // 2. Query upcoming sessions:
+    // - Not currently expired/ended
+    // - Start time is in the future (or marked status as 'upcoming'/'inactive')
+    // - Excludes sessions rider is already part of
+    const comingSoonSessions = await RiderSession.find({
+      _id: { $nin: excludeSessionIds },
+      isActive: true,
+      $or: [
+        { startTime: { $gt: now } }, // Sessions scheduled for the future
+        { status: "upcoming" },      // Or explicit status flag if used
+      ],
+    }).sort({ startTime: 1 }); // Show nearest upcoming sessions first
+
+    return res.status(200).json({
+      success: true,
+      count: comingSoonSessions.length,
+      data: comingSoonSessions,
+    });
+  } catch (err) {
+    console.error("GET COMING SOON SESSIONS ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// =====================================
+// RIDER: CANCEL BOOKED SESSION
+// =====================================
+exports.cancelBookedSession = async (req, res) => {
+  try {
+    const riderId = req.user.id;
+    const { id } = req.params; // Accepts participationId OR sessionId
+
+    // 1. Find participation record that belongs to this rider and is currently in 'booked' status
+    const bookedParticipation = await RiderSessionParticipation.findOne({
+      $or: [{ _id: id }, { sessionId: id }],
+      riderId,
+      status: "booked",
+    });
+
+    if (!bookedParticipation) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "No booked session found matching this ID, or the session is already active/completed.",
+      });
+    }
+
+    // 2. Update status to 'cancelled' (or delete the record)
+    bookedParticipation.status = "cancelled";
+    bookedParticipation.cancelledAt = new Date();
+    await bookedParticipation.save();
+
+    // Option B: If you prefer completely removing the record from DB instead:
+    // await bookedParticipation.deleteOne();
+
+    return res.status(200).json({
+      success: true,
+      message: "Booked session cancelled successfully.",
+      cancelledSession: bookedParticipation,
+    });
+  } catch (err) {
+    console.error("CANCEL BOOKED SESSION ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
   }
 };

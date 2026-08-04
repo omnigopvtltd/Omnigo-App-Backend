@@ -12,7 +12,14 @@ const {
   leaveSession,
   getMySessionStatus,
   getSessionParticipants,
+  getComingSoonSessions,
+  getBookedSessions,
 } = require("../controllers/riderSessionController");
+
+router.get("/", auth, getAllSessions);
+router.get("/coming", auth, getComingSoonSessions);
+router.get("/booked", auth, getBookedSessions);
+router.get("/:id", auth, getSessionById);
 
 // Rider self-service — specific paths first so they aren't shadowed by "/:id"
 router.get("/my/status", auth, role("rider"), getMySessionStatus);
@@ -20,11 +27,9 @@ router.post("/my/leave", auth, role("rider"), leaveSession);
 router.post("/:id/join", auth, role("rider"), joinSession);
 
 // Shared list/detail (role-aware inside the controller)
-router.get("/", auth, getAllSessions);
-router.get("/:id", auth, getSessionById);
 
 // Admin management
-router.post("/", auth, role("admin"), createSession);
+router.post("/create", auth, role("admin"), createSession);
 router.put("/:id", auth, role("admin"), updateSession);
 router.delete("/:id", auth, role("admin"), deleteSession);
 router.get("/:id/participants", auth, role("admin"), getSessionParticipants);
