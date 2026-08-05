@@ -13,11 +13,9 @@ const restaurantRoutes = require("./routes/restaurantRoutes");
 const couponRoutes = require("./routes/couponRoutes");
 const campaignRoutes = require("./routes/campaignRoutes");
 const financeRoutes = require("./routes/financeRoutes");
-<<<<<<< HEAD
-const categoryRoutes = require("./routes/categoryRoutes");
-=======
 const foodCategoryRoutes = require("./routes/foodCategoryRoutes");
->>>>>>> 624727e9e4e20a9adf55422f41beb14bd32b8dab
+const categoryRoutes = require("./routes/categoryRoutes");
+
 require("./config/firebase");
 
 //  SOCKET
@@ -46,6 +44,9 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/products", require("./routes/productRoutes"));
 app.use("/api/cart", require("./routes/cartRoutes"));
+
+// ================= VENDORS =================
+app.use("/api/vendors", require("./routes/vendorRoutes"));
 
 // ================= RIDERS =================
 app.use("/api/admin", require("./routes/adminRoutes"));
