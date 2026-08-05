@@ -13,6 +13,7 @@ const restaurantRoutes = require("./routes/restaurantRoutes");
 const couponRoutes = require("./routes/couponRoutes");
 const campaignRoutes = require("./routes/campaignRoutes");
 const financeRoutes = require("./routes/financeRoutes");
+const categoryRoutes = require("./routes/categoryRoutes");
 const foodCategoryRoutes = require("./routes/foodCategoryRoutes");
 require("./config/firebase");
 
@@ -21,6 +22,11 @@ const { initSocket } = require("./socket");
 
 const app = express();
 const server = http.createServer(app);
+
+const dns = require("node:dns");
+dns.setServers(["1.1.1.1", "8.8.8.8"]);
+
+require("dotenv").config();
 
 // ================= DB =================
 connectDB();
@@ -76,6 +82,8 @@ app.use("/api/settings", AdminSettings);
 app.use("/api/chat", require("./routes/chatRoutes"));
 app.use("/api/calls", require("./routes/callRoutes"));
 
+// Fast Food //
+app.use("/api", categoryRoutes);
 // ================= SOCKET INIT =================
 const io = initSocket(server);
 
