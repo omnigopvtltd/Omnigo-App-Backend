@@ -13,11 +13,8 @@ const restaurantRoutes = require("./routes/restaurantRoutes");
 const couponRoutes = require("./routes/couponRoutes");
 const campaignRoutes = require("./routes/campaignRoutes");
 const financeRoutes = require("./routes/financeRoutes");
-<<<<<<< HEAD
 const categoryRoutes = require("./routes/categoryRoutes");
-=======
 const foodCategoryRoutes = require("./routes/foodCategoryRoutes");
->>>>>>> 624727e9e4e20a9adf55422f41beb14bd32b8dab
 require("./config/firebase");
 
 //  SOCKET
