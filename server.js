@@ -13,9 +13,8 @@ const restaurantRoutes = require("./routes/restaurantRoutes");
 const couponRoutes = require("./routes/couponRoutes");
 const campaignRoutes = require("./routes/campaignRoutes");
 const financeRoutes = require("./routes/financeRoutes");
-const foodCategoryRoutes = require("./routes/foodCategoryRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
-
+const foodCategoryRoutes = require("./routes/foodCategoryRoutes");
 require("./config/firebase");
 
 //  SOCKET
@@ -73,6 +72,7 @@ app.use("/api/tracking", trackingRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/restaurants", restaurantRoutes);
 app.use("/api/categories", foodCategoryRoutes);
+app.use("/api/deals", require("./routes/dealRoutes"));
 
 app.use("/api/onboarding", require("./routes/onboardingRoutes"));
 app.use("/api/wishlist", wishlistRoutes);

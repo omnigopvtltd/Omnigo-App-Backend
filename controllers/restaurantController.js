@@ -150,6 +150,27 @@ exports.getAllRestaurants = async (req, res) => {
 };
 
 // =====================================
+// GET ALL RESTAURANT BRANDS (filter, search, paginate)
+// =====================================
+exports.getAllRestaurantBrands = async (req, res) => {
+  try {
+    const restaurants = await Restaurant.find().select("name logo _id");
+
+    return res.status(200).json({
+      success: true,
+      count: restaurants.length,
+      restaurants,
+    });
+  } catch (err) {
+    console.log("GET RESTAURANTS ERROR:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+// =====================================
 // GET SINGLE RESTAURANT
 // =====================================
 exports.getRestaurantById = async (req, res) => {

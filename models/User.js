@@ -74,7 +74,7 @@ const userSchema = new mongoose.Schema(
 
       vehicleType: {
         type: String,
-        enum: ["bike", "car", "van"],
+        enum: ["bike", "car", "van", "scooty", "auto", "delivery_rider"],
         default: "bike",
       },
 

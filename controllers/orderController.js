@@ -1,6 +1,7 @@
 const Order = require("../models/Order");
 const Cart = require("../models/Cart");
 const User = require("../models/User");
+const RiderSessionParticipation = require("../models/RiderSessionParticipation");
 // const {dispatchOrderToNearestRider} = require("../helpers/dispatchOrderToNearestRider")
 const { getIO } = require("../socket");
 // const { getIO } = require("../socket");
@@ -144,18 +145,13 @@ const sendNotification = require("../utils/sendNotification");
 //   }
 // };
 
-
 // ===================================================
 // DISPATCH: AUTO-ASSIGN TO NEAREST AUTO-ACCEPT RIDER
 // ===================================================
 
-
 exports.createOrder = async (req, res) => {
-
   try {
-
     const {
-
       addressId,
 
       locationId,
@@ -163,30 +159,19 @@ exports.createOrder = async (req, res) => {
       paymentMethod = "cash_on_delivery",
 
       promoDiscount = 0,
-
     } = req.body;
-
-
 
     // USER
 
     const user = await User.findById(req.user.id);
 
-
-
     if (!user) {
-
       return res.status(404).json({
-
         success: false,
 
         message: "User not found",
-
       });
-
     }
-
-
 
     // =========================
 
@@ -194,42 +179,26 @@ exports.createOrder = async (req, res) => {
 
     // =========================
 
-
-
     let orderAddress = null;
 
     let orderLocation = null;
 
-
-
     if (!addressId) {
-
       return res.status(400).json({
-
         success: false,
 
         message: "addressId is required",
-
       });
-
     }
-
-
 
     // Pehle addresses me check karo
 
     const selectedAddress = user.addresses.find(
-
-      (addr) => addr._id.toString() === addressId
-
+      (addr) => addr._id.toString() === addressId,
     );
 
-
-
     if (selectedAddress) {
-
       orderAddress = {
-
         addressId: selectedAddress._id,
 
         phone: selectedAddress.phone,
@@ -241,23 +210,13 @@ exports.createOrder = async (req, res) => {
         zipCode: selectedAddress.zipCode,
 
         country: selectedAddress.country,
-
       };
-
-    }
-
-    else if (
-
+    } else if (
       user.location &&
-
       user.location._id &&
-
       user.location._id.toString() === addressId
-
     ) {
-
       orderLocation = {
-
         locationId: user.location._id,
 
         type: user.location.type || user.location.mode,
@@ -269,24 +228,14 @@ exports.createOrder = async (req, res) => {
         address: user.location.address,
 
         coordinates: user.location.coordinates,
-
       };
-
-    }
-
-    else {
-
+    } else {
       return res.status(404).json({
-
         success: false,
 
         message: "Address or Location not found",
-
       });
-
     }
-
-
 
     // =========================
 
@@ -294,46 +243,26 @@ exports.createOrder = async (req, res) => {
 
     // =========================
 
-
-
     const cart = await Cart.findOne({
-
       userId: req.user.id,
-
     });
 
-
-
     if (!cart || cart.items.length === 0) {
-
       return res.status(400).json({
-
         success: false,
 
         message: "Cart is empty",
-
       });
-
     }
-
-
 
     let subtotal = 0;
 
-
-
     const items = cart.items.map((item) => {
-
       const total = Number(item.price) * Number(item.quantity);
-
-
 
       subtotal += total;
 
-
-
       return {
-
         productId: item.productId,
 
         name: item.name,
@@ -349,12 +278,8 @@ exports.createOrder = async (req, res) => {
         quantity: item.quantity,
 
         total,
-
       };
-
     });
-
-
 
     // =========================
 
@@ -362,17 +287,11 @@ exports.createOrder = async (req, res) => {
 
     // =========================
 
-
-
     const deliveryFee = 6;
 
     const tax = 2.5;
 
-
-
     const totalAmount = subtotal + deliveryFee + tax - promoDiscount;
-
-
 
     // =========================
 
@@ -380,39 +299,20 @@ exports.createOrder = async (req, res) => {
 
     // =========================
 
-
-
     const order = await Order.create({
-
-      orderNumber:
-
-        "ORD" + Date.now(),
-
-
+      orderNumber: "ORD" + Date.now(),
 
       userId: req.user.id,
 
-
-
       address: orderAddress,
-
-
 
       location: orderLocation,
 
-
-
       items,
-
-
 
       paymentMethod,
 
-
-
       paymentStatus: "pending",
-
-
 
       subtotal,
 
@@ -424,25 +324,14 @@ exports.createOrder = async (req, res) => {
 
       totalAmount,
 
-
-
       status: "pending",
-
-
 
       riderId: null,
 
-
-
       isAssigned: false,
 
-
-
       acceptedAt: null,
-
     });
-
-
 
     // =========================
 
@@ -450,44 +339,28 @@ exports.createOrder = async (req, res) => {
 
     // =========================
 
-
-
     cart.items = [];
 
     await cart.save();
 
-
-
     return res.status(201).json({
-
       success: true,
 
-      message:
+      message: "Order placed successfully",
 
-        "Order placed successfully",
+      order,
 
-         order,
-
-         orderId: order._id,
-
+      orderId: order._id,
     });
-
   } catch (err) {
-
     console.log("CREATE ORDER ERROR:", err);
 
-
-
     return res.status(500).json({
-
       success: false,
 
       message: err.message,
-
     });
-
   }
-
 };
 
 // =====================================
@@ -562,13 +435,18 @@ exports.cancelOrder = async (req, res) => {
     }
 
     // NEW — refund any wallet float the rider fronted for this order
-    if (order.riderId && order.riderFloatAmount > 0 && !order.riderFloatSettled) {
+    if (
+      order.riderId &&
+      order.riderFloatAmount > 0 &&
+      !order.riderFloatSettled
+    ) {
       const User = require("../models/User");
       const WalletTransaction = require("../models/WalletTransaction");
 
       const rider = await User.findById(order.riderId);
       if (rider) {
-        const newBalance = (rider.wallet?.balance || 0) + order.riderFloatAmount;
+        const newBalance =
+          (rider.wallet?.balance || 0) + order.riderFloatAmount;
         rider.wallet = { balance: newBalance };
         await rider.save();
 
@@ -714,7 +592,7 @@ exports.toggleAutoAccept = async (req, res) => {
     const rider = await User.findOneAndUpdate(
       { _id: riderId, role: "rider" },
       { autoAcceptOrders },
-      { new: true }
+      { new: true },
     ).select("-password");
 
     if (!rider) {
@@ -753,7 +631,7 @@ exports.toggleAutoAccept = async (req, res) => {
 //       });
 //     }
 
-//     // Rider details 
+//     // Rider details
 //     const rider = await User.findById(req.user.id);
 
 //     order.riderId = req.user.id;
@@ -860,7 +738,8 @@ exports.acceptOrder = async (req, res) => {
     });
 
     if (activeParticipation) {
-      activeParticipation.completedOrders = (activeParticipation.completedOrders || 0) + 1;
+      activeParticipation.completedOrders =
+        (activeParticipation.completedOrders || 0) + 1;
       await activeParticipation.save();
     }
 
@@ -899,7 +778,7 @@ exports.acceptOrder = async (req, res) => {
           riderName: rider.name || "",
           riderEmail: rider.email || "",
           riderPhone: rider.phone || "",
-        }
+        },
       );
     }
 
@@ -1080,8 +959,8 @@ exports.reorder = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Order has no items to reorder",
-          ...order.riderId.toObject(),
-            assignedAt: order.acceptedAt,
+        ...order.riderId.toObject(),
+        assignedAt: order.acceptedAt,
       });
     }
 
@@ -1377,7 +1256,7 @@ exports.getAllOrders = async (req, res) => {
     console.log(search);
     if (search && search.trim() !== "") {
       const searchRegex = new RegExp(search.trim(), "i");
-console.log(searchRegex);
+      console.log(searchRegex);
 
       filter.$or = [
         { orderNumber: searchRegex },
@@ -1401,10 +1280,9 @@ console.log(searchRegex);
   }
 };
 
-
 exports.handleOrderAssignment = async (req, res) => {
   // orderId, io
-  const {orderId} = req.body;
+  const { orderId } = req.body;
   const settings = await Settings.findOne();
   const order = await Order.findById(orderId).populate("restaurantId");
 
@@ -1452,4 +1330,4 @@ exports.handleOrderAssignment = async (req, res) => {
       });
     }
   }
-}
+};

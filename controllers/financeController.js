@@ -227,6 +227,71 @@ exports.getRiderEarnings = async (req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 };
+exports.getRiderEarningByID = async (req, res) => {
+  try {
+    const { id } = req.body;
+    const start = rangeStart(range);
+
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+    const limitNum = Math.max(parseInt(limit, 10) || 20, 1);
+    const skip = (pageNum - 1) * limitNum;
+
+    const riderMatch = { role: "rider" };
+    if (search) {
+      const regex = new RegExp(search, "i");
+      riderMatch.$or = [{ name: regex }, { email: regex }, { phone: regex }];
+    }
+
+    const [riders, total] = await Promise.all([
+      User.find(riderMatch).select("-password").sort({ name: 1 }).skip(skip).limit(limitNum),
+      User.countDocuments(riderMatch),
+    ]);
+
+    const riderIds = riders.map((r) => r._id);
+
+    const stats = await Order.aggregate([
+      {
+        $match: {
+          riderId: { $in: riderIds },
+          status: "delivered",
+          createdAt: { $gte: start },
+        },
+      },
+      {
+        $group: {
+          _id: "$riderId",
+          deliveredCount: { $sum: 1 },
+          totalEarned: { $sum: "$deliveryFee" },
+        },
+      },
+    ]);
+    const statsMap = new Map(stats.map((s) => [String(s._id), s]));
+
+    const earnings = riders.map((rider) => {
+      const stat = statsMap.get(String(rider._id));
+      return {
+        riderId: rider._id,
+        name: rider.name,
+        phone: rider.phone,
+        deliveredCount: stat?.deliveredCount || 0,
+        totalEarned: stat?.totalEarned || 0,
+        walletBalance: rider.wallet?.balance || 0,
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      count: earnings.length,
+      total,
+      page: pageNum,
+      totalPages: Math.ceil(total / limitNum) || 1,
+      earnings,
+    });
+  } catch (err) {
+    console.log("GET RIDER EARNINGS ERROR:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
 
 // =====================================
 // ADMIN COMMISSION SUMMARY (platform's total cut, by restaurant)
