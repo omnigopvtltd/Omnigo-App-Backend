@@ -11,7 +11,7 @@ const {
 } = require("../controllers/riderWalletController");
 
 // Rider self-service
-router.get("/me/", auth, role("rider"), getMyWallet);
+router.get("/me", auth, role("rider"), getMyWallet);
 router.get("/transactions", auth, role("rider"), getTransactions);
 router.post("/topup", auth, role("rider"), topUpWallet);
 

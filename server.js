@@ -63,6 +63,7 @@ app.use("/api/tracking", trackingRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/restaurants", restaurantRoutes);
 app.use("/api/categories", foodCategoryRoutes);
+app.use("/api/deals", require("./routes/dealRoutes"));
 
 app.use("/api/onboarding", require("./routes/onboardingRoutes"));
 app.use("/api/wishlist", wishlistRoutes);

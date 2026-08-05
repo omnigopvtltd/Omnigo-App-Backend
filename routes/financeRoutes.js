@@ -12,11 +12,13 @@ const {
   createWithdrawRequest,
   updateWithdrawRequestStatus,
   getTransactions,
+  getRiderEarningByID,
 } = require("../controllers/financeController");
 
 router.get("/revenue", auth, role("admin"), getRevenueOverview);
 router.get("/restaurant-earnings", auth, getRestaurantEarnings);
 router.get("/rider-earnings", auth, getRiderEarnings);
+router.get("/rider-earnings/:id", auth, getRiderEarningByID);
 router.get("/commission", auth, getCommissionSummary);
 router.get("/tax", auth, getTaxSummary);
 
