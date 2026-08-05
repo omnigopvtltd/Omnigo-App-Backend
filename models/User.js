@@ -317,7 +317,7 @@ const userSchema = new mongoose.Schema(
     riderProfile: {
       vehicleType: {
         type: String,
-        enum: ["bike", "car", "van"],
+        enum: ["bike", "car", "van", "scooty", "auto", "delivery_rider"],
         default: "bike",
       },
       vehiclePlate: { type: String, default: "" },
