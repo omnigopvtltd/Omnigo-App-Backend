@@ -31,7 +31,7 @@ const {
 
   // ADMIN / RIDER
   createAdmin,
-  createRider,
+  // createRider,
   sendRiderOTP,
   verifyRiderOTP,
   saveToken,
@@ -123,12 +123,12 @@ router.post(
 // ======================================================
 // RIDER
 // ======================================================
-router.post(
-  "/rider",
-  // auth,
-  // authorizeRoles("admin", "superadmin"),
-  createRider
-);
+// router.post(
+//   "/rider",
+//   // auth,
+//   // authorizeRoles("admin", "superadmin"),
+//   createRider
+// );
 router.get("/riders", getRiders);
 router.get("/riders/:id", getRiderById);
 router.put("/riders/update/:id", updateRider);

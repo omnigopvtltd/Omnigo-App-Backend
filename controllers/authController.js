@@ -539,7 +539,7 @@ exports.signup = [
         name,
         email,
         password: hash,
-        role: role ||"user",
+        role: role || "user",
 
         // ✅ AUTO VERIFIED
         isEmailVerified: true,
@@ -752,65 +752,67 @@ exports.createAdmin = async (req, res) => {
 // ======================================================
 // RIDER
 // ======================================================
-exports.createRider = async (req, res) => {
-  try {
-    const { name, email, password, phone } = req.body;
+// exports.createRider = async (req, res) => {
+//    console.log("NEW CREATE RIDER RUNNING");
+//   try {
+//     const { name, email, password, phone } = req.body;
 
-    // Check existing rider
-    const existingUser = await User.findOne({
-      $or: [{ email }, { phone }],
-    });
+//     // Check existing rider
+//     const existingUser = await User.findOne({
+//       $or: [{ email }, { phone }],
+//     });
 
-    if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        message: "Email or phone already exists",
-      });
-    }
+//     if (existingUser) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Email or phone already exists",
+//       });
+//     }
 
-    // Hash Password
-    const hash = await bcrypt.hash(password, 12);
+//     // Hash Password
+//     const hash = await bcrypt.hash(password, 12);
 
-    // Create Rider
-    const rider = await User.create({
-      name,
-      email,
-      phone,
-      password: hash,
-      role: "rider",
-    });
+//     // Create Rider
+//     const rider = await User.create({
+//       name,
+//       email,
+//       phone,
+//       password: hash,
+//       role: "rider",
+//     });
 
-    // Generate JWT Token
-    const token = jwt.sign(
-      {
-        id: rider._id,
-        role: rider.role,
-      },
-      process.env.JWT_SECRET,
-      {
-        expiresIn: "30d",
-      },
-    );
+//     // ================= TOKEN YAHAN LAGAO =================
+//     const token = jwt.sign(
+//       {
+//         id: rider._id,
+//         role: rider.role,
+//       },
+//       process.env.JWT_SECRET,
+//       {
+//         expiresIn: "30d",
+//       }
+//     );
 
-    return res.status(201).json({
-      success: true,
-      message: "Rider created successfully",
-      token,
-      rider: {
-        _id: rider._id,
-        name: rider.name,
-        email: rider.email,
-        phone: rider.phone,
-        role: rider.role,
-      },
-    });
-  } catch (err) {
-    return res.status(500).json({
-      success: false,
-      message: err.message,
-    });
-  }
-};
+//     // ================= RESPONSE =================
+//     return res.status(201).json({
+//       success: true,
+//       message: "Rider created successfully",
+//       token,
+//       rider: {
+//         _id: rider._id,
+//         name: rider.name,
+//         email: rider.email,
+//         phone: rider.phone,
+//         role: rider.role,
+//       },
+//     });
+//   } catch (err) {
+//     return res.status(500).json({
+//       success: false,
+//       message: err.message,
+//     });
+//   }
+// };
 
 // ==========================================
 // 1. GET ALL RIDERS (With Search & Status)
@@ -906,7 +908,7 @@ exports.updateRider = async (req, res) => {
 exports.updateRiderStatus = async (req, res) => {
   try {
     const { isBlocked } = req.body;
-console.log(isBlocked);
+    console.log(isBlocked);
 
     // Check if isBlocked is explicitly a boolean
     if (typeof isBlocked !== "boolean") {
@@ -1802,15 +1804,15 @@ exports.updateUserStatus = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: `User marked as ${isBlocked}`,
-      user,   
- });
+      user,
+    });
   } catch (err) {
     return res.status(500).json({
       success: false,
       message: err.message,
     });
   }
-};  
+};
 
 
 
@@ -1884,7 +1886,7 @@ exports.verifyRiderOTP = async (req, res) => {
         phone: rider.phone,
         role: rider.role,
       },
-       });
+    });
   } catch (err) {
     return res.status(500).json({
       success: false,
@@ -1892,7 +1894,7 @@ exports.verifyRiderOTP = async (req, res) => {
     });
   }
 };
-   
+
 exports.completeRiderProfile = async (req, res) => {
   try {
     const riderId = req.user.id; // Token se rider id
@@ -1904,6 +1906,7 @@ exports.completeRiderProfile = async (req, res) => {
       cnicNumber,
       cnicPicture,
       paymentMethod,
+      category,
       vehicleNumber,
       drivingLicenseNumber,
       drivingLicensePicture,
@@ -1938,11 +1941,12 @@ exports.completeRiderProfile = async (req, res) => {
     rider.vehicleNumber = vehicleNumber;
     rider.vehicleModel = vehicleModel;
     rider.vehicleEngineSize = vehicleEngineSize;
+    rider.riderProfile.category = category;
 
     // License
     rider.drivingLicenseNumber = drivingLicenseNumber;
     rider.drivingLicensePicture = drivingLicensePicture;
-
+    rider.category = category;
     // Images
     rider.profilePicture = profilePicture;
     rider.vehiclePicture = vehiclePicture;
@@ -1986,8 +1990,8 @@ exports.uploadVerificationSelfie = async (req, res) => {
       });
     }
 
-    rider.verificationSelfie = selfieUrl;
-    rider.verificationStatus = "pending";
+rider.riderProfile.verificationSelfie = selfieUrl;
+rider.riderProfile.verificationStatus = "pending";
 
     await rider.save();
 
@@ -2018,14 +2022,14 @@ exports.submitVerification = async (req, res) => {
       });
     }
 
-    if (!rider.verificationSelfie) {
+  if (!rider.riderProfile.verificationSelfie)  {
       return res.status(400).json({
         success: false,
         message: "Please upload selfie first",
       });
     }
 
-    rider.verificationStatus = "pending";
+    rider.riderProfile.verificationStatus = "pending";
 
     await rider.save();
 
@@ -2058,10 +2062,10 @@ exports.getVerificationStatus = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      verificationStatus: rider.verificationStatus,
-      verificationReason: rider.verificationReason,
-      verifiedAt: rider.verifiedAt,
-      verificationSelfie: rider.verificationSelfie,
+verificationStatus: rider.riderProfile.verificationStatus,
+verificationReason: rider.riderProfile.verificationReason,
+verifiedAt: rider.riderProfile.verifiedAt,
+verificationSelfie: rider.riderProfile.verificationSelfie,
     });
   } catch (err) {
     return res.status(500).json({
@@ -2084,10 +2088,9 @@ exports.approveRiderVerification = async (req, res) => {
         message: "Rider not found",
       });
     }
-
-    rider.verificationStatus = "approved";
-    rider.verificationReason = null;
-    rider.verifiedAt = new Date();
+rider.riderProfile.verificationStatus = "approved";
+rider.riderProfile.verificationReason = null;
+rider.riderProfile.verifiedAt = new Date();
 
     await rider.save();
 
