@@ -10,10 +10,12 @@ const {
   updateRestaurantStatus,
   deleteRestaurant,
   getAllRestaurantBrands,
+  getRestaurantByFastDeliveryTime,
 } = require("../controllers/restaurantController");
 
 router.get("/", auth, getAllRestaurants);
 router.get("/brands", auth, getAllRestaurantBrands);
+router.get("/fast-delivery", auth, getRestaurantByFastDeliveryTime);
 router.post("/create", auth, role("admin"), createRestaurant);
 router.get("/:id", auth, role("admin"), getRestaurantById);
 router.put("/update/:id", auth, role("admin"), updateRestaurant);

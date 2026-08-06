@@ -8,10 +8,20 @@ const productSchema = new mongoose.Schema(
     weight: { type: String, default: "" },
     quantity: { type: Number, default: 0 },
     
+    belongsTo: {
+      type: String,
+      enum: ["Restaurant", "HomeChef"],
+      required: true,
+    },
+
     restaurantId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Restaurant",
-      required: true,
+    },
+
+    HomeChefId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "HomeChef",
     },
 
     category: { type: String, required: true, trim: true }, // e.g. "Pizza", "Beverages"
@@ -49,6 +59,11 @@ const productSchema = new mongoose.Schema(
       type: String,
       enum: ["active", "inactive"],
       default: "active",
+    },
+    type: {
+      type: String,
+      enum: ["popular", "special", "new", "signature"],
+      default: "new",
     },
   },
   { timestamps: true },
