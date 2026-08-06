@@ -328,6 +328,7 @@
 // };
 
 /////////////////////////////////////////////////////////////////////
+const Order = require("../models/Order");
 const Product = require("../models/Product");
 const Restaurant = require("../models/Restaurant");
 
@@ -490,13 +491,112 @@ exports.getAllProducts = async (req, res) => {
 };
 
 // =====================================
+// GET PRODUCTS BY CATEGORY
+// =====================================
+exports.getProductsByCategory = async (req, res) => {
+  try {
+    const { category, subcategory } = req.query;
+
+    const query = {};
+
+    if (category) query.category = category;
+    if (subcategory) query.subcategory = subcategory;
+
+    const [products, total] = await Promise.all([Product.find(query)]);
+
+    return res.status(200).json({
+      success: true,
+      count: products.length,
+      total,
+      products,
+    });
+  } catch (err) {
+    console.log("GET PRODUCTS ERROR:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// =====================================
+// GET PRODUCTS BY TYPE (popular, featured, new)
+// =====================================
+exports.getProductsByType = async (req, res) => {
+  try {
+    const { type } = req.query;
+
+    const query = {};
+
+    if (type) query.type = type;
+
+    const [products, total] = await Promise.all([Product.find(query)]);
+
+    return res.status(200).json({
+      success: true,
+      count: products.length,
+      total,
+      products,
+    });
+  } catch (err) {
+    console.log("GET PRODUCTS ERROR:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// =====================================
+// GET PRODUCTS BY RESTAURANT
+// =====================================
+exports.getProductsByRestaurant = async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+
+    if (!restaurantId) {
+      return res.status(400).json({
+        success: false,
+        message: "restaurantId is required",
+      });
+    }
+
+    const restaurant = await Restaurant.findById(restaurantId);
+
+    if (!restaurant) {
+      return res.status(404).json({
+        success: false,
+        message: "Restaurant not found",
+      });
+    }
+
+    const products = await Product.find({ restaurantId });
+
+    return res.status(200).json({
+      success: true,
+      count: products.length,
+      products,
+    });
+  } catch (err) {
+    console.log("GET PRODUCTS ERROR:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// =====================================
 // GET SINGLE PRODUCT
 // =====================================
 exports.getProductById = async (req, res) => {
   try {
     const product = await Product.findById(req.params.id).populate(
       "restaurantId",
-      "name logo status commissionRate"
+      "name logo status commissionRate",
     );
 
     if (!product) {
@@ -598,7 +698,7 @@ exports.toggleAvailability = async (req, res) => {
     const product = await Product.findByIdAndUpdate(
       req.params.id,
       { isAvailable: !!isAvailable },
-      { new: true }
+      { new: true },
     );
 
     if (!product) {
@@ -642,6 +742,81 @@ exports.deleteProduct = async (req, res) => {
   } catch (err) {
     console.log("DELETE PRODUCT ERROR:", err);
 
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// ========================================================
+// GET PREVIOUSLY ORDERED ITEMS ("Craving It Again?")
+// ========================================================
+exports.getPreviouslyOrderedItems = async (req, res) => {
+  try {
+    const userId = req.user._id || req.user.id;
+
+    // 1. Find completed/delivered orders for the logged-in user
+    const orders = await Order.find({
+      userId,
+      status: { $in: ["completed", "delivered"] },
+    })
+      .select("items")
+      .sort({ createdAt: -1 });
+
+    if (!orders || orders.length === 0) {
+      return res.status(200).json({
+        success: true,
+        count: 0,
+        items: [],
+      });
+    }
+
+    // 2. Extract unique Product IDs ordered by the user
+    const productIdsSet = new Set();
+    orders.forEach((order) => {
+      order.items?.forEach((item) => {
+        if (item.productId) {
+          productIdsSet.add(item.productId.toString());
+        }
+      });
+    });
+
+    const uniqueProductIds = Array.from(productIdsSet);
+
+    // 3. Fetch product details and populate seller info (Restaurant / HomeChef)
+    const items = await Product.find({
+      _id: { $in: uniqueProductIds },
+      isAvailable: true,
+    })
+      .populate("restaurantId", "name logo rating")
+      .populate("chefId", "name logo rating rating.average")
+      .select("name image price rating chefId restaurantId");
+
+    // 4. Format the response specifically for the card UI layout
+    const formattedItems = items.map((product) => {
+      const seller = product.chefId || product.restaurantId;
+      return {
+        _id: product._id,
+        productName: product.name,
+        productImage: product.image,
+        price: product.price,
+        seller: {
+          _id: seller?._id || null,
+          name: seller?.name || "Unknown Kitchen",
+          logo: seller?.logo || "",
+          rating: seller?.rating?.average || seller?.rating || 5.0,
+        },
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      count: formattedItems.length,
+      items: formattedItems,
+    });
+  } catch (err) {
+    console.error("GET PREVIOUSLY ORDERED ITEMS ERROR:", err);
     return res.status(500).json({
       success: false,
       message: err.message,

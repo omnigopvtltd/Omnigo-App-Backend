@@ -1,5 +1,6 @@
 const Restaurant = require("../models/Restaurant");
 const Product = require("../models/Product");
+const HomeChef = require("../models/HomeChef");
 
 // =====================================
 // CREATE RESTAURANT
@@ -192,6 +193,51 @@ exports.getRestaurantById = async (req, res) => {
       restaurant,
     });
   } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+// =====================================
+// GET RESTAURANTS BY FAST DELIVERY TIME (for "Fast Delivery" section)
+// =====================================
+exports.getRestaurantByFastDeliveryTime = async (req, res) => {
+  try {
+    // 1. Fetch Restaurants (assumes deliveryTime is a Number or object)
+    const restaurant = await Restaurant.find({
+      $or: [
+        { "deliveryTime.max": { $lte: 20 } },
+        { "deliveryTime.min": { $lte: 20 } }
+      ]
+    }).select("name logo _id coverImage deliveryTime rating");
+
+    // 2. Fetch HomeChefs querying the nested object field (deliveryTime.max)
+    const homeChef = await HomeChef.find({
+      $or: [
+        { "deliveryTime.max": { $lte: 20 } },
+        { "deliveryTime.min": { $lte: 20 } }
+      ]
+    }).select("name logo _id coverImage deliveryTime rating");
+
+    // 3. Merge arrays
+    const fastDeliveryRestaurants = [...restaurant, ...homeChef];
+
+    // 4. Check if merged array is empty
+    if (fastDeliveryRestaurants.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No fast delivery options found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      count: fastDeliveryRestaurants.length,
+      fastDeliveryRestaurants,
+    });
+  } catch (err) {
+    console.error("FAST DELIVERY ERROR:", err);
     return res.status(500).json({
       success: false,
       message: err.message,

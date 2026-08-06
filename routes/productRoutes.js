@@ -57,9 +57,18 @@ const {
   updateProduct,
   toggleAvailability,
   deleteProduct,
+  getProductsByCategory,
+  getProductsByType,
+  getPreviouslyOrderedItems,
 } = require("../controllers/productController");
 
-router.get("/", auth, role("admin"), getAllProducts);
+router.get("/", auth, getAllProducts);
+router.get("/product-by-category", auth, getProductsByCategory);
+router.get("/product-by-type", auth, getProductsByType);
+// Endpoint for "Craving It Again?" section
+router.get("/previously-ordered", auth, getPreviouslyOrderedItems);
+router.get("/product-by-restaurant/:restaurantId", auth, getPreviouslyOrderedItems);
+
 router.post("/create", auth, role("admin"), createProduct);
 router.get("/:id", auth, role("admin"), getProductById);
 router.put("/update/:id", auth, role("admin"), updateProduct);
