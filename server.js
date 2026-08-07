@@ -75,6 +75,7 @@ app.use("/api/restaurants", restaurantRoutes);
 app.use("/api/homeChefs", homeChefRoutes);
 app.use("/api/categories", foodCategoryRoutes);
 app.use("/api/deals", require("./routes/dealRoutes"));
+app.use("/api/restaurantReviews", require("./routes/restaurantReviewsRoutes"));
 
 app.use("/api/onboarding", require("./routes/onboardingRoutes"));
 app.use("/api/wishlist", wishlistRoutes);

@@ -343,7 +343,9 @@ exports.createProduct = async (req, res) => {
       images,
       weight,
       quantity,
+      belongsTo,
       restaurantId,
+      homeChefId,
       category,
       subcategory,
       price,
@@ -353,8 +355,11 @@ exports.createProduct = async (req, res) => {
       tags,
       isAvailable,
       preparationTime,
-      status,
+      rating,
+      isFavourite,
       likes,
+      status,
+      type,
     } = req.body;
 
     if (!name) {
@@ -400,7 +405,9 @@ exports.createProduct = async (req, res) => {
       images: Array.isArray(images) ? images : [],
       weight,
       quantity,
+      belongsTo,
       restaurantId,
+      homeChefId,
       category,
       subcategory,
       price,
@@ -410,7 +417,9 @@ exports.createProduct = async (req, res) => {
       tags: Array.isArray(tags) ? tags : [],
       isAvailable,
       preparationTime,
+      rating,
       status,
+      type,
       likes: Array.isArray(likes) ? likes : [],
     });
 
@@ -438,6 +447,7 @@ exports.getAllProducts = async (req, res) => {
       restaurantId,
       category,
       status,
+      type,
       isAvailable,
       search,
       page = 1,
@@ -465,7 +475,7 @@ exports.getAllProducts = async (req, res) => {
 
     const [products, total] = await Promise.all([
       Product.find(query)
-        .populate("restaurantId", "name logo status")
+        .populate("restaurantId", "name logo status type")
         .sort(sort)
         .skip(skip)
         .limit(limitNum),
@@ -502,13 +512,20 @@ exports.getProductsByCategory = async (req, res) => {
     if (category) query.category = category;
     if (subcategory) query.subcategory = subcategory;
 
-    const [products, total] = await Promise.all([Product.find(query)]);
+    const products = await Product.find(query).select(
+        "name images price tags discountPrice category subcategory rating isAvailable isFavourite restaurantId belongsTo chefId",
+      );
+    
+    const restaurants = await Restaurant.find({
+      _id: { $in: products.map((p) => p.restaurantId) },
+    }).select("name logo");
+
+   const productsByCategory = [...products, ...restaurants];
 
     return res.status(200).json({
       success: true,
       count: products.length,
-      total,
-      products,
+      data: productsByCategory,
     });
   } catch (err) {
     console.log("GET PRODUCTS ERROR:", err);
@@ -531,13 +548,17 @@ exports.getProductsByType = async (req, res) => {
 
     if (type) query.type = type;
 
-    const [products, total] = await Promise.all([Product.find(query)]);
+    const products = await Product.find(query).select("name images rating isFavourite restaurantId belongsTo chefId");
+    const restaurants = await Restaurant.find({
+      _id: { $in: products.map((p) => p.restaurantId) },
+    }).select("name logo deliveryTime deliveryFee");
+
+    const productsByType = [...products, ...restaurants];
 
     return res.status(200).json({
       success: true,
       count: products.length,
-      total,
-      products,
+      data: productsByType,
     });
   } catch (err) {
     console.log("GET PRODUCTS ERROR:", err);
@@ -573,6 +594,100 @@ exports.getProductsByRestaurant = async (req, res) => {
     }
 
     const products = await Product.find({ restaurantId });
+
+    return res.status(200).json({
+      success: true,
+      count: products.length,
+      products,
+    });
+  } catch (err) {
+    console.log("GET PRODUCTS ERROR:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// =====================================
+// GET PRODUCTS BY RESTAURANT'S CATEGORIES
+// =====================================
+exports.getProductsByRestaurantCategories = async (req, res) => {
+  try {
+    const { categoryName } = req.query;
+    const { restaurantId } = req.params;
+
+    if (!restaurantId) {
+      return res.status(400).json({
+        success: false,
+        message: "restaurantId is required",
+      });
+    }
+
+    const restaurant = await Restaurant.findById(restaurantId);
+
+    if (!restaurant) {
+      return res.status(404).json({
+        success: false,
+        message: "Restaurant not found",
+      });
+    }
+
+    const query = {};
+
+    if (categoryName) query.subcategory = categoryName;
+
+    const products = await Product.find({ restaurantId, ...query }).select(
+      "name images price description"
+    );
+
+    return res.status(200).json({
+      success: true,
+      count: products.length,
+      products,
+    });
+  } catch (err) {
+    console.log("GET PRODUCTS ERROR:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// =====================================
+// GET PRODUCTS BY RESTAURANT'S Type (special, popular, featured, new)
+// =====================================
+exports.getProductsByRestaurantTypes = async (req, res) => {
+  try {
+    const { type } = req.query;
+    const { restaurantId } = req.params;
+
+    if (!restaurantId) {
+      return res.status(400).json({
+        success: false,
+        message: "restaurantId is required",
+      });
+    }
+
+    const restaurant = await Restaurant.findById(restaurantId);
+
+    if (!restaurant) {
+      return res.status(404).json({
+        success: false,
+        message: "Restaurant not found",
+      });
+    }
+
+    const query = {};
+
+    if (type) query.type = type;
+
+    const products = await Product.find({ restaurantId, ...query }).select(
+      "name images price description"
+    );
 
     return res.status(200).json({
       success: true,
@@ -754,7 +869,7 @@ exports.deleteProduct = async (req, res) => {
 // ========================================================
 exports.getPreviouslyOrderedItems = async (req, res) => {
   try {
-    const userId = req.user._id || req.user.id;
+    const userId = req.user._id || req.user.id ;
 
     // 1. Find completed/delivered orders for the logged-in user
     const orders = await Order.find({
@@ -795,17 +910,20 @@ exports.getPreviouslyOrderedItems = async (req, res) => {
 
     // 4. Format the response specifically for the card UI layout
     const formattedItems = items.map((product) => {
-      const seller = product.chefId || product.restaurantId;
+      const restaurant = product.chefId || product.restaurantId;
       return {
         _id: product._id,
         productName: product.name,
         productImage: product.image,
         price: product.price,
-        seller: {
-          _id: seller?._id || null,
-          name: seller?.name || "Unknown Kitchen",
-          logo: seller?.logo || "",
-          rating: seller?.rating?.average || seller?.rating || 5.0,
+        isFavourite: product.isFavourite,
+        rating: product.rating?.average || 0,
+        restaurant: {
+          _id: restaurant?._id || null,
+          name: restaurant?.name || "Unknown Kitchen",
+          logo: restaurant?.logo || "",
+          offer: restaurant?.offer || "",
+          rating: restaurant?.rating?.average || restaurant?.rating || 5.0,
         },
       };
     });

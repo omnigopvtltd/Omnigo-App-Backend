@@ -38,16 +38,22 @@ const productSchema = new mongoose.Schema(
     ],
 
     isVeg: { type: Boolean, default: false },
-    tags: [{ type: String }], // e.g. "Bestseller", "New", "Spicy"
+    tags: [
+      {
+        icon: { type: String },
+        tagName: { type: String },
+      },
+    ], // e.g. "Bestseller", "New", "Most Popular", "Chef's Special", "50% Off", "Limited Time Offer", "Spicy", "Gluten-Free", "Vegan", "Low-Carb", "Keto-Friendly", "Dairy-Free", "Sugar-Free", "Organic", "Farm-to-Table", "Locally Sourced", "Seasonal Special", "Chef's Recommendation"
 
     isAvailable: { type: Boolean, default: true }, // stock / sold-out toggle
     preparationTime: { type: Number, default: 15 }, // minutes
-
+    
     rating: {
       average: { type: Number, default: 0 },
       count: { type: Number, default: 0 },
     },
-
+    
+    isFavourite: { type: Boolean, default: true }, 
     likes: [
       {
         type: mongoose.Schema.Types.ObjectId,

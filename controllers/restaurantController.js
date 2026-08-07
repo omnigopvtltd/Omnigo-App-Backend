@@ -51,8 +51,7 @@ exports.createRestaurant = async (req, res) => {
 
     const payload = {
       name,
-      slug: 
-      description,
+      slug: description,
       logo,
       coverImage,
       cuisines: Array.isArray(cuisines) ? cuisines : [],
@@ -171,6 +170,43 @@ exports.getAllRestaurantBrands = async (req, res) => {
     });
   }
 };
+
+// =====================================
+// GET RESTAURANT CATEGORIES
+// =====================================
+exports.getRestaurantCategories = async (req, res) => {
+  try {
+    const restaurant = await Restaurant.findById(req.params.id).select(
+      "categories"
+    );
+
+    if (!restaurant) {
+      return res.status(404).json({
+        success: false,
+        message: "Restaurant not found",
+      });
+    }
+
+    const categories = restaurant.categories.map((category) => ({
+      _id: category._id,
+      categoryName: category.categoryName,
+    }));
+
+    return res.status(200).json({
+      success: true,
+      count: categories.length,
+      categories,
+    });
+  } catch (err) {
+    console.log("GET RESTAURANT CATEGORIES ERROR:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
 // =====================================
 // GET SINGLE RESTAURANT
 // =====================================
@@ -178,7 +214,7 @@ exports.getRestaurantById = async (req, res) => {
   try {
     const restaurant = await Restaurant.findById(req.params.id).populate(
       "ownerId",
-      "name email phone"
+      "name email phone",
     );
 
     if (!restaurant) {
@@ -208,20 +244,43 @@ exports.getRestaurantByFastDeliveryTime = async (req, res) => {
     const restaurant = await Restaurant.find({
       $or: [
         { "deliveryTime.max": { $lte: 20 } },
-        { "deliveryTime.min": { $lte: 20 } }
-      ]
+        { "deliveryTime.min": { $lte: 20 } },
+      ],
     }).select("name logo _id coverImage deliveryTime rating");
 
     // 2. Fetch HomeChefs querying the nested object field (deliveryTime.max)
     const homeChef = await HomeChef.find({
       $or: [
         { "deliveryTime.max": { $lte: 20 } },
-        { "deliveryTime.min": { $lte: 20 } }
-      ]
+        { "deliveryTime.min": { $lte: 20 } },
+      ],
     }).select("name logo _id coverImage deliveryTime rating");
 
+    const offer = {
+      type: "offer",
+      title: "Fast Delivery",
+      icon: "⚡",
+    };
+
     // 3. Merge arrays
-    const fastDeliveryRestaurants = [...restaurant, ...homeChef];
+    // const fastDeliveryRestaurants = [...restaurant, ...homeChef, offer ];
+    const fastDeliveryRestaurants = [
+      ...restaurant.map((item) => ({
+        ...item.toObject(),
+        offer: {
+          title: "Fast Delivery",
+          icon: "⚡",
+        },
+      })),
+
+      ...homeChef.map((item) => ({
+        ...item.toObject(),
+        offer: {
+          title: "Fast Delivery",
+          icon: "⚡",
+        },
+      })),
+    ];
 
     // 4. Check if merged array is empty
     if (fastDeliveryRestaurants.length === 0) {
@@ -259,12 +318,25 @@ exports.updateRestaurant = async (req, res) => {
       });
     }
 
+    const { id } = req.params;
+    const updateData = { ...req.body };
+
+    // If updating categories, automatically sync root subCategories
+    if (updateData.categories && Array.isArray(updateData.categories)) {
+      const allSubCategories = updateData.categories.flatMap(
+        (cat) => cat.subCategories || [],
+      );
+      // Remove duplicate subcategories
+      updateData.subCategories = [...new Set(allSubCategories)];
+    }
+
     const fields = [
       "name",
       "description",
       "logo",
       "coverImage",
       "cuisines",
+      "categories",
       "ownerId",
       "contact",
       "address",
@@ -313,7 +385,7 @@ exports.updateRestaurant = async (req, res) => {
 exports.updateRestaurantStatus = async (req, res) => {
   try {
     const { status } = req.body;
-    console.log("Status",status);
+    console.log("Status", status);
     const allowedStatuses = ["pending", "approved", "blocked"];
 
     if (!allowedStatuses.includes(status)) {
@@ -326,7 +398,7 @@ exports.updateRestaurantStatus = async (req, res) => {
     const restaurant = await Restaurant.findByIdAndUpdate(
       req.params.id,
       { status },
-      { new: true }
+      { new: true },
     );
 
     if (!restaurant) {

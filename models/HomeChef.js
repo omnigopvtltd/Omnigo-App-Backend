@@ -79,6 +79,11 @@ const homeChefSchema = new mongoose.Schema(
       },
     ],
 
+    offer: {
+      type: String,
+      default: "",
+    },
+
     status: {
       type: String,
       enum: ["pending", "approved", "blocked"],

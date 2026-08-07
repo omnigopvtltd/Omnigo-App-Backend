@@ -60,6 +60,8 @@ const {
   getProductsByCategory,
   getProductsByType,
   getPreviouslyOrderedItems,
+  getProductsByRestaurantCategories,
+  getProductsByRestaurantTypes
 } = require("../controllers/productController");
 
 router.get("/", auth, getAllProducts);
@@ -67,6 +69,8 @@ router.get("/product-by-category", auth, getProductsByCategory);
 router.get("/product-by-type", auth, getProductsByType);
 // Endpoint for "Craving It Again?" section
 router.get("/previously-ordered", auth, getPreviouslyOrderedItems);
+router.get("/product-by-restaurant-categories/:restaurantId", auth, getProductsByRestaurantCategories);
+router.get("/product-by-restaurant-types/:restaurantId", auth, getProductsByRestaurantTypes);
 router.get("/product-by-restaurant/:restaurantId", auth, getPreviouslyOrderedItems);
 
 router.post("/create", auth, role("admin"), createProduct);

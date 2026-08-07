@@ -24,6 +24,7 @@ exports.createHomeChef = async (req, res) => {
       minimumOrder,
       deliveryFee,
       commissionRate,
+      offer,
       status,
       isFeatured,
       lat,
@@ -67,6 +68,7 @@ exports.createHomeChef = async (req, res) => {
       minimumOrder,
       deliveryFee,
       commissionRate,
+      offer,
       status,
       isFeatured,
     };
@@ -113,7 +115,7 @@ exports.getAllHomeChefs = async (req, res) => {
       ];
     }
 
-    const chefs = await HomeChef.find(query).sort({
+    const chefs = await HomeChef.find(query).select("name description logo coverImage offer deliveryFee deliveryTime rating").sort({
       "rating.average": -1,
       createdAt: -1,
     });
