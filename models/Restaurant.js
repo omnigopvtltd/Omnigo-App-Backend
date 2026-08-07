@@ -10,6 +10,12 @@ const restaurantSchema = new mongoose.Schema(
     coverImage: { type: String, default: "" },
 
     cuisines: [{ type: String }],
+    categories: [
+      {
+        categoryName: { type: String },
+        subCategories: [{ type: String }],
+      }
+    ],
 
     // Optional link to a restaurant-owner account, if/when that role exists
     ownerId: {

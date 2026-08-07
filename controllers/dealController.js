@@ -15,6 +15,69 @@ exports.getDeals = async (req, res) => {
       ],
     })
       .populate("restaurantId", "name logo location")
+      .select("title bannerImage restaurantId")
+      .sort({ isFeatured: -1, createdAt: -1 });
+
+    const restaurants = await Restaurant.find({
+      _id: { $in: deals.map((d) => d.restaurantId) },
+    }).select("name logo");
+
+    const allDeals = [...deals, ...restaurants];
+
+    return res.status(200).json({
+      success: true,
+      count: deals.length,
+      data: allDeals,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// =====================================
+// GET DEALS By Restaurant ID (PUBLIC / APP)
+// =====================================
+exports.getDealsByRestaurantId = async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+
+    const deals = await Deal.find({
+      isActive: true,
+      restaurantId,
+    })
+    .select("title image restaurantId originalPrice dealType")
+      // .populate("restaurantId", "name logo location")
+      .sort({ isFeatured: -1, createdAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      count: deals.length,
+      data: deals,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+// =====================================
+// GET DAILY DEALS By Restaurant ID (PUBLIC / APP)
+// =====================================
+exports.getDailyDeals = async (req, res) => {
+  try {
+    const { type } = req.query; // e.g., "daily-deal"
+
+    let requestedType;
+    if (type === "daily-deal") {
+      requestedType = "Daily Deal";
+    }
+    
+    const deals = await Deal.find({
+      isActive: true,
+      dealType: requestedType,
+    })
+      .select(
+        "title description image restaurantId originalPrice discountPrice dealType",
+      )
+      .populate("restaurantId", "name logo rating deliveryFee deliveryTime")
       .sort({ isFeatured: -1, createdAt: -1 });
 
     return res.status(200).json({
@@ -35,10 +98,12 @@ exports.createDeal = async (req, res) => {
     const {
       title,
       description,
+      image,
       bannerImage,
       restaurantId,
       originalPrice,
       discountPrice,
+      dealType,
       tag,
       isFeatured,
       validUntil,
@@ -55,10 +120,12 @@ exports.createDeal = async (req, res) => {
     const newDeal = await Deal.create({
       title,
       description,
+      image,
       bannerImage,
       restaurantId,
       originalPrice,
       discountPrice,
+      dealType,
       tag,
       isFeatured,
       validUntil,
@@ -66,7 +133,7 @@ exports.createDeal = async (req, res) => {
 
     const populatedDeal = await Deal.findById(newDeal._id).populate(
       "restaurantId",
-      "name logo location"
+      "name logo location",
     );
 
     // ========================================================
@@ -92,30 +159,28 @@ exports.createDeal = async (req, res) => {
       }).select("fcmToken");
 
       const notificationTitle = `🔥 Deal Alert: ${restaurant.name}!`;
-      const notificationBody = title 
-        ? `${title} for only Rs. ${discountPrice}!` 
+      const notificationBody = title
+        ? `${title} for only Rs. ${discountPrice}!`
         : `Check out today's special deal in your town!`;
 
       // Trigger push notifications asynchronously
       usersWithToken.forEach((u) => {
         if (u.fcmToken) {
-          sendNotification(
-            u.fcmToken,
-            notificationTitle,
-            notificationBody,
-            {
-              type: "new_deal",
-              dealId: populatedDeal._id.toString(),
-              restaurantId: restaurant._id.toString(),
-              bannerImage: populatedDeal.bannerImage || "",
-            }
-          ).catch((fcmErr) =>
-            console.error(`FCM error for token ${u.fcmToken}:`, fcmErr.message)
+          sendNotification(u.fcmToken, notificationTitle, notificationBody, {
+            type: "new_deal",
+            dealId: populatedDeal._id.toString(),
+            restaurantId: restaurant._id.toString(),
+            bannerImage: populatedDeal.bannerImage || "",
+          }).catch((fcmErr) =>
+            console.error(`FCM error for token ${u.fcmToken}:`, fcmErr.message),
           );
         }
       });
     } catch (notifErr) {
-      console.error("DEAL NOTIFICATION ERROR (Non-blocking):", notifErr.message);
+      console.error(
+        "DEAL NOTIFICATION ERROR (Non-blocking):",
+        notifErr.message,
+      );
     }
 
     return res.status(201).json({
@@ -139,11 +204,13 @@ exports.updateDealStatus = async (req, res) => {
     const updatedDeal = await Deal.findByIdAndUpdate(
       id,
       { isActive },
-      { new: true }
+      { new: true },
     ).populate("restaurantId", "name logo");
 
     if (!updatedDeal) {
-      return res.status(404).json({ success: false, message: "Deal not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Deal not found" });
     }
 
     const io = req.app.get("io");
