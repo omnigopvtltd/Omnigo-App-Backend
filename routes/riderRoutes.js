@@ -4,14 +4,14 @@ const auth = require("../middleware/authMiddleware");
 const role = require("../middleware/rolemiddleware");
 const {
   createRider,
-  // getAllRiders,
+  getAllRiders,
   getRiderById,
   updateRider,
   updateRiderBlockStatus,
   deleteRider,
 } = require("../controllers/riderController");
 
-// router.get("/", auth, role("admin"), getAllRiders);
+router.get("/", auth, getAllRiders);
 router.post("/create", auth, role("admin"), createRider);
 router.get("/:id", auth,  getRiderById);
 router.put("/update/:id", auth, role("admin"), updateRider);

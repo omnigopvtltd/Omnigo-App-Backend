@@ -19,7 +19,7 @@ const productSchema = new mongoose.Schema(
       ref: "Restaurant",
     },
 
-    HomeChefId: {
+    homeChefId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "HomeChef",
     },

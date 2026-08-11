@@ -116,6 +116,35 @@ exports.getRiderById = async (req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 };
+// =====================================
+// ADMIN: GET ALL RIDERS
+// =====================================
+exports.getAllRiders = async (req, res) => {
+  try {
+    const riders = await User.find({ role: "rider" }).select("-password");
+    if (!riders.length) return res.status(404).json({ success: false, message: "No riders found" });
+
+    const [currentOrders, deliveryHistory, sessionHistory] = await Promise.all([
+      Order.find({ riderId: rider._id, status: "ongoing" }).populate("userId", "name phone"),
+      Order.find({ riderId: rider._id, status: "delivered" }).sort({ updatedAt: -1 }).limit(20),
+      RiderSessionParticipation.find({ riderId: rider._id })
+        .populate("sessionId", "title requiredOrders bonusAmount")
+        .sort({ createdAt: -1 })
+        .limit(10),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      riders,
+      currentOrders,
+      deliveryHistory,
+      sessionHistory,
+    });
+  } catch (err) {
+    console.log("GET RIDERS ERROR:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
 
 // =====================================
 // ADMIN: UPDATE RIDER PROFILE

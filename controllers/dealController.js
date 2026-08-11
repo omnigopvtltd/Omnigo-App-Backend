@@ -35,6 +35,37 @@ exports.getDeals = async (req, res) => {
 };
 
 // =====================================
+// GET ACTIVE DEALS By Id (PUBLIC / APP)
+// =====================================
+exports.getDealsById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const deals = await Deal.find({
+      _id: id,
+      isActive: true,
+    })
+      // .populate("restaurantId", "name logo location")
+      // .select("title bannerImage restaurantId")
+      // .sort({ isFeatured: -1, createdAt: -1 });
+
+    const restaurants = await Restaurant.find({
+      _id: { $in: deals.map((d) => d.restaurantId) },
+    }).select("name logo");
+
+    const allDeals = [...deals, ...restaurants];
+
+    return res.status(200).json({
+      success: true,
+      count: deals.length,
+      data: allDeals,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// =====================================
 // GET DEALS By Restaurant ID (PUBLIC / APP)
 // =====================================
 exports.getDealsByRestaurantId = async (req, res) => {
