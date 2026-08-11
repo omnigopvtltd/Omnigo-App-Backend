@@ -42,9 +42,7 @@ FoodCategoriesSchema.pre("save", function () {
         .toLowerCase()
         .trim()
         .replace(/[^a-z0-9]+/g, "-")
-        .replace(/(^-|-$)/g, "") +
-      "-" +
-      Date.now().toString(36);
+        .replace(/(^-|-$)/g, "");
   }
 
   if (this.subCategories && this.subCategories.length > 0) {
@@ -55,9 +53,7 @@ FoodCategoriesSchema.pre("save", function () {
             .toLowerCase()
             .trim()
             .replace(/[^a-z0-9]+/g, "-")
-            .replace(/(^-|-$)/g, "") +
-          "-" +
-          Date.now().toString(36);
+            .replace(/(^-|-$)/g, "");
       }
     });
   }

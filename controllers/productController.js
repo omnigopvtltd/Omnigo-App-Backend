@@ -331,6 +331,7 @@
 const Order = require("../models/Order");
 const Product = require("../models/Product");
 const Restaurant = require("../models/Restaurant");
+const FoodCategory = require("../models/FoodCategories"); 
 
 // =====================================
 // CREATE PRODUCT
@@ -545,20 +546,39 @@ exports.getProductsByType = async (req, res) => {
     const { type } = req.query;
 
     const query = {};
-
     if (type) query.type = type;
 
-    const products = await Product.find(query).select("name images rating isFavourite restaurantId belongsTo chefId");
-    const restaurants = await Restaurant.find({
-      _id: { $in: products.map((p) => p.restaurantId) },
-    }).select("name logo deliveryTime deliveryFee");
+    // 1. Fetch products and populate restaurant/chef details directly
+    const products = await Product.find(query)
+      .populate("restaurantId", "name logo")
+      .populate("homeChefId", "name logo")
+      .select("name images price discountPrice rating restaurantId homeChefId belongsTo isFavourite");
 
-    const productsByType = [...products, ...restaurants];
+    // 2. Map through products to format output key cleanly as "restaurant" or "chef"
+    const formattedProducts = products.map((product) => {
+      const seller = product.restaurantId || product.homeChefId;
+
+      return {
+        _id: product._id,
+        name: product.name,
+        images: product.images,
+        price: product.price,
+        discountPrice: product.discountPrice,
+        rating: product.rating,
+        restaurant: seller
+          ? {
+              _id: seller._id,
+              name: seller.name,
+              logo: seller.logo,
+            }
+          : null,
+      };
+    });
 
     return res.status(200).json({
       success: true,
-      count: products.length,
-      data: productsByType,
+      count: formattedProducts.length,
+      data: formattedProducts,
     });
   } catch (err) {
     console.log("GET PRODUCTS ERROR:", err);
@@ -640,6 +660,66 @@ exports.getProductsByRestaurantCategories = async (req, res) => {
 
     const products = await Product.find({ restaurantId, ...query }).select(
       "name images price description"
+    );
+
+    return res.status(200).json({
+      success: true,
+      count: products.length,
+      products,
+    });
+  } catch (err) {
+    console.log("GET PRODUCTS ERROR:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// =====================================
+// GET PRODUCTS BY RESTAURANT'S SUBCATEGORIES
+// =====================================
+exports.getProductsByRestaurantSubcategories = async (req, res) => {
+  try {
+    const { subcategoryName, categoryName } = req.query;
+    const { restaurantId } = req.params;
+
+    if (!restaurantId) {
+      return res.status(400).json({
+        success: false,
+        message: "restaurantId is required",
+      });
+    }
+
+    const restaurant = await Restaurant.findById(restaurantId);
+
+    if (!restaurant) {
+      return res.status(404).json({
+        success: false,
+        message: "Restaurant not found",
+      });
+    }
+
+    // Match either restaurantId or chefId for flexibility
+    const query = {
+      $or: [{ restaurantId }, { chefId: restaurantId }],
+    };
+
+    // Partial & case-insensitive matching for subcategory
+    if (subcategoryName) {
+      const cleanSubcategory = subcategoryName.trim();
+      query.subcategory = new RegExp(cleanSubcategory, "i");
+    }
+
+    // Partial & case-insensitive matching for category
+    if (categoryName) {
+      const cleanCategory = categoryName.trim();
+      query.category = new RegExp(cleanCategory, "i");
+    }
+
+    const products = await Product.find(query).select(
+      "name images price discountPrice description rating isAvailable subcategory category restaurantId chefId"
     );
 
     return res.status(200).json({
@@ -935,6 +1015,120 @@ exports.getPreviouslyOrderedItems = async (req, res) => {
     });
   } catch (err) {
     console.error("GET PREVIOUSLY ORDERED ITEMS ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// ========================================================
+// GET PREVIOUSLY ORDERED ITEMS BY FOOD CATEGORY
+// ========================================================
+exports.getPreviouslyOrderedItemsByCategory = async (req, res) => {
+  try {
+    const userId = req.user._id || req.user.id;
+    const { category } = req.params; // Expecting categorySlug (e.g., "fast-food") or categoryName (e.g., "Fast Food")
+
+    // 1. Find the Food Category document by slug or name
+    const categoryDoc = await FoodCategory.findOne({
+      $or: [
+        { categorySlug: category.toLowerCase() },
+        { categoryName: new RegExp(`^${category}$`, "i") },
+      ],
+      status: "active",
+    });
+
+    if (!categoryDoc) {
+      return res.status(200).json({
+        success: true,
+        count: 0,
+        items: [],
+      });
+    }
+
+    // 2. Fetch completed/delivered orders for the user
+    const orders = await Order.find({
+      userId,
+      status: { $in: ["completed", "delivered"] },
+    })
+      .select("items")
+      .sort({ createdAt: -1 });
+
+    if (!orders || orders.length === 0) {
+      return res.status(200).json({
+        success: true,
+        count: 0,
+        items: [],
+      });
+    }
+
+    // 3. Extract unique Product IDs from orders
+    const productIdsSet = new Set();
+    orders.forEach((order) => {
+      order.items?.forEach((item) => {
+        if (item.productId) {
+          productIdsSet.add(item.productId.toString());
+        }
+      });
+    });
+
+    const uniqueProductIds = Array.from(productIdsSet);
+
+    // 4. Fetch ordered products matching categorySlug, categoryName, or Category ObjectId
+    const items = await Product.find({
+      _id: { $in: uniqueProductIds },
+      isAvailable: true,
+      $or: [
+        { category: categoryDoc.categorySlug },
+        { category: categoryDoc.categoryName },
+        { category: categoryDoc._id },
+      ],
+    })
+      .populate("restaurantId", "name logo rating offer")
+      .populate("chefId", "name logo rating offer")
+      .select("name images image price discountPrice rating isFavourite chefId restaurantId");
+
+    // 5. Format response to match product card structure
+    const formattedItems = items.map((product) => {
+      const seller = product.restaurantId || product.chefId;
+
+      return {
+        _id: product._id,
+        productName: product.name,
+        productImage:
+          Array.isArray(product.images) && product.images.length > 0
+            ? product.images[0]
+            : product.image || "",
+        price: product.price,
+        discountPrice: product.discountPrice || null,
+        isFavourite: product.isFavourite || false,
+        rating: product.rating || { average: 0, count: 0 },
+        restaurant: seller
+          ? {
+              _id: seller._id,
+              name: seller.name,
+              logo: seller.logo || "",
+              offer: seller.offer || "",
+              rating: seller.rating?.average || seller.rating || 0,
+            }
+          : null,
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      category: {
+        _id: categoryDoc._id,
+        name: categoryDoc.categoryName,
+        slug: categoryDoc.categorySlug,
+        icon: categoryDoc.icon,
+      },
+      count: formattedItems.length,
+      items: formattedItems,
+    });
+  } catch (err) {
+    console.error("GET PREVIOUSLY ORDERED ITEMS BY CATEGORY ERROR:", err);
     return res.status(500).json({
       success: false,
       message: err.message,

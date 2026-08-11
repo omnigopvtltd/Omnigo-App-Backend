@@ -6,11 +6,13 @@ const {
   updateDealStatus,
   getDealsByRestaurantId,
   getDailyDeals,
+  getDealsById,
 } = require("../controllers/dealController");
 const auth = require("../middleware/authMiddleware");
 
 router.get("/", getDeals);
 router.get("/daily", getDailyDeals);
+router.get("/:id", getDealsById);
 router.post("/create", auth, createDeal);
 router.get("/restaurant/:restaurantId", getDealsByRestaurantId);
 router.patch("/:id/status", updateDealStatus);

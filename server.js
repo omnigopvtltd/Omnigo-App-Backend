@@ -87,9 +87,10 @@ app.use("/api/settings", AdminSettings);
 
 app.use("/api/chat", require("./routes/chatRoutes"));
 app.use("/api/calls", require("./routes/callRoutes"));
+app.use("/api/search", require("./routes/searchRoutes"));
 
 // Fast Food //
-app.use("/api", categoryRoutes);
+// app.use("/api", categoryRoutes);
 // ================= SOCKET INIT =================
 const io = initSocket(server);
 

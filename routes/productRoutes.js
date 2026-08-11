@@ -61,7 +61,9 @@ const {
   getProductsByType,
   getPreviouslyOrderedItems,
   getProductsByRestaurantCategories,
-  getProductsByRestaurantTypes
+  getProductsByRestaurantTypes,
+  getPreviouslyOrderedItemsByCategory,
+  getProductsByRestaurantSubcategories,
 } = require("../controllers/productController");
 
 router.get("/", auth, getAllProducts);
@@ -69,7 +71,9 @@ router.get("/product-by-category", auth, getProductsByCategory);
 router.get("/product-by-type", auth, getProductsByType);
 // Endpoint for "Craving It Again?" section
 router.get("/previously-ordered", auth, getPreviouslyOrderedItems);
+router.get("/previously-ordered/:category", auth,  getPreviouslyOrderedItemsByCategory);
 router.get("/product-by-restaurant-categories/:restaurantId", auth, getProductsByRestaurantCategories);
+router.get("/product-by-restaurant-subcategories/:restaurantId", auth, getProductsByRestaurantSubcategories);
 router.get("/product-by-restaurant-types/:restaurantId", auth, getProductsByRestaurantTypes);
 router.get("/product-by-restaurant/:restaurantId", auth, getPreviouslyOrderedItems);
 

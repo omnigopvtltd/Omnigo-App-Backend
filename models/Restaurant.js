@@ -58,6 +58,7 @@ const restaurantSchema = new mongoose.Schema(
       is24Hours: { type: Boolean, default: false },
     },
     isOpen: { type: Boolean, default: true },
+    isFreeDelivery: { type: Boolean, default: true },
 
     deliveryTime: {
       min: { type: Number, default: 20 },
@@ -106,9 +107,7 @@ restaurantSchema.pre("save", function () {
         .toLowerCase()
         .trim()
         .replace(/[^a-z0-9]+/g, "-")
-        .replace(/(^-|-$)/g, "") +
-      "-" +
-      Date.now().toString(36); // keeps slug unique even for duplicate names
+        .replace(/(^-|-$)/g, "");
   }
   // next();
 });
