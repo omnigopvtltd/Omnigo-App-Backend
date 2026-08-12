@@ -1,4 +1,4 @@
-const CallLog = require("../models/CallLog");
+const CallLog = require("../models/callLog");
 const User = require("../models/User");
 
 function roleOf(req) {
