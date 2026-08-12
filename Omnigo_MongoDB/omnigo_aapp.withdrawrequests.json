@@ -1,0 +1,137 @@
+[{
+  "_id": {
+    "$oid": "6a5efe73c031446230bf82ee"
+  },
+  "riderId": {
+    "$oid": "6a5ef0677d6222708621d39f"
+  },
+  "restaurantId": null,
+  "amount": 2000,
+  "method": "jazzcash",
+  "accountDetails": {
+    "accountTitle": "Marium Afzal",
+    "accountNumber": "03001234567",
+    "bankName": ""
+  },
+  "adminNote": "",
+  "createdAt": {
+    "$date": "2026-07-21T05:06:59.252Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-21T07:21:49.168Z"
+  },
+  "__v": 0,
+  "processedAt": {
+    "$date": "2026-07-21T07:21:49.167Z"
+  },
+  "processedBy": {
+    "$oid": "6a50f90383cbf83bbac2b5f2"
+  },
+  "status": "approved"
+},
+{
+  "_id": {
+    "$oid": "6a5eff39c031446230bf82ef"
+  },
+  "riderId": {
+    "$oid": "6a5ef0677d6222708621d39f"
+  },
+  "restaurantId": null,
+  "amount": 2000,
+  "method": "bank_transfer",
+  "accountDetails": {
+    "accountTitle": "Marium Afzal",
+    "accountNumber": "PK36MEZN0001234567890101",
+    "bankName": "Meezan Bank"
+  },
+  "status": "pending",
+  "adminNote": "",
+  "createdAt": {
+    "$date": "2026-07-21T05:10:17.932Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-21T05:10:17.932Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a62fd61cdb20eb3e2622358"
+  },
+  "riderId": {
+    "$oid": "6a5ef0677d6222708621d39f"
+  },
+  "restaurantId": null,
+  "amount": 2000,
+  "method": "bank_transfer",
+  "accountDetails": {
+    "accountTitle": "Marium Afzal",
+    "accountNumber": "PK36MEZN0001234567890101",
+    "bankName": "Meezan Bank"
+  },
+  "status": "pending",
+  "adminNote": "",
+  "createdAt": {
+    "$date": "2026-07-24T05:51:29.300Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-24T05:51:29.300Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a68c39a92ca9b997379290f"
+  },
+  "riderId": {
+    "$oid": "6a5ef0677d6222708621d39f"
+  },
+  "restaurantId": null,
+  "amount": 2000,
+  "method": "bank_transfer",
+  "accountDetails": {
+    "accountTitle": "Marium Afzal",
+    "accountNumber": "PK36MEZN0001234567890101",
+    "bankName": "Meezan Bank"
+  },
+  "status": "pending",
+  "adminNote": "",
+  "createdAt": {
+    "$date": "2026-07-28T14:58:34.997Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-28T14:58:34.997Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a68c46029a6c8db852b328d"
+  },
+  "riderId": {
+    "$oid": "6a5ef0677d6222708621d39f"
+  },
+  "restaurantId": null,
+  "amount": 2000,
+  "method": "bank_transfer",
+  "accountDetails": {
+    "accountTitle": "Marium Afzal",
+    "accountNumber": "PK36MEZN0001234567890101",
+    "bankName": "Meezan Bank"
+  },
+  "status": "approved",
+  "adminNote": "",
+  "createdAt": {
+    "$date": "2026-07-28T15:01:52.935Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-28T15:44:02.640Z"
+  },
+  "__v": 0,
+  "processedAt": {
+    "$date": "2026-07-28T15:44:02.638Z"
+  },
+  "processedBy": {
+    "$oid": "6a50f90383cbf83bbac2b5f2"
+  }
+}]

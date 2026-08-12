@@ -1,0 +1,382 @@
+[{
+  "_id": {
+    "$oid": "6a6b68d46a7fe7035416b0db"
+  },
+  "categoryName": "Fast Food",
+  "description": "Delicious fast food meals including burgers, pizzas, sandwiches and more.",
+  "image": "https://i.pinimg.com/736x/85/9a/de/859adef90e854238d9b330d0c7d2cf73.jpg",
+  "icon": "🍔",
+  "subCategories": [
+    {
+      "name": "Burger",
+      "image": "https://i.pinimg.com/736x/3e/c9/fe/3ec9fe32c6217014789b5f42e2343f47.jpg",
+      "description": "Beef, Chicken and Zinger Burgers",
+      "sortOrder": 1,
+      "status": "popular",
+      "_id": {
+        "$oid": "6a6b68d46a7fe7035416b0dc"
+      },
+      "createdAt": {
+        "$date": "2026-07-30T15:08:04.558Z"
+      },
+      "updatedAt": {
+        "$date": "2026-07-30T15:08:04.558Z"
+      },
+      "slug": "burger-ms7negjz"
+    },
+    {
+      "name": "Pizza",
+      "image": "https://i.pinimg.com/1200x/b7/46/ee/b746ee2653c180da2c34f6cfb3df2570.jpg",
+      "description": "Cheese Burst, Thin Crust & Deep Pan",
+      "sortOrder": 2,
+      "status": "signature",
+      "_id": {
+        "$oid": "6a6b68d46a7fe7035416b0dd"
+      },
+      "createdAt": {
+        "$date": "2026-07-30T15:08:04.558Z"
+      },
+      "updatedAt": {
+        "$date": "2026-07-30T15:08:04.558Z"
+      },
+      "slug": "pizza-ms7negjz"
+    },
+    {
+      "name": "Shawarma",
+      "image": "https://i.pinimg.com/736x/c4/10/06/c41006049b919e5dbbdbb2e972839e5f.jpg",
+      "description": "Chicken & Beef Shawarma",
+      "sortOrder": 3,
+      "status": "active",
+      "_id": {
+        "$oid": "6a6b68d46a7fe7035416b0de"
+      },
+      "createdAt": {
+        "$date": "2026-07-30T15:08:04.558Z"
+      },
+      "updatedAt": {
+        "$date": "2026-07-30T15:08:04.558Z"
+      },
+      "slug": "shawarma-ms7negjz"
+    },
+    {
+      "name": "Fries",
+      "image": "https://i.pinimg.com/736x/67/51/4d/67514d8b588b60f281d479f0391a6706.jpg",
+      "description": "Loaded Fries & French Fries",
+      "sortOrder": 4,
+      "status": "hot",
+      "_id": {
+        "$oid": "6a6b68d46a7fe7035416b0df"
+      },
+      "createdAt": {
+        "$date": "2026-07-30T15:08:04.558Z"
+      },
+      "updatedAt": {
+        "$date": "2026-07-30T15:08:04.558Z"
+      },
+      "slug": "fries-ms7negjz"
+    }
+  ],
+  "sortOrder": 1,
+  "status": "active",
+  "isFeatured": true,
+  "createdAt": {
+    "$date": "2026-07-30T15:08:04.559Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-30T15:08:04.559Z"
+  },
+  "categorySlug": "fast-food",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a6b69006a7fe7035416b0e0"
+  },
+  "categoryName": "Grocery",
+  "description": "Fresh grocery products delivered to your doorstep.",
+  "image": "https://example.com/images/grocery.jpg",
+  "icon": "🛒",
+  "subCategories": [
+    {
+      "name": "Vegetables",
+      "image": "https://i.pinimg.com/1200x/17/44/ce/1744ce688dee6ca817e84910cdfa2d9a.jpg",
+      "description": "Fresh seasonal vegetables",
+      "sortOrder": 1,
+      "status": "best",
+      "_id": {
+        "$oid": "6a6b69006a7fe7035416b0e1"
+      },
+      "createdAt": {
+        "$date": "2026-07-30T15:08:48.758Z"
+      },
+      "updatedAt": {
+        "$date": "2026-07-30T15:08:48.758Z"
+      },
+      "slug": "vegetables-ms7nfenr"
+    },
+    {
+      "name": "Fruits",
+      "image": "https://i.pinimg.com/736x/ed/15/77/ed15771729415d6c4d2d207a2bbcb48c.jpg",
+      "description": "Fresh fruits",
+      "sortOrder": 2,
+      "status": "popular",
+      "_id": {
+        "$oid": "6a6b69006a7fe7035416b0e2"
+      },
+      "createdAt": {
+        "$date": "2026-07-30T15:08:48.759Z"
+      },
+      "updatedAt": {
+        "$date": "2026-07-30T15:08:48.759Z"
+      },
+      "slug": "fruits-ms7nfenr"
+    },
+    {
+      "name": "Dairy",
+      "image": "https://i.pinimg.com/1200x/2d/a2/c1/2da2c1ea2a1d6b7f073d2b1b1750659c.jpg",
+      "description": "Milk, Butter & Cheese",
+      "sortOrder": 3,
+      "status": "active",
+      "_id": {
+        "$oid": "6a6b69006a7fe7035416b0e3"
+      },
+      "createdAt": {
+        "$date": "2026-07-30T15:08:48.759Z"
+      },
+      "updatedAt": {
+        "$date": "2026-07-30T15:08:48.759Z"
+      },
+      "slug": "dairy-ms7nfenr"
+    },
+    {
+      "name": "Frozen Food",
+      "image": "https://i.pinimg.com/736x/6c/9d/57/6c9d57018dfa49214488095ce18e9b7f.jpg",
+      "description": "Frozen ready-to-cook meals",
+      "sortOrder": 4,
+      "status": "active",
+      "_id": {
+        "$oid": "6a6b69006a7fe7035416b0e4"
+      },
+      "createdAt": {
+        "$date": "2026-07-30T15:08:48.759Z"
+      },
+      "updatedAt": {
+        "$date": "2026-07-30T15:08:48.759Z"
+      },
+      "slug": "frozen-food-ms7nfenr"
+    }
+  ],
+  "sortOrder": 1,
+  "status": "active",
+  "isFeatured": true,
+  "createdAt": {
+    "$date": "2026-07-30T15:08:48.759Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-30T15:41:00.128Z"
+  },
+  "categorySlug": "grocery",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a6b690f6a7fe7035416b0e5"
+  },
+  "categoryName": "Bakery",
+  "description": "Freshly baked bakery items.",
+  "image": "https://i.pinimg.com/736x/e2/59/26/e25926fb1090aa867e6ae087c3e32c4d.jpg",
+  "icon": "🥐",
+  "subCategories": [
+    {
+      "name": "Bread",
+      "image": "https://i.pinimg.com/736x/e1/fe/b4/e1feb42f72cc526b521cbb91bc77514a.jpg",
+      "description": "Fresh Bread",
+      "sortOrder": 1,
+      "status": "active",
+      "_id": {
+        "$oid": "6a6b690f6a7fe7035416b0e6"
+      },
+      "createdAt": {
+        "$date": "2026-07-30T15:09:03.962Z"
+      },
+      "updatedAt": {
+        "$date": "2026-07-30T15:09:03.962Z"
+      },
+      "slug": "bread-ms7nfqe2"
+    },
+    {
+      "name": "Croissants",
+      "image": "https://i.pinimg.com/1200x/ee/a0/c3/eea0c3a855188563e415bbf47b222448.jpg",
+      "description": "Butter Croissants",
+      "sortOrder": 2,
+      "status": "signature",
+      "_id": {
+        "$oid": "6a6b690f6a7fe7035416b0e7"
+      },
+      "createdAt": {
+        "$date": "2026-07-30T15:09:03.962Z"
+      },
+      "updatedAt": {
+        "$date": "2026-07-30T15:09:03.962Z"
+      },
+      "slug": "croissants-ms7nfqe2"
+    },
+    {
+      "name": "Muffins",
+      "image": "https://i.pinimg.com/736x/f4/a3/ab/f4a3ab0a5981a6e123c0ff20f91ced95.jpg",
+      "description": "Chocolate & Vanilla Muffins",
+      "sortOrder": 3,
+      "status": "popular",
+      "_id": {
+        "$oid": "6a6b690f6a7fe7035416b0e8"
+      },
+      "createdAt": {
+        "$date": "2026-07-30T15:09:03.962Z"
+      },
+      "updatedAt": {
+        "$date": "2026-07-30T15:09:03.962Z"
+      },
+      "slug": "muffins-ms7nfqe2"
+    }
+  ],
+  "sortOrder": 3,
+  "status": "active",
+  "isFeatured": false,
+  "createdAt": {
+    "$date": "2026-07-30T15:09:03.962Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-30T15:09:03.962Z"
+  },
+  "categorySlug": "bakery",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a6b69276a7fe7035416b0e9"
+  },
+  "categoryName": "Sweets & Desserts",
+  "description": "Cakes, pastries and delicious desserts.",
+  "image": "https://example.com/images/dessert.jpg",
+  "icon": "🍰",
+  "subCategories": [
+    {
+      "name": "Cake",
+      "image": "https://i.pinimg.com/736x/1e/5f/43/1e5f4354b2d14cfdd152bc0d3c3fe5c5.jpg",
+      "description": "Birthday Cakes",
+      "sortOrder": 1,
+      "status": "signature",
+      "_id": {
+        "$oid": "6a6b69276a7fe7035416b0ea"
+      },
+      "createdAt": {
+        "$date": "2026-07-30T15:09:27.508Z"
+      },
+      "updatedAt": {
+        "$date": "2026-07-30T15:09:27.508Z"
+      },
+      "slug": "cake-ms7ng8k4"
+    },
+    {
+      "name": "Brownie",
+      "image": "https://i.pinimg.com/1200x/6c/3b/10/6c3b10c95f7b8a71c8fbd59c80429c5c.jpg",
+      "description": "Chocolate Brownies",
+      "sortOrder": 2,
+      "status": "hot",
+      "_id": {
+        "$oid": "6a6b69276a7fe7035416b0eb"
+      },
+      "createdAt": {
+        "$date": "2026-07-30T15:09:27.508Z"
+      },
+      "updatedAt": {
+        "$date": "2026-07-30T15:09:27.508Z"
+      },
+      "slug": "brownie-ms7ng8k4"
+    },
+    {
+      "name": "Donuts",
+      "image": "https://i.pinimg.com/736x/43/cc/2a/43cc2a1bccc6c45057f681f41b5b15ba.jpg",
+      "description": "Fresh Donuts",
+      "sortOrder": 3,
+      "status": "popular",
+      "_id": {
+        "$oid": "6a6b69276a7fe7035416b0ec"
+      },
+      "createdAt": {
+        "$date": "2026-07-30T15:09:27.508Z"
+      },
+      "updatedAt": {
+        "$date": "2026-07-30T15:09:27.508Z"
+      },
+      "slug": "donuts-ms7ng8k4"
+    },
+    {
+      "name": "Ice Cream",
+      "image": "https://i.pinimg.com/736x/68/79/cf/6879cf9b00834a790ded1d350d0170fe.jpg",
+      "description": "Premium Ice Cream",
+      "sortOrder": 4,
+      "status": "best",
+      "_id": {
+        "$oid": "6a6b69276a7fe7035416b0ed"
+      },
+      "createdAt": {
+        "$date": "2026-07-30T15:09:27.508Z"
+      },
+      "updatedAt": {
+        "$date": "2026-07-30T15:09:27.508Z"
+      },
+      "slug": "ice-cream-ms7ng8k4"
+    }
+  ],
+  "sortOrder": 4,
+  "status": "active",
+  "isFeatured": true,
+  "createdAt": {
+    "$date": "2026-07-30T15:09:27.508Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-30T15:09:27.508Z"
+  },
+  "categorySlug": "sweets-desserts",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a6b69386a7fe7035416b0ee"
+  },
+  "categoryName": "Beverages",
+  "description": "Cold and hot drinks.",
+  "image": "https://i.pinimg.com/736x/42/1c/77/421c77ff2d8b6120d8ed66318adce6a9.jpg",
+  "icon": "🥤",
+  "subCategories": [
+    {
+      "name": "Cold Drinks",
+      "image": "https://i.pinimg.com/736x/42/1c/77/421c77ff2d8b6120d8ed66318adce6a9.jpg",
+      "description": "Pepsi, Coke, Sprite",
+      "sortOrder": 1,
+      "status": "popular",
+      "_id": {
+        "$oid": "6a6b6b016a7fe7035416b101"
+      },
+      "createdAt": {
+        "$date": "2026-07-30T15:17:21.828Z"
+      },
+      "updatedAt": {
+        "$date": "2026-07-30T15:17:21.828Z"
+      },
+      "slug": "cold-drinks-ms7nqejo"
+    }
+  ],
+  "sortOrder": 5,
+  "status": "best",
+  "isFeatured": true,
+  "createdAt": {
+    "$date": "2026-07-30T15:09:44.524Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-30T15:17:21.828Z"
+  },
+  "categorySlug": "beverages",
+  "__v": 5
+}]

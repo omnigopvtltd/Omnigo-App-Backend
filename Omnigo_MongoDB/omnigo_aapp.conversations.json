@@ -1,0 +1,187 @@
+[{
+  "_id": {
+    "$oid": "6a463bd674f1e5793327c41f"
+  },
+  "orderId": {
+    "$oid": "6a35a717e8c8ea4bae1926a1"
+  },
+  "customerId": {
+    "$oid": "6a22b6644a4b879e3c210f02"
+  },
+  "riderId": {
+    "$oid": "6a35a742e8c8ea4bae1926a4"
+  },
+  "lastMessage": "Got it, see you soon!",
+  "createdAt": {
+    "$date": "2026-07-02T10:22:14.507Z"
+  },
+  "updatedAt": {
+    "$date": "2026-08-03T07:58:11.726Z"
+  },
+  "__v": 0,
+  "unreadCount": 0
+},
+{
+  "_id": {
+    "$oid": "6a48d659a57da4a6e4737913"
+  },
+  "orderId": {
+    "$oid": "6a35a7a8229dd50f53f003f2"
+  },
+  "customerId": {
+    "$oid": "6a217e42dae094cf4cccdb21"
+  },
+  "riderId": {
+    "$oid": "6a35a451229dd50f53f003d5"
+  },
+  "lastMessage": "",
+  "createdAt": {
+    "$date": "2026-07-04T09:46:01.210Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-04T09:46:01.210Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a4b870c7f3069cb9cdf2dd0"
+  },
+  "orderId": {
+    "$oid": "6a3a3f0c0fcd4a956e1e42c2"
+  },
+  "customerId": {
+    "$oid": "6a35ae11229dd50f53f00459"
+  },
+  "riderId": {
+    "$oid": "6a44d98a1bce305ee4e0f962"
+  },
+  "lastMessage": "",
+  "createdAt": {
+    "$date": "2026-07-06T10:44:28.461Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-06T10:44:28.461Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a4e129550e285a3201fcc9b"
+  },
+  "orderId": {
+    "$oid": "6a4cfb7550e285a3201fcc6f"
+  },
+  "customerId": {
+    "$oid": "6a35ae11229dd50f53f00459"
+  },
+  "riderId": {
+    "$oid": "6a4ce0aa50e285a3201fcb02"
+  },
+  "lastMessage": "hlo",
+  "createdAt": {
+    "$date": "2026-07-08T09:04:21.763Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-24T10:12:21.907Z"
+  },
+  "__v": 0,
+  "unreadCount": 0
+},
+{
+  "_id": {
+    "$oid": "6a4e9ebb50e285a3201fccce"
+  },
+  "orderId": {
+    "$oid": "6a4ce88450e285a3201fcbd5"
+  },
+  "customerId": {
+    "$oid": "6a35ae11229dd50f53f00459"
+  },
+  "riderId": {
+    "$oid": "6a4ce0aa50e285a3201fcb02"
+  },
+  "lastMessage": "how are you",
+  "createdAt": {
+    "$date": "2026-07-08T19:02:19.419Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-08T19:38:56.726Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a58d968909839b47ec51a76"
+  },
+  "orderId": {
+    "$oid": "6a58d6cd909839b47ec51a46"
+  },
+  "customerId": {
+    "$oid": "6a35ae11229dd50f53f00459"
+  },
+  "riderId": {
+    "$oid": "6a4ce0aa50e285a3201fcb02"
+  },
+  "lastMessage": "",
+  "createdAt": {
+    "$date": "2026-07-16T13:15:20.246Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-24T10:12:25.053Z"
+  },
+  "__v": 0,
+  "unreadCount": 0
+},
+{
+  "_id": {
+    "$oid": "6a6328bd44c12977cd10c4e5"
+  },
+  "type": "admin_user",
+  "customerId": null,
+  "riderId": null,
+  "adminId": null,
+  "orderId": null,
+  "lastMessage": {
+    "text": "",
+    "senderId": null,
+    "senderRole": null,
+    "sentAt": null
+  },
+  "unreadCount": 0,
+  "status": "active",
+  "createdAt": {
+    "$date": "2026-07-24T08:56:29.758Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-27T15:05:56.629Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a633b445462d9683e5996c9"
+  },
+  "type": "admin_rider",
+  "customerId": null,
+  "riderId": {
+    "$oid": "6a5ef0677d6222708621d39f"
+  },
+  "adminId": null,
+  "orderId": null,
+  "lastMessage": {
+    "text": "",
+    "senderId": null,
+    "senderRole": null,
+    "sentAt": null
+  },
+  "unreadCount": 0,
+  "status": "active",
+  "createdAt": {
+    "$date": "2026-07-24T10:15:32.638Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-24T15:28:18.470Z"
+  },
+  "__v": 0
+}]

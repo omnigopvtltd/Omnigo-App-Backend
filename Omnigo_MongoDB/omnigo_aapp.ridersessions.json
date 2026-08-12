@@ -1,0 +1,125 @@
+[{
+  "_id": {
+    "$oid": "6a6cc2b9561984da659387b9"
+  },
+  "title": "Morning Rider Challenge",
+  "description": "Complete 8 orders during the morning shift and earn a bonus.",
+  "requiredOrders": 8,
+  "bonusAmount": 500,
+  "minWalletBalance": 200,
+  "timeLimitHours": 6,
+  "isActive": true,
+  "startDate": {
+    "$date": "2026-08-01T06:00:00.000Z"
+  },
+  "endDate": {
+    "$date": "2026-08-01T12:00:00.000Z"
+  },
+  "createdAt": {
+    "$date": "2026-07-31T15:43:53.258Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-31T15:43:53.258Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a6cc2c7561984da659387ba"
+  },
+  "title": "Lunch Rush Session",
+  "description": "Complete 10 orders during lunch hours to unlock extra earnings.",
+  "requiredOrders": 10,
+  "bonusAmount": 800,
+  "minWalletBalance": 300,
+  "timeLimitHours": 5,
+  "isActive": true,
+  "startDate": {
+    "$date": "2026-08-01T11:00:00.000Z"
+  },
+  "endDate": {
+    "$date": "2026-08-01T16:00:00.000Z"
+  },
+  "createdAt": {
+    "$date": "2026-07-31T15:44:07.421Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-31T15:44:07.421Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a6cc2e3561984da659387bb"
+  },
+  "title": "Evening Boost",
+  "description": "Deliver 12 orders in the evening and receive a performance bonus.",
+  "requiredOrders": 12,
+  "bonusAmount": 1000,
+  "minWalletBalance": 500,
+  "timeLimitHours": 6,
+  "isActive": true,
+  "startDate": {
+    "$date": "2026-08-01T17:00:00.000Z"
+  },
+  "endDate": {
+    "$date": "2026-08-01T23:00:00.000Z"
+  },
+  "createdAt": {
+    "$date": "2026-07-31T15:44:35.549Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-31T15:44:35.549Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a6cc2f4561984da659387bc"
+  },
+  "title": "Weekend Mega Session",
+  "description": "Weekend challenge with higher rewards for active riders.",
+  "requiredOrders": 20,
+  "bonusAmount": 2000,
+  "minWalletBalance": 1000,
+  "timeLimitHours": 12,
+  "isActive": true,
+  "startDate": {
+    "$date": "2026-08-02T08:00:00.000Z"
+  },
+  "endDate": {
+    "$date": "2026-08-02T20:00:00.000Z"
+  },
+  "createdAt": {
+    "$date": "2026-07-31T15:44:52.079Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-31T15:44:52.079Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a6cc305561984da659387bd"
+  },
+  "title": "Night Owl Session",
+  "description": "Late-night delivery challenge with bonus incentives.",
+  "requiredOrders": 6,
+  "bonusAmount": 400,
+  "minWalletBalance": 100,
+  "timeLimitHours": 4,
+  "isActive": true,
+  "startDate": {
+    "$date": "2026-08-01T21:00:00.000Z"
+  },
+  "endDate": {
+    "$date": "2026-08-02T01:00:00.000Z"
+  },
+  "createdAt": {
+    "$date": "2026-07-31T15:45:09.788Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-31T15:45:09.788Z"
+  },
+  "__v": 0
+}]

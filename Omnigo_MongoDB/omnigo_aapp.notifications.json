@@ -1,0 +1,44 @@
+[{
+  "_id": {
+    "$oid": "69fc387d52e8218a720fc2ae"
+  },
+  "userId": {
+    "$oid": "69fadab049ad4ca2a044dba9"
+  },
+  "orderId": {
+    "$oid": "69fc387d52e8218a720fc2ac"
+  },
+  "title": "Order Placed",
+  "message": "Your order has been placed successfully",
+  "type": "order_placed",
+  "isRead": true,
+  "createdAt": {
+    "$date": "2026-05-07T07:00:13.359Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-21T19:37:33.244Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69fc3aaa9f66347ea23e6a26"
+  },
+  "userId": {
+    "$oid": "69fadab049ad4ca2a044dba9"
+  },
+  "orderId": {
+    "$oid": "69fc3aaa9f66347ea23e6a24"
+  },
+  "title": "Order Placed",
+  "message": "Your order has been placed successfully",
+  "type": "order_placed",
+  "isRead": true,
+  "createdAt": {
+    "$date": "2026-05-07T07:09:30.784Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-21T19:37:33.244Z"
+  },
+  "__v": 0
+}]
