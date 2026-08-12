@@ -1,7 +1,7 @@
 const { initializeApp, cert, getApps } = require("firebase-admin/app");
 
 // const serviceAccount = require("../serviceAccountKey.json");
-const admin = require("firebase-admin");
+// const admin = require("firebase-admin");
 
 const serviceAccount = {
   type: process.env.FIREBASE_TYPE,
