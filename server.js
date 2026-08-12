@@ -97,7 +97,14 @@ const io = initSocket(server);
 //  make io available globally in express
 app.set("io", io);
 
-// ================= START SERVER =================
-server.listen(5000, () => {
-  console.log("Server running on port 5000");
+
+// // ================= START SERVER =================
+// server.listen(5000, () => {
+//   console.log("Server running on port 5000");
+// });
+
+const PORT = process.env.PORT || 5000;
+
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
 });

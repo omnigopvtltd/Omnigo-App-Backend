@@ -1,0 +1,420 @@
+[{
+  "_id": {
+    "$oid": "6a5ef3bac20086be56ec8c04"
+  },
+  "userId": {
+    "$oid": "6a5ef0677d6222708621d39f"
+  },
+  "type": "credit",
+  "amount": 5000,
+  "reason": "Wallet top-up (ref: TEST_JC_12345)",
+  "balanceAfter": 5000,
+  "source": "topup",
+  "orderId": null,
+  "sessionParticipationId": null,
+  "createdBy": null,
+  "createdAt": {
+    "$date": "2026-07-21T04:21:14.590Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-21T04:21:14.590Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a5ef950dd110c2a75f280b2"
+  },
+  "userId": {
+    "$oid": "6a5ef0677d6222708621d39f"
+  },
+  "type": "debit",
+  "amount": 1200,
+  "reason": "Vendor purchase for Order #6a35aa9f229dd50f53f00456 via jazzcash",
+  "balanceAfter": 3800,
+  "source": "order_float",
+  "orderId": {
+    "$oid": "6a35aa9f229dd50f53f00456"
+  },
+  "sessionParticipationId": null,
+  "createdBy": null,
+  "createdAt": {
+    "$date": "2026-07-21T04:45:04.500Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-21T04:45:04.500Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a5ef950dd110c2a75f280b3"
+  },
+  "userId": {
+    "$oid": "6a57323f8cf2d87bf78f3340"
+  },
+  "type": "credit",
+  "amount": 1200,
+  "reason": "Payment received for Order #6a35aa9f229dd50f53f00456 via jazzcash",
+  "balanceAfter": 1200,
+  "source": "order_earning",
+  "orderId": {
+    "$oid": "6a35aa9f229dd50f53f00456"
+  },
+  "sessionParticipationId": null,
+  "createdBy": null,
+  "createdAt": {
+    "$date": "2026-07-21T04:45:04.612Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-21T04:45:04.612Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a5efa1a2e95640f0482b2a6"
+  },
+  "userId": {
+    "$oid": "6a5ef0677d6222708621d39f"
+  },
+  "type": "debit",
+  "amount": 1200,
+  "reason": "Vendor purchase for Order #6a35aa9f229dd50f53f00456 via jazzcash",
+  "balanceAfter": 2600,
+  "source": "order_float",
+  "orderId": {
+    "$oid": "6a35aa9f229dd50f53f00456"
+  },
+  "sessionParticipationId": null,
+  "createdBy": null,
+  "createdAt": {
+    "$date": "2026-07-21T04:48:26.922Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-21T04:48:26.922Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a5efa1b2e95640f0482b2a7"
+  },
+  "userId": {
+    "$oid": "6a57323f8cf2d87bf78f3340"
+  },
+  "type": "credit",
+  "amount": 1200,
+  "reason": "Payment received for Order #6a35aa9f229dd50f53f00456 via jazzcash",
+  "balanceAfter": 2400,
+  "source": "order_earning",
+  "orderId": {
+    "$oid": "6a35aa9f229dd50f53f00456"
+  },
+  "sessionParticipationId": null,
+  "createdBy": null,
+  "createdAt": {
+    "$date": "2026-07-21T04:48:27.051Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-21T04:48:27.051Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a5efa4225a2e95cddaabaef"
+  },
+  "userId": {
+    "$oid": "6a5ef0677d6222708621d39f"
+  },
+  "type": "debit",
+  "amount": 1200,
+  "reason": "Vendor purchase for Order #6a35aa9f229dd50f53f00456 via jazzcash",
+  "balanceAfter": 1400,
+  "source": "order_float",
+  "orderId": {
+    "$oid": "6a35aa9f229dd50f53f00456"
+  },
+  "sessionParticipationId": null,
+  "createdBy": null,
+  "createdAt": {
+    "$date": "2026-07-21T04:49:06.026Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-21T04:49:06.026Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a5efa4225a2e95cddaabaf0"
+  },
+  "userId": {
+    "$oid": "6a57323f8cf2d87bf78f3340"
+  },
+  "type": "credit",
+  "amount": 1200,
+  "reason": "Payment received for Order #6a35aa9f229dd50f53f00456 via jazzcash",
+  "balanceAfter": 3600,
+  "source": "order_earning",
+  "orderId": {
+    "$oid": "6a35aa9f229dd50f53f00456"
+  },
+  "sessionParticipationId": null,
+  "createdBy": null,
+  "createdAt": {
+    "$date": "2026-07-21T04:49:06.137Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-21T04:49:06.137Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a5efb2bb1b737d155163e75"
+  },
+  "userId": {
+    "$oid": "6a5ef0677d6222708621d39f"
+  },
+  "type": "debit",
+  "amount": 1200,
+  "reason": "Vendor purchase for Order #6a35aa9f229dd50f53f00456 via jazzcash",
+  "balanceAfter": 200,
+  "source": "order_float",
+  "orderId": {
+    "$oid": "6a35aa9f229dd50f53f00456"
+  },
+  "sessionParticipationId": null,
+  "createdBy": null,
+  "createdAt": {
+    "$date": "2026-07-21T04:52:59.035Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-21T04:52:59.035Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a5efb2bb1b737d155163e76"
+  },
+  "userId": {
+    "$oid": "6a57323f8cf2d87bf78f3340"
+  },
+  "type": "credit",
+  "amount": 1200,
+  "reason": "Payment received for Order #6a35aa9f229dd50f53f00456 via jazzcash",
+  "balanceAfter": 4800,
+  "source": "order_earning",
+  "orderId": {
+    "$oid": "6a35aa9f229dd50f53f00456"
+  },
+  "sessionParticipationId": null,
+  "createdBy": null,
+  "createdAt": {
+    "$date": "2026-07-21T04:52:59.165Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-21T04:52:59.165Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a5efc40b1b737d155163e77"
+  },
+  "userId": {
+    "$oid": "6a5ef0677d6222708621d39f"
+  },
+  "type": "credit",
+  "amount": 1350,
+  "reason": "Delivery completed for Order #6691a2b3c4d5e6f7a8b9c0d1 (Customer Payment + Fee)",
+  "balanceAfter": 1550,
+  "source": "order_earning",
+  "orderId": {
+    "$oid": "6691a2b3c4d5e6f7a8b9c0d1"
+  },
+  "sessionParticipationId": null,
+  "createdBy": null,
+  "createdAt": {
+    "$date": "2026-07-21T04:57:36.765Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-21T04:57:36.765Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a5efc9e5c32e93fe000ee2c"
+  },
+  "userId": {
+    "$oid": "6a5ef0677d6222708621d39f"
+  },
+  "type": "credit",
+  "amount": 1350,
+  "reason": "Delivery completed for Order #6691a2b3c4d5e6f7a8b9c0d1 (Customer Payment + Fee)",
+  "balanceAfter": 2900,
+  "source": "order_earning",
+  "orderId": {
+    "$oid": "6691a2b3c4d5e6f7a8b9c0d1"
+  },
+  "sessionParticipationId": null,
+  "createdBy": null,
+  "createdAt": {
+    "$date": "2026-07-21T04:59:10.691Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-21T04:59:10.691Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a5f1e0def58eb6982d5376f"
+  },
+  "userId": {
+    "$oid": "6a5ef0677d6222708621d39f"
+  },
+  "type": "debit",
+  "amount": 2000,
+  "reason": "Withdrawal approved",
+  "balanceAfter": 900,
+  "source": "withdrawal",
+  "orderId": null,
+  "sessionParticipationId": null,
+  "createdBy": {
+    "$oid": "6a50f90383cbf83bbac2b5f2"
+  },
+  "createdAt": {
+    "$date": "2026-07-21T07:21:49.095Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-21T07:21:49.095Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a68c5a029a6c8db852b328e"
+  },
+  "userId": {
+    "$oid": "6a5ef0677d6222708621d39f"
+  },
+  "restaurantId": null,
+  "type": "credit",
+  "amount": 2000,
+  "reason": "Wallet top-up (ref: bank_transfer)",
+  "balanceAfter": 2900,
+  "source": "topup",
+  "orderId": null,
+  "sessionParticipationId": null,
+  "createdBy": null,
+  "createdAt": {
+    "$date": "2026-07-28T15:07:12.262Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-28T15:07:12.262Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a68ce3fc8be9ed3e31cd01b"
+  },
+  "userId": {
+    "$oid": "6a5ef0677d6222708621d39f"
+  },
+  "restaurantId": null,
+  "type": "debit",
+  "amount": 2000,
+  "reason": "Withdrawal approved via BANK_TRANSFER (undefined)",
+  "balanceAfter": 900,
+  "source": "withdrawal",
+  "orderId": null,
+  "sessionParticipationId": null,
+  "createdBy": {
+    "$oid": "6a50f90383cbf83bbac2b5f2"
+  },
+  "createdAt": {
+    "$date": "2026-07-28T15:43:59.380Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-28T15:43:59.380Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a7024f89eeb860567e44562"
+  },
+  "userId": {
+    "$oid": "6a5ef0677d6222708621d39f"
+  },
+  "restaurantId": null,
+  "type": "credit",
+  "amount": 2000,
+  "reason": "Wallet top-up (ref: jazzcash)",
+  "balanceAfter": 2900,
+  "source": "topup",
+  "orderId": null,
+  "sessionParticipationId": null,
+  "createdBy": null,
+  "createdAt": {
+    "$date": "2026-08-03T05:19:52.442Z"
+  },
+  "updatedAt": {
+    "$date": "2026-08-03T05:19:52.442Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a70252b9eeb860567e44563"
+  },
+  "userId": {
+    "$oid": "6a6cdd056fbb837389628163"
+  },
+  "restaurantId": null,
+  "type": "credit",
+  "amount": 2000,
+  "reason": "Wallet top-up (ref: jazzcash)",
+  "balanceAfter": 2000,
+  "source": "topup",
+  "orderId": null,
+  "sessionParticipationId": null,
+  "createdBy": null,
+  "createdAt": {
+    "$date": "2026-08-03T05:20:43.946Z"
+  },
+  "updatedAt": {
+    "$date": "2026-08-03T05:20:43.946Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a7048df8bd198aa50fae238"
+  },
+  "userId": {
+    "$oid": "6a6cdd056fbb837389628163"
+  },
+  "restaurantId": null,
+  "type": "credit",
+  "amount": 2000,
+  "reason": "Wallet top-up (ref: jazzcash)",
+  "balanceAfter": 4000,
+  "source": "topup",
+  "orderId": null,
+  "sessionParticipationId": null,
+  "createdBy": null,
+  "createdAt": {
+    "$date": "2026-08-03T07:53:03.896Z"
+  },
+  "updatedAt": {
+    "$date": "2026-08-03T07:53:03.896Z"
+  },
+  "__v": 0
+}]

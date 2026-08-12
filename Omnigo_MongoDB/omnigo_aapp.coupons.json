@@ -1,0 +1,58 @@
+[{
+  "_id": {
+    "$oid": "6a5a7bf2006f5665037a9f0d"
+  },
+  "code": "ATQUE NEQUE MAGNAM T",
+  "description": "Velit veniam doloru",
+  "type": "percentage",
+  "value": 73,
+  "maxDiscount": 86,
+  "minOrderAmount": 35,
+  "usageLimit": 44,
+  "usedCount": 0,
+  "perUserLimit": 16,
+  "applicableRestaurants": [],
+  "startDate": {
+    "$date": "1971-12-27T00:00:00.000Z"
+  },
+  "endDate": {
+    "$date": "1972-07-05T00:00:00.000Z"
+  },
+  "isActive": true,
+  "createdAt": {
+    "$date": "2026-07-17T19:01:06.837Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-17T19:01:06.837Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "6a5a7c04006f5665037a9f0e"
+  },
+  "code": "ULLAM VELIT MOLESTIA",
+  "description": "Aute distinctio Do ",
+  "type": "percentage",
+  "value": 94,
+  "maxDiscount": 100,
+  "minOrderAmount": 49,
+  "usageLimit": 79,
+  "usedCount": 0,
+  "perUserLimit": 56,
+  "applicableRestaurants": [],
+  "startDate": {
+    "$date": "2010-11-09T00:00:00.000Z"
+  },
+  "endDate": {
+    "$date": "2014-07-13T00:00:00.000Z"
+  },
+  "isActive": true,
+  "createdAt": {
+    "$date": "2026-07-17T19:01:24.604Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-17T19:01:24.604Z"
+  },
+  "__v": 0
+}]

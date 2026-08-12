@@ -1,0 +1,25 @@
+[{
+  "_id": {
+    "$oid": "6a670374c5aa587d64c978f0"
+  },
+  "title": "Rerum perspiciatis",
+  "description": "Proident non sint ",
+  "bannerImage": "https://i.pinimg.com/1200x/db/1b/e4/db1be4f81c5fe0dd124d7717317a7d16.jpg",
+  "type": "banner",
+  "linkedCoupon": null,
+  "targetAudience": "new_users",
+  "startDate": {
+    "$date": "1974-04-27T00:00:00.000Z"
+  },
+  "endDate": {
+    "$date": "2022-12-03T00:00:00.000Z"
+  },
+  "isActive": true,
+  "createdAt": {
+    "$date": "2026-07-27T07:06:28.489Z"
+  },
+  "updatedAt": {
+    "$date": "2026-07-27T07:06:28.489Z"
+  },
+  "__v": 0
+}]
