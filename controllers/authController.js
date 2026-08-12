@@ -1,7 +1,7 @@
 require("dotenv").config();
 const mongoose = require("mongoose");
 const User = require("../models/User");
-const OTP = require("../models/OTP");
+const OTP = require("../models/Otp");
 const Zone = require("../models/Zone");
 
 const jwt = require("jsonwebtoken");
