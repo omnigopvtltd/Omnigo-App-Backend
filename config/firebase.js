@@ -19,7 +19,7 @@ const serviceAccount = {
 const app =
   getApps().length === 0
     ? initializeApp({
-        credential: cert(serviceAccount),
+        credential: cert(serviceAccount || "../serviceAccountKey.json"),
       })
     : getApps()[0];
 

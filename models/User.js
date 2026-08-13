@@ -18,7 +18,6 @@ const userSchema = new mongoose.Schema(
     fcmToken: { type: String, default: "" },
     phone: {
       type: String,
-      unique: true,
       sparse: true,
       trim: true,
       default: null,
@@ -30,6 +29,7 @@ const userSchema = new mongoose.Schema(
     paymentMethod: {
       type: String,
       enum: ["cash", "jazzcash", "easypaisa", "bank"],
+      default: "cash",
     },
 
     role: {
@@ -56,7 +56,6 @@ const userSchema = new mongoose.Schema(
     // ADDRESSES
     addresses: [
       {
-        phone: { type: String, required: true },
         address: { type: String, required: true },
         city: { type: String, required: true },
         zipCode: { type: String, required: true },
@@ -122,12 +121,6 @@ const userSchema = new mongoose.Schema(
       rating: {
         average: { type: Number, default: 0 },
         count: { type: Number, default: 0 },
-      },
-
-      verificationStatus: {
-        type: String,
-        enum: ["not_submitted", "pending", "approved", "rejected"],
-        default: "not_submitted",
       },
 
       autoAcceptOrders: {

@@ -141,10 +141,7 @@ const generateOtp = () => {
 exports.saveToken = async (req, res) => {
   const { fcmToken } = req.body;
 
-  await User.findByIdAndUpdate(
-    req.user.id,
-    { fcmToken }
-  );
+  await User.findByIdAndUpdate(req.user.id, { fcmToken });
 
   res.status(200).json({
     success: true,
@@ -519,7 +516,38 @@ exports.signup = [
         });
       }
 
-      const { name, email, password, role } = req.body;
+      const {
+        name,
+        email,
+        password,
+        role,
+        phone,
+        cnicNumber,
+        isEmailVerified,
+        isPhoneVerified,
+        profilePicture,
+        paymentMethod,
+        riderProfile,
+        addresses: [
+          {
+            address,
+            city,
+            zipCode,
+            country,
+            isDefault,
+          }
+        ],
+        riderProfile: {
+          category,
+          vehicleType,
+          vehiclePlate,
+          vehicleModel,
+        verificationSelfie,
+        verificationStatus,
+        isOnline,
+      },
+        
+      } = req.body;
 
       // CHECK EXISTING USER
       const exists = await User.findOne({ email });
@@ -543,6 +571,31 @@ exports.signup = [
 
         // ✅ AUTO VERIFIED
         isEmailVerified: true,
+        phone: phone || "",
+        cnicNumber : cnicNumber || "",
+        isPhoneVerified: isPhoneVerified || false,
+        profilePicture: profilePicture || "",
+        paymentMethod: paymentMethod || "cash",
+        riderProfile,
+        addresses: [
+          {
+            address: address || "",
+            city: city || "",
+            zipCode: zipCode || "",
+            country: country || "",
+            isDefault: isDefault || false,
+          }
+        ],
+        riderProfile: {
+          category: category || null,
+          vehicleType: vehicleType || "bike",
+          vehiclePlate: vehiclePlate || "",
+          vehicleModel: vehicleModel || "",
+          verificationSelfie: verificationSelfie || null,
+          verificationStatus: verificationStatus || "not_submitted",
+
+        isOnline: isOnline || false,
+      },
       });
 
       return sendResponse(res, "Signup successful", user);
@@ -914,14 +967,15 @@ exports.updateRiderStatus = async (req, res) => {
     if (typeof isBlocked !== "boolean") {
       return res.status(400).json({
         success: false,
-        message: "Invalid payload. 'isBlocked' must be a boolean value (true/false).",
+        message:
+          "Invalid payload. 'isBlocked' must be a boolean value (true/false).",
       });
     }
 
     const updatedRider = await User.findOneAndUpdate(
       { _id: req.params.id, role: "rider" },
       { $set: { isBlocked } },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
 
     if (!updatedRider) {
@@ -1670,6 +1724,35 @@ exports.setDefaultAddress = async (req, res) => {
 // =======================
 // Get All Users
 // =======================
+exports.getAllUsers = async (req, res) => {
+  try {
+    const { status, search } = req.query;
+
+    const filter = {};
+
+    if (status && status !== "all") {
+      // isBlocked status handle karne ke liye (agar dynamic state query ho)
+      if (status === "blocked") filter.isBlocked = true;
+      if (status === "active") filter.isBlocked = false;
+    }
+
+    const users = await User.find(filter).sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      users,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// =======================
+// Get All Users
+// =======================
 exports.getUsers = async (req, res) => {
   try {
     const { status, search } = req.query;
@@ -1695,8 +1778,7 @@ exports.getUsers = async (req, res) => {
       message: err.message,
     });
   }
-}
-
+};
 
 //------------------------------------  Rider Otps -------------------------------------
 
@@ -1723,10 +1805,7 @@ exports.sendRiderOTP = async (req, res) => {
       });
     }
 
-    const match = await bcrypt.compare(
-      password,
-      rider.password
-    );
+    const match = await bcrypt.compare(password, rider.password);
 
     if (!match) {
       return res.status(400).json({
@@ -1755,7 +1834,7 @@ exports.sendRiderOTP = async (req, res) => {
       {
         upsert: true,
         new: true,
-      }
+      },
     );
 
     console.log("RIDER OTP:", otp);
@@ -1813,8 +1892,6 @@ exports.updateUserStatus = async (req, res) => {
     });
   }
 };
-
-
 
 exports.verifyRiderOTP = async (req, res) => {
   try {
@@ -1990,8 +2067,8 @@ exports.uploadVerificationSelfie = async (req, res) => {
       });
     }
 
-rider.riderProfile.verificationSelfie = selfieUrl;
-rider.riderProfile.verificationStatus = "pending";
+    rider.riderProfile.verificationSelfie = selfieUrl;
+    rider.riderProfile.verificationStatus = "pending";
 
     await rider.save();
 
@@ -2022,7 +2099,7 @@ exports.submitVerification = async (req, res) => {
       });
     }
 
-  if (!rider.riderProfile.verificationSelfie)  {
+    if (!rider.riderProfile.verificationSelfie) {
       return res.status(400).json({
         success: false,
         message: "Please upload selfie first",
@@ -2046,7 +2123,6 @@ exports.submitVerification = async (req, res) => {
   }
 };
 
-
 exports.getVerificationStatus = async (req, res) => {
   try {
     const riderId = req.user.id;
@@ -2062,10 +2138,10 @@ exports.getVerificationStatus = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-verificationStatus: rider.riderProfile.verificationStatus,
-verificationReason: rider.riderProfile.verificationReason,
-verifiedAt: rider.riderProfile.verifiedAt,
-verificationSelfie: rider.riderProfile.verificationSelfie,
+      verificationStatus: rider.riderProfile.verificationStatus,
+      verificationReason: rider.riderProfile.verificationReason,
+      verifiedAt: rider.riderProfile.verifiedAt,
+      verificationSelfie: rider.riderProfile.verificationSelfie,
     });
   } catch (err) {
     return res.status(500).json({
@@ -2074,7 +2150,6 @@ verificationSelfie: rider.riderProfile.verificationSelfie,
     });
   }
 };
-
 
 exports.approveRiderVerification = async (req, res) => {
   try {
@@ -2088,9 +2163,9 @@ exports.approveRiderVerification = async (req, res) => {
         message: "Rider not found",
       });
     }
-rider.riderProfile.verificationStatus = "approved";
-rider.riderProfile.verificationReason = null;
-rider.riderProfile.verifiedAt = new Date();
+    rider.riderProfile.verificationStatus = "approved";
+    rider.riderProfile.verificationReason = null;
+    rider.riderProfile.verifiedAt = new Date();
 
     await rider.save();
 
