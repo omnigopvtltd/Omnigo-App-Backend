@@ -56,6 +56,7 @@ const {
   updateRider,
   getRiders,
   updateRiderStatus,
+  getAllUsers,
  
 } = require("../controllers/authController");
 const { getRiderById } = require("../controllers/riderController");
@@ -74,6 +75,7 @@ router.post("/facebook-login", facebookLogin);
 // ======================================================
 // CUSTOMER
 // ======================================================
+router.get("/all-users", getAllUsers);
 router.get("/users", getUsers);
 router.patch("/users/update/:id/status", updateUserStatus);
 
