@@ -563,7 +563,7 @@ exports.signup = [
         addresses: addresses || [],
       };
 
-      // Only add riderProfile if it was actually provided
+      // Only add riderProfile if it was provided
       if (riderProfile) {
         userData.riderProfile = {
           category: riderProfile.category || null,
