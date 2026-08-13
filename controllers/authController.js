@@ -528,25 +528,7 @@ exports.signup = [
         profilePicture,
         paymentMethod,
         riderProfile,
-        addresses: [
-          {
-            address,
-            city,
-            zipCode,
-            country,
-            isDefault,
-          }
-        ],
-        riderProfile: {
-          category,
-          vehicleType,
-          vehiclePlate,
-          vehicleModel,
-        verificationSelfie,
-        verificationStatus,
-        isOnline,
-      },
-        
+        addresses,
       } = req.body;
 
       // CHECK EXISTING USER
@@ -563,40 +545,39 @@ exports.signup = [
       const hash = await bcrypt.hash(password, 12);
 
       // CREATE USER
-      const user = await User.create({
+      const userData = {
         name,
         email,
         password: hash,
         role: role || "user",
 
-        // ✅ AUTO VERIFIED
+        // AUTO VERIFIED
         isEmailVerified: true,
+
         phone: phone || "",
-        cnicNumber : cnicNumber || "",
+        cnicNumber: cnicNumber || "",
         isPhoneVerified: isPhoneVerified || false,
         profilePicture: profilePicture || "",
         paymentMethod: paymentMethod || "cash",
-        riderProfile,
-        addresses: [
-          {
-            address: address || "",
-            city: city || "",
-            zipCode: zipCode || "",
-            country: country || "",
-            isDefault: isDefault || false,
-          }
-        ],
-        riderProfile: {
-          category: category || null,
-          vehicleType: vehicleType || "bike",
-          vehiclePlate: vehiclePlate || "",
-          vehicleModel: vehicleModel || "",
-          verificationSelfie: verificationSelfie || null,
-          verificationStatus: verificationStatus || "not_submitted",
 
-        isOnline: isOnline || false,
-      },
-      });
+        addresses: addresses || [],
+      };
+
+      // Only add riderProfile if it was actually provided
+      if (riderProfile) {
+        userData.riderProfile = {
+          category: riderProfile.category || null,
+          vehicleType: riderProfile.vehicleType || "bike",
+          vehiclePlate: riderProfile.vehiclePlate || "",
+          vehicleModel: riderProfile.vehicleModel || "",
+          verificationSelfie: riderProfile.verificationSelfie || null,
+          verificationStatus:
+            riderProfile.verificationStatus || "not_submitted",
+          isOnline: riderProfile.isOnline || false,
+        };
+      }
+
+      const user = await User.create(userData);
 
       return sendResponse(res, "Signup successful", user);
     } catch (err) {
