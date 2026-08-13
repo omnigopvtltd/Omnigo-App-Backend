@@ -55,22 +55,28 @@ omnigo-backend/
 ├── utils/              # Helper utilities and slug generators
 ├── server.js           # Server entrypoint
 └── package.json
-6️⃣ Installation & Setup
-Prerequisites
+```
+
+---
+
+## 6️⃣ Installation & Setup
+**Prerequisites**
 Node.js >= 18.x
 
 MongoDB instance (Local or MongoDB Atlas)
 
-Environment Variables
+**Environment Variables**
 Create a .env file in the root directory:
 
-Code snippet
+**Code snippet**
 PORT=5000
 MONGO_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/omnigo
 JWT_SECRET=your_jwt_secret_key
 SOCKET_ALLOWED_ORIGIN=*
-Commands
-Bash
+
+**Commands**
+**Bash**
+
 # Install dependencies
 npm install
 
@@ -79,51 +85,65 @@ npm run dev
 
 # Start production server
 npm start
-7️⃣ Usage
+
+---
+
+## 7️⃣ Usage
 Start the server; verify the console displays MongoDB Connected and Server running on port 5000.
 
 Connect mobile or admin client apps pointing to http://localhost:5000/api.
 
 Use WebSocket client listeners to subscribe to events like order_updated or vendor_status_changed.
 
-8️⃣ Screenshots / Demo
-Live API Base URL: https://api.omnigo.com/api/v1 (Replace with active production deployment link)
+--- 
 
-9️⃣ API Documentation
-Merchant Management
-POST /api/restaurants
+## 8️⃣ Screenshots / Demo
+**Live API Base URL**: https://api.omnigo.com/api/v1 (Replace with active production deployment link)
 
-Auth: Required (Bearer Token)
+---
 
-Body:
+## 9️⃣ API Documentation
+**Merchant Management**
+**POST** /api/restaurants
 
-JSON
+**Auth**: Required (Bearer Token)
+
+**Body**:
+
+**JSON**
 {
   "name": "Spice Route",
-  "contact": { "phone": "+923001234567" },
+  "contact": { "phone": "+000000000000" },
   "address": { "street": "Main Blvd", "city": "Karachi" }
 }
-Response (201 Created): Returns created merchant payload with auto-generated slug.
+**Response** (201 Created): Returns created merchant payload with auto-generated slug.
 
-GET /api/restaurants
+**GET** /api/restaurants
 
-Query Params: belongsTo=restaurant|homeChef, status=approved, category=Fast Food
+**Query Params**: belongsTo=restaurant|homeChef, status=approved, category=Fast Food
 
-Response (200 OK): Array of filtered merchant objects.
+**Response** (200 OK): Array of filtered merchant objects.
 
-🔟 Engineering Decisions
+---
+
+## 🔟 Engineering Decisions
 Embed vs. Reference Schema Strategy: Address details and category structures are embedded directly within vendor profiles to eliminate unnecessary database $lookup joins, optimizing single-query read performance.
 
 Pre-Save Lifecycle Hooks: Automatic slugification of merchant names is performed at the database abstraction layer, guaranteeing URL consistency across administrative and user inputs.
 
-1️⃣1️⃣ Testing
-Tools: Postman / Supertest + Jest.
+---
 
-Run Command:
+## 1️⃣1️⃣ Testing
+**Tools**: Postman / Supertest + Jest.
 
-Bash
+**Run Command**:
+
+**Bash**
 npm run test
-1️⃣2️⃣ Limitations & Future Improvements
-Current Limitation: Geospatial queries currently fall back to static city text matching until client GPS coordinate pipelines are deployed.
 
-Planned Improvements: Redis caching layer for merchant catalog views to reduce MongoDB read load.
+---
+
+## 1️⃣2️⃣ Limitations & Future Improvements
+**Current Limitation**: Geospatial queries currently fall back to static city text matching until client GPS coordinate pipelines are deployed.
+
+**Planned Improvements**: Redis caching layer for merchant catalog views to reduce MongoDB read load.
