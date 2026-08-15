@@ -786,67 +786,67 @@ exports.createAdmin = async (req, res) => {
 // ======================================================
 // RIDER
 // ======================================================
-// exports.createRider = async (req, res) => {
-//    console.log("NEW CREATE RIDER RUNNING");
-//   try {
-//     const { name, email, password, phone } = req.body;
+exports.createRider = async (req, res) => {
+   console.log("NEW CREATE RIDER RUNNING");
+  try {
+    const { name, email, password, phone } = req.body;
 
-//     // Check existing rider
-//     const existingUser = await User.findOne({
-//       $or: [{ email }, { phone }],
-//     });
+    // Check existing rider
+    const existingUser = await User.findOne({
+      $or: [{ email }, { phone }],
+    });
 
-//     if (existingUser) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Email or phone already exists",
-//       });
-//     }
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: "Email or phone already exists",
+      });
+    }
 
-//     // Hash Password
-//     const hash = await bcrypt.hash(password, 12);
+    // Hash Password
+    const hash = await bcrypt.hash(password, 12);
 
-//     // Create Rider
-//     const rider = await User.create({
-//       name,
-//       email,
-//       phone,
-//       password: hash,
-//       role: "rider",
-//     });
+    // Create Rider
+    const rider = await User.create({
+      name,
+      email,
+      phone,
+      password: hash,
+      role: "rider",
+    });
 
-//     // ================= TOKEN YAHAN LAGAO =================
-//     const token = jwt.sign(
-//       {
-//         id: rider._id,
-//         role: rider.role,
-//       },
-//       process.env.JWT_SECRET,
-//       {
-//         expiresIn: "30d",
-//       }
-//     );
+    // ================= TOKEN YAHAN LAGAO =================
+    const token = jwt.sign(
+      {
+        id: rider._id,
+        role: rider.role,
+      },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: "30d",
+      }
+    );
 
-//     // ================= RESPONSE =================
-//     return res.status(201).json({
-//       success: true,
-//       message: "Rider created successfully",
-//       token,
-//       rider: {
-//         _id: rider._id,
-//         name: rider.name,
-//         email: rider.email,
-//         phone: rider.phone,
-//         role: rider.role,
-//       },
-//     });
-//   } catch (err) {
-//     return res.status(500).json({
-//       success: false,
-//       message: err.message,
-//     });
-//   }
-// };
+    // ================= RESPONSE =================
+    return res.status(201).json({
+      success: true,
+      message: "Rider created successfully",
+      token,
+      rider: {
+        _id: rider._id,
+        name: rider.name,
+        email: rider.email,
+        phone: rider.phone,
+        role: rider.role,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
 
 // ==========================================
 // 1. GET ALL RIDERS (With Search & Status)
