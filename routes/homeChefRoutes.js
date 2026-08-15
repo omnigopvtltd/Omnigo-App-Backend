@@ -3,15 +3,17 @@ const router = express.Router();
 const {
   createHomeChef,
   getAllHomeChefs,
-  getChefById,
+  getHomeChefById,
   updateHomeChef,
   deleteHomeChef,
   createChefDeal,
+  getHomeChefCategories,
 } = require("../controllers/homeChefController");
 
 router.post("/create", createHomeChef);
 router.get("/", getAllHomeChefs);
-router.get("/:id", getChefById);
+router.get("/categories/:id", getHomeChefCategories);
+router.get("/:id", getHomeChefById);
 router.put("/update/:id", updateHomeChef);
 router.delete("/delete/:id", deleteHomeChef);
 

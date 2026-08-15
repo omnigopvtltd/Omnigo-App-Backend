@@ -332,6 +332,7 @@ const Order = require("../models/Order");
 const Product = require("../models/Product");
 const Restaurant = require("../models/Restaurant");
 const FoodCategory = require("../models/FoodCategories"); 
+const HomeChef = require("../models/HomeChef");
 
 // =====================================
 // CREATE PRODUCT
@@ -345,8 +346,8 @@ exports.createProduct = async (req, res) => {
       weight,
       quantity,
       belongsTo,
-      restaurantId,
-      homeChefId,
+      vendorId,
+      // homeChefId,
       category,
       subcategory,
       price,
@@ -370,10 +371,10 @@ exports.createProduct = async (req, res) => {
       });
     }
 
-    if (!restaurantId) {
+    if (!vendorId) {
       return res.status(400).json({
         success: false,
-        message: "restaurantId is required",
+        message: "vendorId is required",
       });
     }
 
@@ -391,14 +392,14 @@ exports.createProduct = async (req, res) => {
       });
     }
 
-    const restaurant = await Restaurant.findById(restaurantId);
+    // const restaurant = await Restaurant.findById(restaurantId);
 
-    if (!restaurant) {
-      return res.status(404).json({
-        success: false,
-        message: "Restaurant not found",
-      });
-    }
+    // if (!restaurant) {
+    //   return res.status(404).json({
+    //     success: false,
+    //     message: "Restaurant not found",
+    //   });
+    // }
 
     const product = await Product.create({
       name,
@@ -407,8 +408,8 @@ exports.createProduct = async (req, res) => {
       weight,
       quantity,
       belongsTo,
-      restaurantId,
-      homeChefId,
+      vendorId,
+      // homeChefId,
       category,
       subcategory,
       price,
@@ -631,6 +632,47 @@ exports.getProductsByRestaurant = async (req, res) => {
 };
 
 // =====================================
+// GET PRODUCTS BY Home Chef
+// =====================================
+exports.getProductsByHomeChef = async (req, res) => {
+  try {
+    const { homeChefId } = req.params;
+
+    if (!homeChefId) {
+      return res.status(400).json({
+        success: false,
+        message: "homeChefId is required",
+      });
+    }
+
+    const homeChef = await HomeChef.findById(homeChefId);
+
+    if (!homeChef) {
+      return res.status(404).json({
+        success: false,
+        message: "Home Chef not found",
+      });
+    }
+
+    const products = await Product.find({ homeChefId });
+
+    return res.status(200).json({
+      success: true,
+      count: products.length,
+      products,
+    });
+  } catch (err) {
+    console.log("GET PRODUCTS ERROR:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+
+// =====================================
 // GET PRODUCTS BY RESTAURANT'S CATEGORIES
 // =====================================
 exports.getProductsByRestaurantCategories = async (req, res) => {
@@ -767,6 +809,53 @@ exports.getProductsByRestaurantTypes = async (req, res) => {
 
     const products = await Product.find({ restaurantId, ...query }).select(
       "name images price description"
+    );
+
+    return res.status(200).json({
+      success: true,
+      count: products.length,
+      products,
+    });
+  } catch (err) {
+    console.log("GET PRODUCTS ERROR:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// =====================================
+// GET PRODUCTS BY Home Chefs'S Type (special, popular, featured, new)
+// =====================================
+exports.getProductsByHomeChefTypes = async (req, res) => {
+  try {
+    const { type } = req.query;
+    const { homeChefId } = req.params;
+
+    if (!homeChefId) {
+      return res.status(400).json({
+        success: false,
+        message: "homeChefId is required",
+      });
+    }
+
+    const homeChef = await HomeChef.findById(homeChefId);
+
+    if (!homeChef) {
+      return res.status(404).json({
+        success: false,
+        message: "Home Chef not found",
+      });
+    }
+
+    const query = {};
+
+    if (type) query.type = type;
+
+    const products = await Product.find({ homeChefId, ...query }).select(
+      "name images price description type"
     );
 
     return res.status(200).json({
