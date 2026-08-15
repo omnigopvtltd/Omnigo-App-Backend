@@ -64,6 +64,9 @@ const {
   getProductsByRestaurantTypes,
   getPreviouslyOrderedItemsByCategory,
   getProductsByRestaurantSubcategories,
+  getProductsByRestaurant,
+  getProductsByHomeChef,
+  getProductsByHomeChefTypes,
 } = require("../controllers/productController");
 
 router.get("/", auth, getAllProducts);
@@ -75,9 +78,11 @@ router.get("/previously-ordered/:category", auth,  getPreviouslyOrderedItemsByCa
 router.get("/product-by-restaurant-categories/:restaurantId", auth, getProductsByRestaurantCategories);
 router.get("/product-by-restaurant-subcategories/:restaurantId", auth, getProductsByRestaurantSubcategories);
 router.get("/product-by-restaurant-types/:restaurantId", auth, getProductsByRestaurantTypes);
-router.get("/product-by-restaurant/:restaurantId", auth, getPreviouslyOrderedItems);
+router.get("/product-by-home-chef-types/:homeChefId", auth, getProductsByHomeChefTypes);
+router.get("/product-by-restaurant/:restaurantId", auth, getProductsByRestaurant);
+router.get("/product-by-home-chef/:homeChefId", auth, getProductsByHomeChef);
 
-router.post("/create", auth, role("admin"), createProduct);
+router.post("/create", auth, createProduct);
 router.get("/:id", auth, role("admin"), getProductById);
 router.put("/update/:id", auth, role("admin"), updateProduct);
 router.patch("/:id/availability", auth, role("admin"), toggleAvailability);

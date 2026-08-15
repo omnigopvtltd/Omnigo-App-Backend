@@ -137,7 +137,7 @@ exports.getAllHomeChefs = async (req, res) => {
 // ========================================================
 // 3. GET SINGLE CHEF DETAILS WITH PRODUCTS & DEALS
 // ========================================================
-exports.getChefById = async (req, res) => {
+exports.getHomeChefById = async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -163,6 +163,45 @@ exports.getChefById = async (req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 };
+// =====================================
+// GET HOME CHEF CATEGORIES
+// =====================================
+exports.getHomeChefCategories = async (req, res) => {
+  try {
+    const homeChef = await HomeChef.findById(req.params.id)
+      .select("categories")
+      .lean();
+
+    console.log("HOME CHEF:", homeChef);
+    console.log("HOME CHEF CATEGORIES:", homeChef?.categories);
+
+    if (!homeChef) {
+      return res.status(404).json({
+        success: false,
+        message: "Home Chef not found",
+      });
+    }
+
+    const categories = (homeChef.categories || []).map((category) => ({
+      _id: category._id,
+      categoryName: category.categoryName,
+    }));
+
+    return res.status(200).json({
+      success: true,
+      count: categories.length,
+      categories,
+    });
+  } catch (err) {
+    console.log("GET HOME CHEF CATEGORIES ERROR:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
 
 // ========================================================
 // 4. UPDATE HOME CHEF DETAILS
