@@ -44,15 +44,15 @@ const orderSchema = new mongoose.Schema(
       default: "",
     },
 
-    orderFrom: {
-      type: String,
-      enum: ["fast-food", "grocery", "pharmacy", "other"],
-      default: "fast-food",
-    },
-
-
+    
+    
     items: [
       {
+        orderFrom: {
+          type: String,
+          enum: ["fast-food", "grocery", "pharmacy", "other"],
+          default: "fast-food",
+        },
         productId: {
           type: mongoose.Schema.Types.ObjectId,
           ref: "Product",
@@ -144,6 +144,7 @@ orderSchema.pre("save", function (next) {
   if (!this.orderNumber) {
     this.orderNumber = "ORD" + Date.now() + Math.floor(Math.random() * 1000);
   }
+  next();
 });
 
 module.exports = mongoose.model("Order", orderSchema);
