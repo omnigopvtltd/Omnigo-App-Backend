@@ -7,6 +7,8 @@ const { getIO } = require("../socket");
 // const { getIO } = require("../socket");
 
 const sendNotification = require("../utils/sendNotification");
+const Product = require("../models/Product");
+const Restaurant = require("../models/Restaurant");
 // =====================================
 // CREATE ORDER
 // =====================================
@@ -149,220 +151,310 @@ const sendNotification = require("../utils/sendNotification");
 // DISPATCH: AUTO-ASSIGN TO NEAREST AUTO-ACCEPT RIDER
 // ===================================================
 
+// exports.createOrder = async (req, res) => {
+//   try {
+//     const {
+//       addressId,
+
+//       locationId,
+
+//       paymentMethod = "cash_on_delivery",
+
+//       promoDiscount = 0,
+//     } = req.body;
+
+//     // USER
+
+//     const user = await User.findById(req.user.id);
+
+//     if (!user) {
+//       return res.status(404).json({
+//         success: false,
+
+//         message: "User not found",
+//       });
+//     }
+
+//     // =========================
+
+//     // ADDRESS OR LOCATION
+
+//     // =========================
+
+//     let orderAddress = null;
+
+//     let orderLocation = null;
+
+//     if (!addressId) {
+//       return res.status(400).json({
+//         success: false,
+
+//         message: "addressId is required",
+//       });
+//     }
+
+//     // Pehle addresses me check karo
+
+//     const selectedAddress = user.addresses.find(
+//       (addr) => addr._id.toString() === addressId,
+//     );
+
+//     if (selectedAddress) {
+//       orderAddress = {
+//         addressId: selectedAddress._id,
+
+//         phone: selectedAddress.phone,
+
+//         address: selectedAddress.address,
+
+//         city: selectedAddress.city,
+
+//         zipCode: selectedAddress.zipCode,
+
+//         country: selectedAddress.country,
+//       };
+//     } else if (
+//       user.location &&
+//       user.location._id &&
+//       user.location._id.toString() === addressId
+//     ) {
+//       orderLocation = {
+//         locationId: user.location._id,
+
+//         type: user.location.type || user.location.mode,
+
+//         zone: user.location.zone,
+
+//         area: user.location.area,
+
+//         address: user.location.address,
+
+//         coordinates: user.location.coordinates,
+//       };
+//     } else {
+//       return res.status(404).json({
+//         success: false,
+
+//         message: "Address or Location not found",
+//       });
+//     }
+
+//     // =========================
+
+//     // CART
+
+//     // =========================
+
+//     const cart = await Cart.findOne({
+//       userId: req.user.id,
+//     });
+
+//     if (!cart || cart.items.length === 0) {
+//       return res.status(400).json({
+//         success: false,
+
+//         message: "Cart is empty",
+//       });
+//     }
+
+//     let subtotal = 0;
+
+//     const items = cart.items.map((item) => {
+//       const total = Number(item.price) * Number(item.quantity);
+
+//       subtotal += total;
+
+//       return {
+//         productId: item.productId,
+
+//         name: item.name,
+
+//         image: item.image,
+
+//         category: item.category,
+
+//         weight: item.weight,
+
+//         price: item.price,
+
+//         quantity: item.quantity,
+
+//         total,
+//       };
+//     });
+
+//     // =========================
+
+//     // FEES
+
+//     // =========================
+
+//     const deliveryFee = 6;
+
+//     const tax = 2.5;
+
+//     const totalAmount = subtotal + deliveryFee + tax - promoDiscount;
+
+//     // =========================
+
+//     // CREATE ORDER
+
+//     // =========================
+
+//     const order = await Order.create({
+//       orderNumber: "ORD" + Date.now(),
+
+//       userId: req.user.id,
+
+//       address: orderAddress,
+
+//       location: orderLocation,
+
+//       items,
+
+//       paymentMethod,
+
+//       paymentStatus: "pending",
+
+//       subtotal,
+
+//       deliveryFee,
+
+//       tax,
+
+//       instructions: req.body.instructions || "",
+
+//       orderFrom: req.body.orderFrom || "fast-food",
+
+//       promoDiscount,
+
+//       totalAmount,
+
+//       status: "pending",
+
+//       riderId: null,
+
+//       isAssigned: false,
+
+//       acceptedAt: null,
+//     });
+
+//     // =========================
+
+//     // CLEAR CART
+
+//     // =========================
+
+//     cart.items = [];
+
+//     await cart.save();
+
+//     return res.status(201).json({
+//       success: true,
+
+//       message: "Order placed successfully",
+
+//       order,
+
+//       orderId: order._id,
+//     });
+//   } catch (err) {
+//     console.log("CREATE ORDER ERROR:", err);
+
+//     return res.status(500).json({
+//       success: false,
+
+//       message: err.message,
+//     });
+//   }
+// };
+
 exports.createOrder = async (req, res) => {
+  console.log("1. Inside createOrder route");
   try {
     const {
-      addressId,
-
-      locationId,
-
+      address,
+      location,
       paymentMethod = "cash_on_delivery",
-
       promoDiscount = 0,
+      items = [],
+      instructions = "",
+      orderFrom = orderFrom || "fast-food",
+      deliveryFee = 200,
+      tax = 2.5,
     } = req.body;
-
-    // USER
-
+    console.log("2. Fetching user...");
+    // 1. Verify User
     const user = await User.findById(req.user.id);
-
     if (!user) {
       return res.status(404).json({
         success: false,
-
         message: "User not found",
       });
     }
+    console.log("3. User found:", user?._id);
 
-    // =========================
-
-    // ADDRESS OR LOCATION
-
-    // =========================
-
-    let orderAddress = null;
-
-    let orderLocation = null;
-
-    if (!addressId) {
+    // 2. Validate Items Array
+    if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
         success: false,
-
-        message: "addressId is required",
+        message: "Order items cannot be empty",
       });
     }
 
-    // Pehle addresses me check karo
-
-    const selectedAddress = user.addresses.find(
-      (addr) => addr._id.toString() === addressId,
-    );
-
-    if (selectedAddress) {
-      orderAddress = {
-        addressId: selectedAddress._id,
-
-        phone: selectedAddress.phone,
-
-        address: selectedAddress.address,
-
-        city: selectedAddress.city,
-
-        zipCode: selectedAddress.zipCode,
-
-        country: selectedAddress.country,
-      };
-    } else if (
-      user.location &&
-      user.location._id &&
-      user.location._id.toString() === addressId
-    ) {
-      orderLocation = {
-        locationId: user.location._id,
-
-        type: user.location.type || user.location.mode,
-
-        zone: user.location.zone,
-
-        area: user.location.area,
-
-        address: user.location.address,
-
-        coordinates: user.location.coordinates,
-      };
-    } else {
-      return res.status(404).json({
-        success: false,
-
-        message: "Address or Location not found",
-      });
-    }
-
-    // =========================
-
-    // CART
-
-    // =========================
-
-    const cart = await Cart.findOne({
-      userId: req.user.id,
-    });
-
-    if (!cart || cart.items.length === 0) {
-      return res.status(400).json({
-        success: false,
-
-        message: "Cart is empty",
-      });
-    }
-
+    // 3. Process Items & Subtotal
     let subtotal = 0;
-
-    const items = cart.items.map((item) => {
-      const total = Number(item.price) * Number(item.quantity);
-
+    const allItems = items.map((item) => {
+      const price = Number(item.price) || 0;
+      const quantity = Number(item.quantity) || 1;
+      const total = price * quantity;
       subtotal += total;
 
       return {
         productId: item.productId,
-
         name: item.name,
-
-        image: item.image,
-
-        category: item.category,
-
-        weight: item.weight,
-
-        price: item.price,
-
-        quantity: item.quantity,
-
+        price,
+        quantity,
         total,
       };
     });
 
-
-    // =========================
-
-    // FEES
-
-    // =========================
-
-    const deliveryFee = 6;
-
-    const tax = 2.5;
-
-    const totalAmount = subtotal + deliveryFee + tax - promoDiscount;
-
-    // =========================
-
-    // CREATE ORDER
-
-    // =========================
-
+    const discount = Number(promoDiscount) || 0;
+    const totalAmount = subtotal + Number(deliveryFee) + Number(tax) - discount;
+    console.log("4. Creating order...");
+    // 4. Create Order
     const order = await Order.create({
       orderNumber: "ORD" + Date.now(),
-
       userId: req.user.id,
-
-      address: orderAddress,
-
-      location: orderLocation,
-
-      items,
-
+      address: address || user.addresses?.[0] || null,
+      location: location || user.location || null,
+      items: allItems,
       paymentMethod,
-
       paymentStatus: "pending",
-
       subtotal,
-
-      deliveryFee,
-
-      tax,
-
-      instructions: req.body.instructions || "",
-
-      orderFrom: req.body.orderFrom || "fast-food",
-
-      promoDiscount,
-
+      deliveryFee: Number(deliveryFee),
+      tax: Number(tax),
+      instructions,
+      orderFrom,
+      promoDiscount: discount,
       totalAmount,
-
       status: "pending",
-
       riderId: null,
-
       isAssigned: false,
-
       acceptedAt: null,
     });
-
-    // =========================
-
-    // CLEAR CART
-
-    // =========================
-
-    cart.items = [];
-
-    await cart.save();
-
+    console.log("5. Order created!");
+    // 5. Always Send Response Immediately
     return res.status(201).json({
       success: true,
-
       message: "Order placed successfully",
-
       order,
-
       orderId: order._id,
     });
   } catch (err) {
-    console.log("CREATE ORDER ERROR:", err);
-
+    console.error("CREATE ORDER ERROR:", err);
     return res.status(500).json({
       success: false,
-
       message: err.message,
     });
   }
@@ -399,22 +491,60 @@ exports.getMyOrders = async (req, res) => {
 // =====================================
 exports.getOrderById = async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id);
+    // 1. Fetch single order document
+    const orderDoc = await Order.findById(req.params.id).populate(
+      "userId",
+      "name email phone"
+    );
 
-    if (!order) {
+    if (!orderDoc) {
       return res.status(404).json({
         success: false,
         message: "Order not found",
       });
     }
 
+    // 2. Extract product IDs safely from single order items array
+    const productIds = orderDoc.items.map((item) => item.productId).filter(Boolean);
+
+    // 3. Fetch matching products
+    const products = await Product.find({
+      _id: { $in: productIds },
+    }).select("name price restaurantId chefId");
+
+    // 4. Fetch matching stores/restaurants
+    const restaurantIds = products
+      .map((p) => p.restaurantId || p.chefId)
+      .filter(Boolean);
+
+    const restaurants = await Restaurant.find({
+      _id: { $in: restaurantIds },
+    }).select("name logo address contact");
+
+    // Create lookup maps
+    const productMap = new Map(products.map((p) => [p._id.toString(), p]));
+    const restaurantMap = new Map(restaurants.map((r) => [r._id.toString(), r]));
+
+    // 5. Build enriched single order object
+    const order = orderDoc.toObject();
+    order.items = order.items.map((item) => {
+      const product = productMap.get(item.productId?.toString());
+      const storeId = product?.restaurantId || product?.chefId;
+      const vendor = storeId ? restaurantMap.get(storeId.toString()) : null;
+
+      return {
+        ...item,
+        productDetails: product || null,
+        vendorDetails: vendor || null,
+      };
+    });
+
     return res.status(200).json({
       success: true,
       order,
     });
   } catch (err) {
-    console.log("GET ORDER ERROR:", err);
-
+    console.error("GET ORDER ERROR:", err);
     return res.status(500).json({
       success: false,
       message: err.message,
@@ -559,20 +689,62 @@ exports.getOngoingOrders = async (req, res) => {
 
 exports.getAvailableOrders = async (req, res) => {
   try {
-    const orders = await Order.find({
+    // 1. Fetch unassigned pending orders
+    const allOrders = await Order.find({
       status: "pending",
       isAssigned: false,
     })
       .populate("userId", "name email phone")
       .sort({ createdAt: -1 });
 
-    res.status(200).json({
+    // 2. Extract all product IDs from all order items safely
+    const productIds = allOrders.flatMap((order) =>
+      order.items.map((item) => item.productId)
+    );
+
+    // 3. Fetch matching products
+    const products = await Product.find({
+      _id: { $in: productIds },
+    }).select("name price restaurantId chefId");
+
+    // 4. Fetch matching restaurants/chefs
+    const restaurantIds = products
+      .map((p) => p.restaurantId || p.chefId)
+      .filter(Boolean);
+
+    const restaurants = await Restaurant.find({
+      _id: { $in: restaurantIds },
+    }).select("name logo address contact");
+
+    // Create lookup maps for fast matching
+    const productMap = new Map(products.map((p) => [p._id.toString(), p]));
+    const restaurantMap = new Map(restaurants.map((r) => [r._id.toString(), r]));
+
+    // 5. Structure populated order response
+    const formattedOrders = allOrders.map((orderDoc) => {
+      const order = orderDoc.toObject();
+      order.items = order.items.map((item) => {
+        const product = productMap.get(item.productId?.toString());
+        const storeId = product?.restaurantId || product?.chefId;
+        const store = storeId ? restaurantMap.get(storeId.toString()) : null;
+
+        return {
+          ...item,
+          productDetails: product || null,
+          vendorDetails: store || null,
+        };
+      });
+      return order;
+    });
+
+    return res.status(200).json({
       success: true,
-      count: orders.length,
-      orders,
+      count: formattedOrders.length,
+      orders: formattedOrders,
     });
   } catch (err) {
-    res.status(500).json({
+    console.error("GET AVAILABLE ORDERS ERROR:", err);
+    return res.status(500).json({
       success: false,
       message: err.message,
     });

@@ -2,12 +2,23 @@ require("../config/firebase");
 
 const { getMessaging } = require("firebase-admin/messaging");
 
-const sendNotification = async (
-  token,
-  title,
-  body,
-  data = {}
-) => {
+const getNotification = async (req, res) => {
+  try {
+    const notification = await Notification.find().sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      users,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+const sendNotification = async (token, title, body, data = {}) => {
   try {
     // FCM data payload must contain string values only
     const stringData = {};
@@ -36,4 +47,4 @@ const sendNotification = async (
   }
 };
 
-module.exports = sendNotification;
+module.exports = {sendNotification, getNotification};
