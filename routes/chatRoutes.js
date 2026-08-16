@@ -15,7 +15,7 @@ router.get("/contacts", getContactsController);
 router.get("/conversations", getConversations);
 router.get("/conversations/:id/messages", getMessages);
 router.post("/conversations", getOrCreateConversation);
-router.post("/conversations/:id/messages", sendMessage);
+router.post("/conversations/:conversationId/messages", sendMessage);
 router.patch("/conversations/:id/read", markConversationRead);
 
 module.exports = router;

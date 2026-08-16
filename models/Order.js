@@ -39,6 +39,18 @@ const orderSchema = new mongoose.Schema(
       country: String,
     },
 
+    instructions: {
+      type: String,
+      default: "",
+    },
+
+    orderFrom: {
+      type: String,
+      enum: ["fast-food", "grocery", "pharmacy", "other"],
+      default: "fast-food",
+    },
+
+
     items: [
       {
         productId: {
