@@ -30,8 +30,8 @@ router.post("/:id/join", auth, role("rider"), joinSession);
 
 // Admin management
 router.post("/create", auth, role("admin"), createSession);
-router.put("/:id", auth, role("admin"), updateSession);
-router.delete("/:id", auth, role("admin"), deleteSession);
+router.put("/update/:id", auth, role("admin"), updateSession);
+router.delete("/delete/:id", auth, role("admin"), deleteSession);
 router.get("/:id/participants", auth, role("admin"), getSessionParticipants);
 
 module.exports = router;

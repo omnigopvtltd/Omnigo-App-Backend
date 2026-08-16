@@ -578,12 +578,12 @@ exports.getComingSoonSessions = async (req, res) => {
     // - Excludes sessions rider is already part of
     const comingSoonSessions = await RiderSession.find({
       _id: { $nin: excludeSessionIds },
-      isActive: true,
+      isActive: false,
       $or: [
-        { startTime: { $gt: now } }, // Sessions scheduled for the future
-        { status: "upcoming" },      // Or explicit status flag if used
+        { startDate: { $gt: now } }, // Sessions scheduled for the future
+        // { status: "upcoming" },      // Or explicit status flag if used
       ],
-    }).sort({ startTime: 1 }); // Show nearest upcoming sessions first
+    }).sort({ startDate: 1 }); // Show nearest upcoming sessions first
 
     return res.status(200).json({
       success: true,

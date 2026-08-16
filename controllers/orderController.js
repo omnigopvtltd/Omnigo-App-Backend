@@ -281,6 +281,7 @@ exports.createOrder = async (req, res) => {
       };
     });
 
+
     // =========================
 
     // FEES
@@ -319,6 +320,10 @@ exports.createOrder = async (req, res) => {
       deliveryFee,
 
       tax,
+
+      instructions: req.body.instructions || "",
+
+      orderFrom: req.body.orderFrom || "fast-food",
 
       promoDiscount,
 

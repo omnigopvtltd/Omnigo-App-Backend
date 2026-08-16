@@ -551,8 +551,8 @@ exports.getProductsByType = async (req, res) => {
 
     // 1. Fetch products and populate restaurant/chef details directly
     const products = await Product.find(query)
-      .populate("restaurantId", "name logo")
-      .populate("homeChefId", "name logo")
+      .populate("restaurantId", "name logo deliveryTime")
+      .populate("homeChefId", "name logo deliveryTime")
       .select("name images price discountPrice rating restaurantId homeChefId belongsTo isFavourite");
 
     // 2. Map through products to format output key cleanly as "restaurant" or "chef"
@@ -571,6 +571,7 @@ exports.getProductsByType = async (req, res) => {
               _id: seller._id,
               name: seller.name,
               logo: seller.logo,
+              deliveryTime: seller.deliveryTime
             }
           : null,
       };

@@ -567,38 +567,93 @@ exports.getContactsController = async (req, res) => {
 /**
  * POST /api/chat/conversations/:id/messages
  */
+// exports.sendMessage = async (req, res) => {
+//   try {
+//     const { id: conversationId } = req.params;
+//     const { text, attachments = [], senderRole, senderId } = req.body;
+
+//     if (!text || !text.trim()) {
+//       return res.status(400).json({ error: "Message text is required" });
+//     }
+
+//     const conversation = await Conversation.findById(conversationId);
+//     if (!conversation) {
+//       return res.status(404).json({ error: "Conversation not found" });
+//     }
+
+//     const messagePayload = {
+//       conversationId: conversation._id,
+//       text,
+//       attachments,
+//       senderRole,
+//       ...(senderId && { senderId }),
+//     };
+
+//     const newMessage = await Message.create(messagePayload);
+
+//     conversation.lastMessage = newMessage._id;
+//     conversation.updatedAt = new Date();
+//     await conversation.save({ validateModifiedOnly: true });
+
+//     return res.status(201).json({ message: newMessage });
+//   } catch (error) {
+//     console.error("SEND MESSAGE ERROR:", error);
+//     return res.status(500).json({ error: error.message || "Failed to send message" });
+//   }
+// };
+
+const mongoose = require("mongoose");
+
 exports.sendMessage = async (req, res) => {
   try {
-    const { id: conversationId } = req.params;
-    const { text, attachments = [], senderRole, senderId } = req.body;
+    const { conversationId } = req.params;
+    const { text, attachments, senderRole, senderId } = req.body;
 
-    if (!text || !text.trim()) {
-      return res.status(400).json({ error: "Message text is required" });
-    }
-
+    // Validate ObjectIds
     const conversation = await Conversation.findById(conversationId);
     if (!conversation) {
-      return res.status(404).json({ error: "Conversation not found" });
+      return res.status(404).json({ success: false, message: "Conversation not found" });
     }
 
-    const messagePayload = {
-      conversationId: conversation._id,
+  const user = await User.findById(senderId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "Sender not found" });
+    }
+    // if (!mongoose.Types.ObjectId.isValid(senderId)) {
+    //   return res.status(400).json({ success: false, message: "Invalid Sender ID" });
+    // }
+
+    // Create Message Document
+    const newMessage = await Message.create({
+      conversationId,
+      senderId,
+      senderRole,
       text,
       attachments,
-      senderRole,
-      ...(senderId && { senderId }),
-    };
+    });
 
-    const newMessage = await Message.create(messagePayload);
+    // Update conversation's lastMessage reference
+    await Conversation.findByIdAndUpdate(conversationId, {
+      lastMessage: newMessage._id,
+      updatedAt: new Date(),
+    });
 
-    conversation.lastMessage = newMessage._id;
-    conversation.updatedAt = new Date();
-    await conversation.save({ validateModifiedOnly: true });
+    // Real-time socket emit (if active)
+    const io = req.app.get("socketio");
+    if (io) {
+      io.to(conversationId).emit("new_message", newMessage);
+    }
 
-    return res.status(201).json({ message: newMessage });
+    return res.status(201).json({
+      success: true,
+      message: newMessage,
+    });
   } catch (error) {
-    console.error("SEND MESSAGE ERROR:", error);
-    return res.status(500).json({ error: error.message || "Failed to send message" });
+    console.error("SEND MESSAGE BACKEND ERROR:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
