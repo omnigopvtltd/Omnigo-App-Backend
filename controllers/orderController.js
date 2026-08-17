@@ -1000,6 +1000,42 @@ exports.getRiderOrders = async (req, res) => {
   }
 };
 
+exports.getRiderActiveOrders = async (req, res) => {
+  try {
+    const riderId = req.user.id;
+
+    // Fetch active orders assigned to this rider that are not yet completed or cancelled
+    const activeOrders = await Order.find({
+      riderId,
+      status: { $in: ["accepted", "ongoing", "picked_up", "in_transit"] },
+    })
+      .populate("userId", "name email phone")
+      .populate({
+        path: "items.productId",
+        select: "name price restaurantId chefId",
+        strictPopulate: false,
+        populate: [
+          { path: "restaurantId", select: "name logo address contact", strictPopulate: false },
+          { path: "chefId", select: "name logo address contact", strictPopulate: false },
+        ],
+      })
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      hasActiveOrder: activeOrders.length > 0,
+      count: activeOrders.length,
+      orders: activeOrders,
+    });
+  } catch (err) {
+    console.error("GET RIDER ONGOING ORDERS ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
 exports.markDelivered = async (req, res) => {
   try {
     const order = await Order.findOne({

@@ -21,6 +21,7 @@ const {
   updateOrderStatus,
   getAllOrders,
   toggleAutoAccept,
+  getRiderActiveOrders,
 } = require("../controllers/orderController");
 
 router.get("/all-orders", auth, role("admin", "superadmin"), getAllOrders);
@@ -52,6 +53,7 @@ router.patch("/rider/auto-accept", auth, toggleAutoAccept);
 router.put("/rider/accept/:id", auth, role("rider"), acceptOrder);
 
 router.get("/rider/my-orders", auth, role("rider"), getRiderOrders);
+router.get("/rider/active-orders", auth, role("rider"), getRiderActiveOrders);
 
 router.put("/rider/deliver/:id", auth, role("rider"), markDelivered);
 router.post("/reorder/:id", auth, reorder);

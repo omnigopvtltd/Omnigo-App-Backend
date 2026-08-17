@@ -9,14 +9,21 @@ exports.globalSearch = async (req, res) => {
   try {
     const { q } = req.query;
     if (!q || q.trim().length === 0) {
-      return res.json({ success: true, results: { orders: [], riders: [], restaurants: [] } });
+      return res.json({
+        success: true,
+        results: { orders: [], riders: [], restaurants: [] },
+      });
     }
 
     const regex = new RegExp(q, "i");
 
     const [orders, riders, restaurants] = await Promise.all([
-      Order.find({ $or: [{ orderId: regex }, { "customer.name": regex }] }).limit(5).lean(),
-      User.find({ role: "rider", $or: [{ name: regex }, { phone: regex }] }).limit(5).lean(),
+      Order.find({ $or: [{ orderId: regex }, { "customer.name": regex }] })
+        .limit(5)
+        .lean(),
+      User.find({ role: "rider", $or: [{ name: regex }, { phone: regex }] })
+        .limit(5)
+        .lean(),
       User.find({ role: "restaurant", name: regex }).limit(5).lean(),
     ]);
 
@@ -47,11 +54,30 @@ exports.getNotifications = async (req, res) => {
   }
 };
 
+// PATCH /api/notifications/read/:id
+exports.markNotificationsRead = async (req, res) => {
+  try {
+    await await Notification.findOneAndUpdate(
+      { _id: req.params.id, recipient: req.user.id },
+      { isRead: true },
+      { new: true },
+    );
+    return res.json({ success: true, message: "Notifications marked as read" });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
 // PATCH /api/notifications/read-all
 exports.markAllNotificationsRead = async (req, res) => {
   try {
-    await Notification.updateMany({ recipient: req.user._id, isRead: false }, { isRead: true });
-    return res.json({ success: true, message: "All notifications marked as read" });
+    await Notification.updateMany(
+      { recipient: req.user._id, isRead: false },
+      { isRead: true },
+    );
+    return res.json({
+      success: true,
+      message: "All notifications marked as read",
+    });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -60,7 +86,7 @@ exports.markAllNotificationsRead = async (req, res) => {
 // GET /api/profile
 exports.getProfile = async (req, res) => {
   try {
-    const {id} = req.params;
+    const { id } = req.params;
     const user = await User.findById(id).select("-password");
     return res.json({ success: true, user });
   } catch (err) {
@@ -71,7 +97,7 @@ exports.getProfile = async (req, res) => {
 // PUT /api/profile
 exports.updateProfile = async (req, res) => {
   try {
-    const {id} = req.params;
+    const { id } = req.params;
     const { name, phone, currentPassword, newPassword, avatarUrl } = req.body;
     const user = await User.findById(id);
 
@@ -81,17 +107,25 @@ exports.updateProfile = async (req, res) => {
 
     if (newPassword) {
       if (!currentPassword) {
-        return res.status(400).json({ success: false, message: "Current password required" });
+        return res
+          .status(400)
+          .json({ success: false, message: "Current password required" });
       }
       const isMatch = await bcrypt.compare(currentPassword, user.password);
       if (!isMatch) {
-        return res.status(400).json({ success: false, message: "Current password incorrect" });
+        return res
+          .status(400)
+          .json({ success: false, message: "Current password incorrect" });
       }
       user.password = await bcrypt.hash(newPassword, 10);
     }
 
     await user.save();
-    return res.json({ success: true, message: "Profile updated successfully", user });
+    return res.json({
+      success: true,
+      message: "Profile updated successfully",
+      user,
+    });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
