@@ -511,26 +511,61 @@ exports.getProductsByCategory = async (req, res) => {
 
     const query = {};
 
-    if (category) query.category = category;
-    if (subcategory) query.subcategory = subcategory;
+    // Helper to build a case-insensitive regex pattern handling spaces/dashes (e.g. "fast food" or "fast-food")
+    const createFlexibleRegex = (input) => {
+      if (!input) return null;
+      // Convert hyphens/multiple spaces to a flexible whitespace pattern
+      const sanitized = input.trim().replace(/[-_\s]+/g, "[-\\s_]*");
+      return new RegExp(`^${sanitized}$`, "i");
+    };
 
+    if (category) {
+      query.category = createFlexibleRegex(category);
+    }
+
+    if (subcategory) {
+      query.subcategory = createFlexibleRegex(subcategory);
+    }
+
+    // 1. Query products matching category/subcategory
     const products = await Product.find(query).select(
-        "name images price tags discountPrice category subcategory rating isAvailable isFavourite restaurantId belongsTo chefId",
-      );
-    
+      "name images price tags discountPrice category subcategory rating isAvailable isFavourite restaurantId belongsTo chefId"
+    );
+
+    // 2. Extract restaurant IDs safely
+    const restaurantIds = products
+      .map((p) => p.restaurantId)
+      .filter(Boolean);
+
+    // 3. Query associated restaurants
     const restaurants = await Restaurant.find({
-      _id: { $in: products.map((p) => p.restaurantId) },
+      _id: { $in: restaurantIds },
     }).select("name logo");
 
-   const productsByCategory = [...products, ...restaurants];
+    // 4. Map restaurant data into product objects
+    const restaurantMap = new Map(
+      restaurants.map((r) => [r._id.toString(), r])
+    );
+
+    const productsWithVendor = products.map((productDoc) => {
+      const product = productDoc.toObject();
+      const vendor = product.restaurantId
+        ? restaurantMap.get(product.restaurantId.toString())
+        : null;
+
+      return {
+        ...product,
+        restaurant: vendor || null,
+      };
+    });
 
     return res.status(200).json({
       success: true,
-      count: products.length,
-      data: productsByCategory,
+      count: productsWithVendor.length,
+      data: productsWithVendor,
     });
   } catch (err) {
-    console.log("GET PRODUCTS ERROR:", err);
+    console.error("GET PRODUCTS ERROR:", err);
 
     return res.status(500).json({
       success: false,
