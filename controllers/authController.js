@@ -148,6 +148,7 @@ exports.saveToken = async (req, res) => {
     message: "Token saved",
   });
 };
+
 exports.sendOTP = async (req, res) => {
   try {
     const { userId, type, value, purpose } = req.body;
@@ -383,6 +384,7 @@ exports.verifyOTP = async (req, res) => {
     });
   }
 };
+
 // ======================================================
 // EMAIL OTP
 // ======================================================
@@ -500,132 +502,175 @@ exports.verifyOTP = async (req, res) => {
 // ======================================================
 // SIGNUP
 // ======================================================
-exports.signup = [
-  body("name").notEmpty(),
-  body("email").isEmail(),
-  body("password").isLength({ min: 6 }),
 
-  async (req, res) => {
-    try {
-      const errors = validationResult(req);
+// 1. Validation Middleware Array
+exports.validateSignup = [
+  body("phone").notEmpty().withMessage("Phone number is required"),
+  body("password")
+    .isLength({ min: 6 })
+    .withMessage("Password must be at least 6 characters"),
+  body("email").custom((value, { req }) => {
+    if (req.body.role === "admin") {
+      if (!value) throw new Error("Email is required for admin role");
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(value)) throw new Error("Invalid email format");
+    }
+    return true;
+  }),
+];
 
-      if (!errors.isEmpty()) {
-        return res.status(400).json({
+// 2. Signup Controller
+exports.signup = async (req, res) => {
+  try {
+    const {
+      phone,
+      password,
+      role = "user",
+      email,
+      name,
+      riderProfile,
+    } = req.body;
+
+    const normalizedPhone = String(phone).trim();
+
+    // 🔒 RESTRICT ADMIN CREATION: Allow only ONE admin in the database
+    if (role === "admin") {
+      const existingAdmin = await User.findOne({ role: "admin" });
+      if (existingAdmin) {
+        return res.status(403).json({
           success: false,
-          errors: errors.array(),
+          message: "Admin account already exists. Please login instead.",
         });
       }
 
-      const {
-        name,
-        email,
-        password,
-        role,
-        phone,
-        cnicNumber,
-        isEmailVerified,
-        isPhoneVerified,
-        profilePicture,
-        paymentMethod,
-        riderProfile,
-        addresses,
-      } = req.body;
-
-      // CHECK EXISTING USER
-      const exists = await User.findOne({ email });
-
-      if (exists) {
+      if (!email) {
         return res.status(400).json({
           success: false,
-          message: "Email already exists",
+          message: "Email is required for admin signup.",
         });
       }
+    }
 
-      // HASH PASSWORD
-      const hash = await bcrypt.hash(password, 12);
+    // Check existing user by phone or email
+    const existingUser = await User.findOne({
+      $or: [
+        { phone: normalizedPhone },
+        ...(email ? [{ email: email.toLowerCase().trim() }] : []),
+      ],
+    });
 
-      // CREATE USER
-      const userData = {
-        name,
-        email,
-        password: hash,
-        role: role || "user",
-
-        // AUTO VERIFIED
-        isEmailVerified: true,
-
-        phone: phone || "",
-        cnicNumber: cnicNumber || "",
-        isPhoneVerified: isPhoneVerified || false,
-        profilePicture: profilePicture || "",
-        paymentMethod: paymentMethod || "cash",
-
-        addresses: addresses || [],
-      };
-
-      // Only add riderProfile if it was provided
-      if (riderProfile) {
-        userData.riderProfile = {
-          category: riderProfile.category || null,
-          vehicleType: riderProfile.vehicleType || "bike",
-          vehiclePlate: riderProfile.vehiclePlate || "",
-          vehicleModel: riderProfile.vehicleModel || "",
-          verificationSelfie: riderProfile.verificationSelfie || null,
-          verificationStatus:
-            riderProfile.verificationStatus || "not_submitted",
-          isOnline: riderProfile.isOnline || false,
-        };
-      }
-
-      const user = await User.create(userData);
-
-      return sendResponse(res, "Signup successful", user);
-    } catch (err) {
-      return res.status(500).json({
+    if (existingUser) {
+      return res.status(400).json({
         success: false,
-        message: err.message,
+        message: existingUser.phone === normalizedPhone
+          ? "Phone number already registered"
+          : "Email already registered",
       });
     }
-  },
-];
+
+    // Hash password
+    const hash = await bcrypt.hash(password, 12);
+
+    // Build user document
+    const userData = {
+      phone: normalizedPhone,
+      password: hash,
+      role,
+      name: name || `${role}_${normalizedPhone.slice(-4)}`,
+      email: email ? email.toLowerCase().trim() : `${normalizedPhone}@placeholder.app`,
+      isPhoneVerified: false,
+      isEmailVerified: role === "admin",
+    };
+
+    if (role === "rider" || riderProfile) {
+      userData.riderProfile = {
+        category: riderProfile?.category || null,
+        vehicleType: riderProfile?.vehicleType || "bike",
+        vehiclePlate: riderProfile?.vehiclePlate || "",
+        vehicleModel: riderProfile?.vehicleModel || "",
+        verificationSelfie: riderProfile?.verificationSelfie || null,
+        verificationStatus: riderProfile?.verificationStatus || "not_submitted",
+        isOnline: false,
+      };
+    }
+
+    const user = await User.create(userData);
+
+    const userResponse = user.toObject();
+    delete userResponse.password;
+
+    return sendResponse(res, "Signup successful", userResponse);
+  } catch (err) {
+    console.error("SIGNUP ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
 
 // ======================================================
 // LOGIN
 // ======================================================
 exports.login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { phone, email, password } = req.body;
 
-    // FIND USER
-    const user = await User.findOne({ email });
+    let user = null;
 
-    if (!user) {
+    // 1. ADMIN LOGIN FLOW (Email + Password)
+    if (email) {
+      const normalizedEmail = email.toLowerCase().trim();
+
+      user = await User.findOne({ email: normalizedEmail, role: "admin" });
+      if (!user) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid admin credentials",
+        });
+      }
+    } 
+    // 2. USER / RIDER LOGIN FLOW (Phone + Password)
+    else if (phone) {
+      const normalizedPhone = String(phone).trim();
+
+      user = await User.findOne({
+        phone: normalizedPhone,
+        role: { $ne: "admin" }, // Prevent user route from logging into admin accounts
+      });
+
+      if (!user) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid phone number or password",
+        });
+      }
+    } else {
       return res.status(400).json({
         success: false,
-        message: "Invalid email or password",
+        message: "Please provide phone or email to log in",
       });
     }
 
-    // CHECK PASSWORD
+    // 3. COMPARE PASSWORD
     const match = await bcrypt.compare(password, user.password);
-
     if (!match) {
       return res.status(400).json({
         success: false,
-        message: "Invalid email or password",
+        message: "Invalid credentials",
       });
     }
 
-    // UPDATE LOGIN TIME
+    // 4. UPDATE METADATA
     user.lastLogin = new Date();
-
-    // ✅ AUTO EMAIL VERIFIED
-    user.isEmailVerified = true;
-
     await user.save();
 
-    return sendResponse(res, "Login successful", user);
+    const userResponse = user.toObject();
+    delete userResponse.password;
+
+    return sendResponse(res, "Login successful", userResponse);
   } catch (err) {
+    console.error("LOGIN ERROR:", err);
     return res.status(500).json({
       success: false,
       message: err.message,
@@ -787,7 +832,7 @@ exports.createAdmin = async (req, res) => {
 // RIDER
 // ======================================================
 exports.createRider = async (req, res) => {
-   console.log("NEW CREATE RIDER RUNNING");
+  console.log("NEW CREATE RIDER RUNNING");
   try {
     const { name, email, password, phone } = req.body;
 
@@ -824,7 +869,7 @@ exports.createRider = async (req, res) => {
       process.env.JWT_SECRET,
       {
         expiresIn: "30d",
-      }
+      },
     );
 
     // ================= RESPONSE =================

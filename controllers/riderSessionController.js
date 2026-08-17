@@ -598,6 +598,42 @@ exports.getComingSoonSessions = async (req, res) => {
     });
   }
 };
+// =====================================
+// ADMIN: GET TODAY's SESSIONS 
+// =====================================
+exports.getTodaySessions = async (req, res) => {
+  try {
+    // 1. Calculate the start and end of "Today" in UTC/Local time
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+
+    // 2. Fetch all active sessions scheduled for today
+    const todaySessions = await RiderSession.find({
+      isActive: true,
+      startDate: {
+        $gte: startOfToday,
+        $lte: endOfToday,
+      },
+    })
+      // .populate("zoneId", "name city") // Optional: populate zone details
+      .sort({ startDate: 1 });
+
+    return res.status(200).json({
+      success: true,
+      count: todaySessions.length,
+      data: todaySessions,
+    });
+  } catch (err) {
+    console.error("GET TODAY SESSIONS ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
 
 // =====================================
 // RIDER: CANCEL BOOKED SESSION
