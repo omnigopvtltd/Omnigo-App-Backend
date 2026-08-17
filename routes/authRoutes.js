@@ -57,6 +57,7 @@ const {
   getRiders,
   updateRiderStatus,
   getAllUsers,
+  validateSignup,
  
 } = require("../controllers/authController");
 const { getRiderById } = require("../controllers/riderController");
@@ -65,7 +66,8 @@ const { getRiderById } = require("../controllers/riderController");
 // ======================================================
 // AUTH
 // ======================================================
-router.post("/signup", signup);
+// router.post("/signup", signup);
+router.post("/signup", validateSignup, signup);
 router.post("/login", login);
 
 // SOCIAL LOGIN

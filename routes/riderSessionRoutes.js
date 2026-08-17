@@ -14,9 +14,11 @@ const {
   getSessionParticipants,
   getComingSoonSessions,
   getBookedSessions,
+  getTodaySessions,
 } = require("../controllers/riderSessionController");
 
 router.get("/", auth, getAllSessions);
+router.get("/today", auth, getTodaySessions);
 router.get("/coming", auth, getComingSoonSessions);
 router.get("/booked", auth, getBookedSessions);
 router.get("/:id", auth, getSessionById);
