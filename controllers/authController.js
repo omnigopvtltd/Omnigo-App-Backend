@@ -562,9 +562,10 @@ exports.signup = async (req, res) => {
     if (existingUser) {
       return res.status(400).json({
         success: false,
-        message: existingUser.phone === normalizedPhone
-          ? "Phone number already registered"
-          : "Email already registered",
+        message:
+          existingUser.phone === normalizedPhone
+            ? "Phone number already registered"
+            : "Email already registered",
       });
     }
 
@@ -577,7 +578,9 @@ exports.signup = async (req, res) => {
       password: hash,
       role,
       name: name || `${role}_${normalizedPhone.slice(-4)}`,
-      email: email ? email.toLowerCase().trim() : `${normalizedPhone}@placeholder.app`,
+      email: email
+        ? email.toLowerCase().trim()
+        : `${normalizedPhone}@placeholder.app`,
       isPhoneVerified: false,
       isEmailVerified: role === "admin",
     };
@@ -629,7 +632,7 @@ exports.login = async (req, res) => {
           message: "Invalid admin credentials",
         });
       }
-    } 
+    }
     // 2. USER / RIDER LOGIN FLOW (Phone + Password)
     else if (phone) {
       const normalizedPhone = String(phone).trim();
@@ -1293,45 +1296,64 @@ exports.resetPassword = async (req, res) => {
 
 exports.addZone = async (req, res) => {
   try {
-    const { zone, areas } = req.body;
+    const { country, city, zone, areas, isActive } = req.body;
 
-    if (!zone) {
+    if (!zone || !zone.trim()) {
       return res.status(400).json({
         success: false,
-        message: "Zone is required",
+        message: "Zone name is required",
       });
     }
 
+    const trimmedZone = zone.trim();
+    const formattedAreas = Array.isArray(areas)
+      ? areas.map((a) => a.trim()).filter(Boolean)
+      : [];
+
     let existingZone = await Zone.findOne({
-      zone: zone.trim(),
+      zone: { $regex: new RegExp(`^${trimmedZone}$`, "i") },
     });
 
     // =========================
     // UPDATE EXISTING ZONE
     // =========================
     if (existingZone) {
-      if (areas && areas.length > 0) {
+      // FIX: Update country and city fields for existing documents
+      existingZone.country = country ? country.trim() : existingZone.country || "Pakistan";
+      existingZone.city = city ? city.trim() : existingZone.city || "";
+      
+      if (typeof isActive !== "undefined") {
+        existingZone.isActive = isActive;
+      }
+
+      if (formattedAreas.length > 0) {
         existingZone.areas = [
-          ...new Set([...existingZone.areas, ...areas.map((a) => a.trim())]),
+          ...new Set([...existingZone.areas, ...formattedAreas]),
         ];
       }
 
+      console.log("Exisiting Zone",existingZone);
+      
+      
       await existingZone.save();
 
       return res.status(200).json({
         success: true,
-        message: "Zone updated successfully",
+        message: "Existing zone updated successfully",
         zone: existingZone,
       });
     }
-
+    
+    console.log("data",country, city, zone, areas);
     // =========================
     // CREATE NEW ZONE
     // =========================
     const newZone = await Zone.create({
-      zone: zone.trim(),
-      areas: (areas || []).map((a) => a.trim()),
-      isActive: true,
+      country: country ? country.trim() : "Pakistan",
+      city: city ? city.trim() : "",
+      zone: trimmedZone,
+      areas: [...new Set(formattedAreas)],
+      isActive: typeof isActive !== "undefined" ? isActive : true,
     });
 
     return res.status(201).json({
@@ -1339,6 +1361,7 @@ exports.addZone = async (req, res) => {
       message: "Zone added successfully",
       zone: newZone,
     });
+    console.log("Sucess", newZone);
   } catch (err) {
     return res.status(500).json({
       success: false,
@@ -1359,6 +1382,115 @@ exports.getZones = async (req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 };
+
+exports.getZonesById = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const zone = await Zone.findById(id);
+
+    return res.json({
+      success: true,
+      zone,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.updateZone = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { country, city, zone, areas, isActive } = req.body;
+
+    const updateData = {};
+
+    if (country) updateData.country = country.trim();
+    if (city) updateData.city = city.trim();
+    if (zone) updateData.zone = zone.trim();
+    if (typeof isActive !== "undefined") updateData.isActive = isActive;
+    if (Array.isArray(areas)) {
+      updateData.areas = [...new Set(areas.map((a) => a.trim()))];
+    }
+
+    const updatedZone = await Zone.findByIdAndUpdate(
+      id,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedZone) {
+      return res.status(404).json({
+        success: false,
+        message: "Zone not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Zone updated successfully",
+      zone: updatedZone,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+exports.toggleZoneStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isActive } = req.body;
+
+    // Validate that isActive is explicitly a boolean
+    if (typeof isActive !== "boolean") {
+      return res.status(400).json({
+        success: false,
+        message: "isActive must be a boolean value",
+      });
+    }
+
+    const updatedZone = await Zone.findByIdAndUpdate(
+      id,
+      { $set: { isActive } },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedZone) {
+      return res.status(404).json({
+        success: false,
+        message: "Zone not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Zone status changed to ${isActive ? "active" : "inactive"} successfully`,
+      zone: updatedZone,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+exports.deleteZone = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const zone = await Zone.findByIdAndDelete(id);
+
+    return res.json({
+      success: true,
+      message: "Zone deleted Successfully",
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 exports.checkServiceability = async (req, res) => {
   try {
     const { zone, area } = req.body;

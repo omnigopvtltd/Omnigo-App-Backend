@@ -14,7 +14,7 @@ const {
 router.get("/search", auth, role("admin"), globalSearch);
 router.get("/notifications", auth, getNotifications);
 router.patch("/update/notifications/read/:id", auth, markNotificationsRead);
-router.patch("/update/notifications/read-all", auth, role("admin"), markAllNotificationsRead);
+router.patch("/update/notifications/read-all", auth, markAllNotificationsRead);
 router.get("/profile/:id", auth, role("admin"), getProfile);
 router.put("/update/profile/:id", auth, role("admin"), updateProfile);
 

@@ -9,9 +9,11 @@ const {
   updateRider,
   updateRiderBlockStatus,
   deleteRider,
+  getRiderAutoAcceptOrders,
 } = require("../controllers/riderController");
 
 router.get("/", auth, getAllRiders);
+router.get("/auto-accept-order", auth, getRiderAutoAcceptOrders);
 router.post("/create", auth, role("admin"), createRider);
 router.get("/:id", auth,  getRiderById);
 router.put("/update/:id", auth, role("admin"), updateRider);

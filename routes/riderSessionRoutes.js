@@ -15,6 +15,7 @@ const {
   getComingSoonSessions,
   getBookedSessions,
   getTodaySessions,
+  extendSession,
 } = require("../controllers/riderSessionController");
 
 router.get("/", auth, getAllSessions);
@@ -33,6 +34,7 @@ router.post("/:id/join", auth, role("rider"), joinSession);
 // Admin management
 router.post("/create", auth, role("admin"), createSession);
 router.put("/update/:id", auth, role("admin"), updateSession);
+router.put("/extend/:id", auth, extendSession);
 router.delete("/delete/:id", auth, role("admin"), deleteSession);
 router.get("/:id/participants", auth, role("admin"), getSessionParticipants);
 

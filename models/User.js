@@ -68,7 +68,15 @@ const userSchema = new mongoose.Schema(
     riderProfile: {
       category: {
         type: String,
-        default: null
+        default: null,
+      },
+
+      bikeLoan: {
+        hasActiveLoan: { type: Boolean, default: false },
+        totalAmount: { type: Number, default: 0 }, // Total loan e.g. 150,000
+        remainingAmount: { type: Number, default: 0 }, // Remaining e.g. 120,000
+        dailyInstallment: { type: Number, default: 500 }, // Daily deduction amount
+        startDate: { type: Date },
       },
 
       vehicleType: {

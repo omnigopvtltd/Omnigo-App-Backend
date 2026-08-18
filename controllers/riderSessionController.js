@@ -679,3 +679,24 @@ exports.cancelBookedSession = async (req, res) => {
     });
   }
 };
+
+// =====================================
+//  EXTEND SESSION
+// =====================================
+exports.extendSession = async (req, res) => {
+  try {
+    const { extendHours } = req.body
+    const session = await RiderSession.findById(req.params.id).select("timeLimitHours");
+    if (!session) return res.status(404).json({ success: false, message: "Session not found" });
+
+   
+    if (extendHours !== undefined) session.timeLimitHours = extendHours;
+
+    await session.save();
+
+    return res.status(200).json({ success: true, message: "Session updated successfully", session });
+  } catch (err) {
+    console.log("UPDATE SESSION ERROR:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};

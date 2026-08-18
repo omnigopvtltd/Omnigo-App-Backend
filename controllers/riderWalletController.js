@@ -174,3 +174,44 @@ exports.getTransactions = async (req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 };
+
+// =====================================
+// Deduct Bike Installment From Rider's Wallet (self via /me, or admin via /:id)
+// =====================================
+
+const { processRiderBikeInstallment } = require("../helpers/riderBikeInstallment");
+
+exports.adminDeductInstallment = async (req, res) => {
+  try {
+    const { riderId } = req.body;
+    const adminId = req.user._id; // Admin performing the action
+
+    if (!riderId) {
+      return res.status(400).json({
+        success: false,
+        message: "riderId is required",
+      });
+    }
+
+    const result = await processRiderBikeInstallment(riderId, adminId);
+console.log(result);
+
+    if (result.status === "NO_LOAN") {
+      return res.status(400).json({
+        success: false,
+        message: "This rider does not have an active bike loan",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Successfully deducted Rs. ${result.deductionAmount} from rider's wallet`,
+      transaction: result.transaction,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
