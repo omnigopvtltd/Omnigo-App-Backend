@@ -76,6 +76,7 @@ const walletTransactionSchema = new mongoose.Schema(
         "order_earning", // credited on delivery (float refund + delivery fee)
         "order_refund", // float refunded because the order was cancelled
         "session_bonus", // Option 2 bonus payout
+        "bike_installment", // Added for bike loan deductions
       ],
       default: "manual",
     },

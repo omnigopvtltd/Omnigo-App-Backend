@@ -58,6 +58,10 @@ const {
   updateRiderStatus,
   getAllUsers,
   validateSignup,
+  getZonesById,
+  deleteZone,
+  updateZone,
+  toggleZoneStatus,
  
 } = require("../controllers/authController");
 const { getRiderById } = require("../controllers/riderController");
@@ -97,8 +101,12 @@ router.post("/verify-otp", verifyOTP);
 // LOCATION APIs
 // ======================================================
 router.post("/location/add-zone", addZone);
-router.get("/location/zones/:userId", getZones);
 router.get("/location/zones", getZones);
+router.get("/location/zone/:id", getZonesById);
+router.get("/location/zones/:userId", getZones);
+router.put("/location/zone/update/:id", updateZone);
+router.patch("/location/zone/update/:id/status", toggleZoneStatus);
+router.delete("/location/zone/delete/:id", deleteZone);
 
 router.post("/location/check", checkServiceability);
 

@@ -9,6 +9,7 @@ const { getIO } = require("../socket");
 const sendNotification = require("../utils/sendNotification");
 const Product = require("../models/Product");
 const Restaurant = require("../models/Restaurant");
+const { processRiderBikeInstallment } = require("../helpers/riderBikeInstallment");
 // =====================================
 // CREATE ORDER
 // =====================================
@@ -1073,6 +1074,10 @@ exports.markDelivered = async (req, res) => {
       });
     }
     // ========================================================
+
+    // 2. Process daily bike installment on the first order of the day
+    await processRiderBikeInstallment(riderId);
+
 
     res.status(200).json({
       success: true,

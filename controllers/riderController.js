@@ -116,6 +116,24 @@ exports.getRiderById = async (req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 };
+
+
+exports.getRiderAutoAcceptOrders = async (req, res) => {
+  try {
+    const rider = await User.findOne({ _id: req.user.id, role: "rider" }).select("riderProfile.autoAcceptOrders");
+    if (!rider) return res.status(404).json({ success: false, message: "Rider not found" });
+
+    return res.status(200).json({
+      success: true,
+      rider,
+    });
+  } catch (err) {
+    console.log("GET RIDER DETAILS ERROR:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+
 // =====================================
 // ADMIN: GET ALL RIDERS
 // =====================================
