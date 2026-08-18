@@ -758,20 +758,12 @@ exports.getAvailableOrders = async (req, res) => {
 exports.toggleAutoAccept = async (req, res) => {
   try {
     const riderId = req.user.id;
-    const { autoAcceptOrders } = req.body; // Expects boolean: true / false
 
-    if (typeof autoAcceptOrders !== "boolean") {
-      return res.status(400).json({
-        success: false,
-        message: "autoAcceptOrders must be a boolean value (true or false).",
-      });
-    }
-
-    const rider = await User.findOneAndUpdate(
-      { _id: riderId, role: "rider" },
-      { autoAcceptOrders },
-      { new: true },
-    ).select("-password");
+    // Get current rider setting
+    const rider = await User.findOne({
+      _id: riderId,
+      role: "rider",
+    });
 
     if (!rider) {
       return res.status(404).json({
@@ -780,13 +772,26 @@ exports.toggleAutoAccept = async (req, res) => {
       });
     }
 
+    // Toggle current value
+    const currentValue =
+      rider.riderProfile?.autoAcceptOrders ?? false;
+
+    rider.riderProfile.autoAcceptOrders = !currentValue;
+
+    await rider.save();
+
     return res.status(200).json({
       success: true,
-      message: `Auto accept orders has been ${autoAcceptOrders ? "enabled" : "disabled"}.`,
-      autoAcceptOrders: rider.autoAcceptOrders,
+      message: `Auto accept orders has been ${
+        rider.riderProfile.autoAcceptOrders
+          ? "enabled"
+          : "disabled"
+      }.`,
+      autoAcceptOrders: rider.riderProfile.autoAcceptOrders,
     });
   } catch (err) {
     console.error("TOGGLE AUTO ACCEPT ERROR:", err);
+
     return res.status(500).json({
       success: false,
       message: err.message,
