@@ -333,6 +333,7 @@ const Product = require("../models/Product");
 const Restaurant = require("../models/Restaurant");
 const FoodCategory = require("../models/FoodCategories"); 
 const HomeChef = require("../models/HomeChef");
+const { default: mongoose } = require("mongoose");
 
 // =====================================
 // CREATE PRODUCT
@@ -582,7 +583,7 @@ exports.getProductsByType = async (req, res) => {
     const { type } = req.query;
 
     const query = {};
-    if (type) query.type = type;
+    if (type.toLowerCase()) query.type = type.toLowerCase();
 
     // 1. Fetch products and populate restaurant/chef details directly
     const products = await Product.find(query)
@@ -716,15 +717,14 @@ exports.getProductsByRestaurantCategories = async (req, res) => {
     const { categoryName } = req.query;
     const { restaurantId } = req.params;
 
-    if (!restaurantId) {
+    if (!restaurantId || !mongoose.Types.ObjectId.isValid(restaurantId)) {
       return res.status(400).json({
         success: false,
-        message: "restaurantId is required",
+        message: "Valid restaurantId is required",
       });
     }
 
-    const restaurant = await Restaurant.findById(restaurantId);
-
+    const restaurant = await Restaurant.findById(restaurantId).lean();
     if (!restaurant) {
       return res.status(404).json({
         success: false,
@@ -732,13 +732,23 @@ exports.getProductsByRestaurantCategories = async (req, res) => {
       });
     }
 
-    const query = {};
+    const query = { restaurantId };
 
-    if (categoryName) query.subcategory = categoryName;
+    if (categoryName && categoryName.trim() !== "") {
+      // Convert query string into target slug format: "fries-and-pasta"
+      const slugifiedCategory = categoryName
+        .trim()
+        .toLowerCase()
+        .replace(/&/g, "and")          // Convert "&" to "and"
+        .replace(/[\s_]+/g, "-")        // Convert spaces and underscores to hyphens
+        .replace(/-+/g, "-");          // Normalize multiple hyphens to a single hyphen
 
-    const products = await Product.find({ restaurantId, ...query }).select(
-      "name images price description"
-    );
+      query.category = slugifiedCategory;
+    }
+
+    const products = await Product.find(query)
+      .select("name images price description category")
+      .lean();
 
     return res.status(200).json({
       success: true,
@@ -746,8 +756,7 @@ exports.getProductsByRestaurantCategories = async (req, res) => {
       products,
     });
   } catch (err) {
-    console.log("GET PRODUCTS ERROR:", err);
-
+    console.error("GET PRODUCTS ERROR:", err);
     return res.status(500).json({
       success: false,
       message: err.message,
@@ -841,7 +850,7 @@ exports.getProductsByRestaurantTypes = async (req, res) => {
 
     const query = {};
 
-    if (type) query.type = type;
+    if (type.toLowerCase()) query.type = type.toLowerCase();
 
     const products = await Product.find({ restaurantId, ...query }).select(
       "name images price description"
