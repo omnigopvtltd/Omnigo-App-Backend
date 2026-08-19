@@ -2369,3 +2369,30 @@ exports.rejectRiderVerification = async (req, res) => {
     });
   }
 };
+
+// =========================================
+// SELECT JOB CATEGORY
+// =========================================
+exports.selectRiderCategory = async (req, res) => {
+  try {
+    const { userId, selectedCategory } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // Update categories array: set selected to true, all others to false
+    user.riderProfile.categories.forEach((cat) => {
+      cat.isActive = cat.name === selectedCategory;
+    });
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Category updated successfully",
+      categories: user.riderProfile.categories,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};

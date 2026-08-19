@@ -66,9 +66,21 @@ const userSchema = new mongoose.Schema(
 
     // RIDER PROFILE & LIVE TRACKING
     riderProfile: {
-      category: {
-        type: String,
-        default: null,
+     categories: {
+        type: [
+          {
+            name: { type: String, required: true },
+            isActive: { type: Boolean, default: false },
+          },
+        ],
+        default: [
+          { name: "Delivery Rider", isActive: true },
+          { name: "Bike Rider", isActive: false },
+          { name: "Scooty Rider", isActive: false },
+          { name: "Auto Rider", isActive: false },
+          { name: "Car Rider", isActive: false },
+          { name: "Van Rider", isActive: false },
+        ],
       },
 
       bikeLoan: {
@@ -82,7 +94,7 @@ const userSchema = new mongoose.Schema(
       vehicleType: {
         type: String,
         enum: ["bike", "car", "van", "scooty", "auto", "delivery_rider"],
-        default: "bike",
+        default: "delivery_rider",
       },
 
       vehiclePlate: { type: String, default: "" },
