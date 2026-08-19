@@ -12,11 +12,13 @@ const {
   getAllRestaurantBrands,
   getRestaurantByFastDeliveryTime,
   getRestaurantCategories,
+  restaurantMenu,
 } = require("../controllers/restaurantController");
 
 router.get("/", auth, getAllRestaurants);
 router.get("/brands", auth, getAllRestaurantBrands);
 router.get("/fast-delivery", auth, getRestaurantByFastDeliveryTime);
+router.get("/menu/:restaurantId", auth, restaurantMenu);
 router.post("/create", auth, role("admin"), createRestaurant);
 router.get("/:id", auth, getRestaurantById);
 router.get("/categories/:id", auth, getRestaurantCategories);

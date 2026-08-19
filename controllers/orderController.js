@@ -9,7 +9,7 @@ const { getIO } = require("../socket");
 const sendNotification = require("../utils/sendNotification");
 const Product = require("../models/Product");
 const Restaurant = require("../models/Restaurant");
-const { processRiderBikeInstallment } = require("../helpers/riderBikeInstallment");
+const { processRiderBikeInstallment } = require("../helpers/bikeInstallment");
 // =====================================
 // CREATE ORDER
 // =====================================

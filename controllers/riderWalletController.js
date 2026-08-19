@@ -179,7 +179,7 @@ exports.getTransactions = async (req, res) => {
 // Deduct Bike Installment From Rider's Wallet (self via /me, or admin via /:id)
 // =====================================
 
-const { processRiderBikeInstallment } = require("../helpers/riderBikeInstallment");
+const { processRiderBikeInstallment } = require("../helpers/bikeInstallment");
 
 exports.adminDeductInstallment = async (req, res) => {
   try {

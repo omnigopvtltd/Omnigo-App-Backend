@@ -71,6 +71,7 @@ const { getNotification } = require("./utils/sendNotification");
 app.use("/api/tracking", trackingRoutes);
 
 //  ================= Restaurant ===========================
+// app.use("/api/restaurants/menu", require("./routes/menuRoutes"));
 app.use("/api/orders", orderRoutes);
 app.use("/api/restaurants", restaurantRoutes);
 app.use("/api/homeChefs", homeChefRoutes);
