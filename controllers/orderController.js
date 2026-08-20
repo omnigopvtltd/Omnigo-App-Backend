@@ -302,7 +302,7 @@ exports.cancelOrder = async (req, res) => {
   try {
     const order = await Order.findOne({
       _id: req.params.id,
-      userId: req.user.id,
+      // userId: req.user.id,
     });
 
     if (!order) {
