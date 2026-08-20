@@ -3,29 +3,30 @@ const router = express.Router();
 
 const auth = require("../middleware/authMiddleware");
 const role = require("../middleware/rolemiddleware");
-
 const {
+  getAllOrders,
+  getOngoingOrders,
+  getOrderDetails,
   createOrder,
   getMyOrders,
   getOrderById,
   cancelOrder,
   confirmOrder,
-  getOngoingOrders,
   getAvailableOrders,
+  toggleAutoAccept,
   acceptOrder,
   getRiderOrders,
+  getRiderActiveOrders,
   markDelivered,
-  getOrderDetails,
   reorder,
   trackOrder,
   updateOrderStatus,
-  getAllOrders,
-  toggleAutoAccept,
-  getRiderActiveOrders,
 } = require("../controllers/orderController");
+
 
 router.get("/all-orders", auth, role("admin", "superadmin"), getAllOrders);
 
+router.get("/available", auth, getAvailableOrders);
 router.get("/ongoing", auth, getOngoingOrders);
 
 router.get("/details/:id", auth, getOrderDetails);
@@ -39,15 +40,14 @@ router.get("/my-orders", auth, getMyOrders);
 // SINGLE ORDER
 router.get("/:id", auth, getOrderById);
 
-router.get("/ongoing", auth, getOngoingOrders);
+// router.get("/ongoing", auth, getOngoingOrders);
 
 // CANCEL ORDER
 router.put("/cancel/:id", auth, cancelOrder);
 // CONFIRM ORDER
 router.put("/confirm/:id", auth, confirmOrder);
 
-router.get("/rider/available", auth, getAvailableOrders)
-;
+router.get("/rider/available", auth, getAvailableOrders);
 router.patch("/rider/auto-accept", auth, toggleAutoAccept);
 
 router.put("/rider/accept/:id", auth, role("rider"), acceptOrder);
@@ -60,5 +60,6 @@ router.post("/reorder/:id", auth, reorder);
 router.get("/track/:id", auth, trackOrder);
 router.put("/status/:id", auth, updateOrderStatus);
 router.patch("/status/:id", auth, updateOrderStatus);
+router.put("/:orderId/stops/:stopId/status", auth, updateOrderStatus);
 
 module.exports = router;

@@ -24,6 +24,8 @@ const { initSocket } = require("./socket");
 const app = express();
 const server = http.createServer(app);
 
+const trackingSocket = require("./socket/trackingSocket");
+
 const dns = require("node:dns");
 dns.setServers(["1.1.1.1", "8.8.8.8"]);
 
@@ -68,7 +70,7 @@ app.use("/api/finance", financeRoutes);
 const trackingRoutes = require("./routes/trackingRoutes");
 const AdminSettings = require("./models/AdminSettings");
 const { getNotification } = require("./utils/sendNotification");
-app.use("/api/tracking", trackingRoutes);
+// app.use("/api/tracking", trackingRoutes);
 
 //  ================= Restaurant ===========================
 // app.use("/api/restaurants/menu", require("./routes/menuRoutes"));
@@ -97,8 +99,10 @@ app.use("/api/notifications", require("./routes/notificationRoutes"));
 // ================= SOCKET INIT =================
 const io = initSocket(server);
 
+
 //  make io available globally in express
 app.set("io", io);
+trackingSocket(io);
 
 
 // // ================= START SERVER =================

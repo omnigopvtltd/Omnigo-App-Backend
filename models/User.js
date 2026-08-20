@@ -122,6 +122,7 @@ const userSchema = new mongoose.Schema(
         default: null,
       },
       isOnline: { type: Boolean, default: false },
+      isBusy: { type: Boolean, default: false },
 
       // Standard GeoJSON for MongoDB 2dsphere proximity queries
       location: {
