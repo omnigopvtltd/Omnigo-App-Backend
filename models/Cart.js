@@ -7,49 +7,29 @@ const cartSchema = new mongoose.Schema({
   },
 
   items: [
-    {
-      productId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Product",
-      },
-
-      name: {
-        type: String,
-        required: true,
-        trim: true,
-      },
-
-      weight: {
-        type: String,
-        default: "",
-      },
-
-      price: {
-        type: Number,
-        required: true,
-      },
-
-      quantity: {
-        type: Number,
-        default: 1,
-      },
-
-      category: {
-        type: String,
-        default: "",
-      },
-
-      image: {
-        type: String,
-        default: "",
-      },
-
-      description: {
-        type: String,
-        default: "",
-      },
-    },
-  ],
+        {
+          orderFrom: {
+            type: String,
+            enum: ["fast-food", "grocery", "pharmacy", "bakery", "other"],
+            default: "fast-food",
+          },
+          productId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Product",
+          },
+  
+          name: String,
+          image: String,
+          category: String,
+          weight: String,
+  
+          price: Number,
+          quantity: Number,
+  
+          total: Number,
+        },
+      ],
+  
 });
 
 module.exports = mongoose.model("Cart", cartSchema);

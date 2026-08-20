@@ -24,7 +24,7 @@ const { initSocket } = require("./socket");
 const app = express();
 const server = http.createServer(app);
 
-const trackingSocket = require("./socket/trackingSocket");
+// const trackingSocket = require("./socket/trackingSocket");
 
 const dns = require("node:dns");
 dns.setServers(["1.1.1.1", "8.8.8.8"]);
@@ -102,7 +102,7 @@ const io = initSocket(server);
 
 //  make io available globally in express
 app.set("io", io);
-trackingSocket(io);
+// trackingSocket(io);
 
 
 // // ================= START SERVER =================

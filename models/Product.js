@@ -10,7 +10,7 @@ const productSchema = new mongoose.Schema(
     
     belongsTo: {
       type: String,
-      enum: ["Restaurant", "HomeChef"],
+      enum: ["Restaurant", "HomeChef", "fast-food", "grocery", "pharmacy", "stationary", "bakery"],
       required: true,
     },
 
@@ -30,6 +30,12 @@ const productSchema = new mongoose.Schema(
     price: { type: Number, required: true, min: 0 },
     discountPrice: { type: Number, default: null, min: 0 },
 
+    sizes: [
+      {
+        name: String,
+        price: { type: Number, default: 0 },
+      },
+    ],
     addOns: [
       {
         name: String,

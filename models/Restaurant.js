@@ -58,6 +58,7 @@ const restaurantSchema = new mongoose.Schema(
       is24Hours: { type: Boolean, default: false },
     },
     isOpen: { type: Boolean, default: true },
+    isSponsored: { type: Boolean, default: false },
     isFreeDelivery: { type: Boolean, default: true },
 
     deliveryTime: {

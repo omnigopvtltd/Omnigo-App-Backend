@@ -218,7 +218,7 @@ const orderSchema = new mongoose.Schema(
         },
         status: {
           type: String,
-          enum: ["assigned", "arrived_at_vendor", "picked_up"],
+          enum: ["assigned", "arrived_at_vendor", "picked_up", "shopping"],
           default: "assigned",
         },
       },

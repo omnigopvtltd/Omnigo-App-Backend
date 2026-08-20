@@ -948,6 +948,33 @@ exports.getProductById = async (req, res) => {
 };
 
 // =====================================
+// GET PRODUCT DETAILS
+// =====================================
+exports.getProductDetails = async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id)
+      .select("name image description rating price discountPrice addOns sizes isAvailable isFavourite")
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      product,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// =====================================
 // UPDATE PRODUCT
 // =====================================
 exports.updateProduct = async (req, res) => {
