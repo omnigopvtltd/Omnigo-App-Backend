@@ -5,29 +5,19 @@ const { getIO } = require("../socket");
 // ================= ADD TO CART =================
 exports.addToCart = async (req, res) => {
   try {
-    const io = getIO();
+    const io = req.app.get("io");
+    const { items } = req.body;
 
-    let { productId, quantity } = req.body;
-    quantity = Number(quantity) || 1;
-
-    if (!productId) {
+    // 1. Array validation check
+    if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
         success: false,
-        msg: "ProductId required",
+        msg: "Please select at least one item",
       });
     }
 
-    const product = await Product.findById(productId);
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        msg: "Product not found",
-      });
-    }
-
+    // 2. Fetch or create user cart
     let cart = await Cart.findOne({ userId: req.user.id });
-
     if (!cart) {
       cart = new Cart({
         userId: req.user.id,
@@ -35,44 +25,65 @@ exports.addToCart = async (req, res) => {
       });
     }
 
-    const index = cart.items.findIndex(
-      (item) => item.productId.toString() === productId.toString()
-    );
+    // 3. Process each item in the array
+    for (const newItem of items) {
+      const { productId, quantity = 1 } = newItem;
 
-    if (index > -1) {
-      cart.items[index].quantity += quantity;
-    } else {
-      cart.items.push({
-        productId: product._id,
-        name: product.name,
-        weight: product.weight,
-        price: product.price,
-        quantity,
-        category: product.category,
-        image: product.image,
-        description: product.description,
-      });
+      if (!productId) continue;
+
+      // Verify product exists in database
+      const product = await Product.findById(productId);
+      if (!product) continue;
+
+      const qty = Number(quantity) || 1;
+
+      // Check if product is already in cart
+      const existingIndex = cart.items.findIndex(
+        (item) => item.productId.toString() === productId.toString()
+      );
+
+      if (existingIndex > -1) {
+        // Update quantity & total
+        cart.items[existingIndex].quantity += qty;
+        cart.items[existingIndex].total =
+          cart.items[existingIndex].quantity * cart.items[existingIndex].price;
+      } else {
+        // Add new item entry
+        cart.items.push({
+          productId: product._id,
+          orderFrom: newItem.orderFrom || product.orderFrom || product.category || "fast-food",
+          name: product.name,
+          image: product.image,
+          category: product.category,
+          weight: product.weight,
+          price: product.price,
+          quantity: qty,
+          total: product.price * qty,
+        });
+      }
     }
 
     await cart.save();
 
-    io.to(`user_${req.user.id}`).emit("cart_updated", cart);
+    // 4. Emit socket event
+    if (io) {
+      io.to(`user:${req.user.id}`).emit("cart_updated", cart);
+    }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      msg: "Added to cart",
+      msg: "Added to cart successfully",
       cart,
     });
   } catch (err) {
-    console.log("ADD TO CART ERROR:", err);
-
-    res.status(500).json({
+    console.error("ADD TO CART ERROR:", err);
+    return res.status(500).json({
       success: false,
       msg: "Server Error",
+      error: err.message,
     });
   }
 };
-
 // ================= GET CART =================
 exports.getCart = async (req, res) => {
   try {
@@ -120,7 +131,7 @@ exports.updateCart = async (req, res) => {
     }
 
     const item = cart.items.find(
-      (item) => item.productId.toString() === productId.toString()
+      (item) => item.productId.toString() === productId.toString(),
     );
 
     if (!item) {
@@ -133,9 +144,7 @@ exports.updateCart = async (req, res) => {
     item.quantity = Number(quantity);
 
     // quantity <= 0 ho to remove
-    cart.items = cart.items.filter(
-      (item) => item.quantity > 0
-    );
+    cart.items = cart.items.filter((item) => item.quantity > 0);
 
     await cart.save();
 
@@ -173,8 +182,7 @@ exports.removeItem = async (req, res) => {
     }
 
     cart.items = cart.items.filter(
-      (item) =>
-        item.productId.toString() !== req.params.id.toString()
+      (item) => item.productId.toString() !== req.params.id.toString(),
     );
 
     await cart.save();
@@ -266,8 +274,7 @@ exports.bulkAddToCart = async (req, res) => {
       const quantity = Number(item.quantity) || 1;
 
       const existingIndex = cart.items.findIndex(
-        (cartItem) =>
-          cartItem.productId.toString() === product._id.toString()
+        (cartItem) => cartItem.productId.toString() === product._id.toString(),
       );
 
       if (existingIndex > -1) {

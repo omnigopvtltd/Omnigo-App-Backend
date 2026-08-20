@@ -6,10 +6,110 @@ const RiderSessionParticipation = require("../models/RiderSessionParticipation")
 // const Settings = require("../models/Settings"); // Ensured import for handleOrderAssignment
 const sendNotification = require("../utils/sendNotification");
 const { processRiderBikeInstallment } = require("../helpers/bikeInstallment");
+const Cart = require("../models/Cart");
+
 
 // =====================================
 // CREATE ORDER (Supports Multi-Stop & GeoJSON)
 // =====================================
+// exports.createOrder = async (req, res) => {
+//   try {
+//     const {
+//       address,
+//       stops = [],
+//       paymentMethod = "cash_on_delivery",
+//       promoDiscount = 0,
+//       items = [],
+//       instructions = "",
+//       deliveryFee = 200,
+//       tax = 2.5,
+//       routingMetrics,
+//     } = req.body;
+
+//     const user = await User.findById(req.user.id);
+//     if (!user) {
+//       return res
+//         .status(404)
+//         .json({ success: false, message: "User not found" });
+//     }
+
+//     if (!Array.isArray(items) || items.length === 0) {
+//       return res
+//         .status(400)
+//         .json({ success: false, message: "Order items cannot be empty" });
+//     }
+
+//     const cartItems = await Cart.find()
+
+//     // Process items & subtotal
+//     let subtotal = 0;
+//     const formattedItems = items.map((item) => {
+//       const price = Number(item.price) || 0;
+//       const quantity = Number(item.quantity) || 1;
+//       const total = price * quantity;
+//       subtotal += total;
+
+//       return {
+//         productId: item.productId,
+//         name: item.name,
+//         orderFrom: item.orderFrom || "fast-food",
+//         image: item.image,
+//         category: item.category,
+//         weight: item.weight,
+//         price,
+//         quantity,
+//         total,
+//       };
+//     });
+
+//     // Format delivery address with GeoJSON fallback
+//     const formattedAddress = {
+//       phone: address?.phone || user.phone || "",
+//       address: address?.address || user.address || "",
+//       city: address?.city || "Karachi",
+//       zipCode: address?.zipCode || "",
+//       country: address?.country || "Pakistan",
+//       location: {
+//         type: "Point",
+//         coordinates: address?.location?.coordinates ||
+//           user.location?.coordinates || [0, 0],
+//       },
+//     };
+
+//     const discount = Number(promoDiscount) || 0;
+//     const totalAmount = subtotal + Number(deliveryFee) + Number(tax) - discount;
+
+//     const order = await Order.create({
+//       orderNumber: "ORD" + Date.now() + Math.floor(Math.random() * 1000),
+//       userId: req.user.id,
+//       address: formattedAddress,
+//       stops,
+//       items: formattedItems,
+//       paymentMethod,
+//       paymentStatus: "pending",
+//       subtotal,
+//       deliveryFee: Number(deliveryFee),
+//       tax: Number(tax),
+//       instructions,
+//       promoDiscount: discount,
+//       totalAmount,
+//       routingMetrics,
+//       status: "pending",
+//       riderId: null,
+//       isAssigned: false,
+//     });
+
+//     return res.status(201).json({
+//       success: true,
+//       message: "Order placed successfully",
+//       order,
+//       orderId: order._id,
+//     });
+//   } catch (err) {
+//     console.error("CREATE ORDER ERROR:", err);
+//     return res.status(500).json({ success: false, message: err.message });
+//   }
+// };
 exports.createOrder = async (req, res) => {
   try {
     const {
@@ -17,7 +117,6 @@ exports.createOrder = async (req, res) => {
       stops = [],
       paymentMethod = "cash_on_delivery",
       promoDiscount = 0,
-      items = [],
       instructions = "",
       deliveryFee = 200,
       tax = 2.5,
@@ -31,15 +130,21 @@ exports.createOrder = async (req, res) => {
         .json({ success: false, message: "User not found" });
     }
 
-    if (!Array.isArray(items) || items.length === 0) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Order items cannot be empty" });
+    // Cart Validation
+    const cart = await Cart.findOne({
+      userId: req.user.id,
+    });
+
+    if (!cart || !Array.isArray(cart.items) || cart.items.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Cart is empty",
+      });
     }
 
-    // Process items & subtotal
+    // Process items & subtotal from Cart
     let subtotal = 0;
-    const formattedItems = items.map((item) => {
+    const formattedItems = cart.items.map((item) => {
       const price = Number(item.price) || 0;
       const quantity = Number(item.quantity) || 1;
       const total = price * quantity;
@@ -94,6 +199,16 @@ exports.createOrder = async (req, res) => {
       riderId: null,
       isAssigned: false,
     });
+
+    // CLEAR CART & NOTIFY SOCKETS
+    cart.items = [];
+    await cart.save();
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`user:${req.user.id}`).emit("cart_updated", cart);
+      io.to("role:admin").emit("adminNewOrder", order);
+    }
 
     return res.status(201).json({
       success: true,
@@ -352,12 +467,10 @@ exports.acceptOrder = async (req, res) => {
     }
 
     if (rider.wallet.balance < order.totalAmount) {
-      return res
-        .status(404)
-        .json({
-          success: false,
-          message: "You have unsufficient balance to accept this order",
-        });
+      return res.status(404).json({
+        success: false,
+        message: "You have unsufficient balance to accept this order",
+      });
     }
 
     order.riderId = rider._id;
@@ -368,7 +481,7 @@ exports.acceptOrder = async (req, res) => {
     await order.save();
 
     rider.riderProfile.isBusy = true;
-    
+
     await rider.save();
 
     // Increment bonus session completed orders count
@@ -558,7 +671,6 @@ exports.markDelivered = async (req, res) => {
 //   }
 // };
 
-
 // =====================================
 // UPDATE STOP STATUS & SYNC MAIN STATUS
 // =====================================
@@ -569,41 +681,55 @@ exports.updateStopStatus = async (req, res) => {
 
     const allowedStopStatuses = ["assigned", "arrived_at_vendor", "picked_up"];
     if (!allowedStopStatuses.includes(status)) {
-      return res.status(400).json({ success: false, message: "Invalid stop status" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid stop status" });
     }
 
     // 1. Update the specific stop status
     const order = await Order.findOneAndUpdate(
       { _id: orderId, riderId: req.user.id, "stops._id": stopId },
-      { 
-        $set: { 
+      {
+        $set: {
           "stops.$.status": status,
-          status: status // <-- Syncs main order status with stop status
-        } 
+          status: status, // <-- Syncs main order status with stop status
+        },
       },
-      { new: true } // Returns the updated document immediately
+      { new: true }, // Returns the updated document immediately
     ).populate("stops.vendorId");
 
     if (!order) {
-      return res.status(404).json({ success: false, message: "Order or Stop not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Order or Stop not found" });
     }
 
     // Socket notification
+    // Example in orderController.js / updateStopStatus
     const io = req.app.get("io");
+
     if (io) {
-      io.to(`order_${order._id}`).emit("stopStatusUpdated", {
+      const updatePayload = {
         orderId: order._id,
-        stopId,
-        status,
-      });
+        status: order.status,
+        stops: order.stops,
+        updatedAt: order.updatedAt,
+      };
+
+      // 1. Broadcast to Customer, Rider, & Vendor joined to this order
+      io.to(`order:${order._id}`).emit("orderTrackingUpdated", updatePayload);
+
+      // 2. Broadcast to Admin Panel (for global live monitoring)
+      io.to("role:admin").emit("adminOrderUpdated", updatePayload);
     }
 
-    return res.status(200).json({ success: true, message: "Stop status updated", order });
+    return res
+      .status(200)
+      .json({ success: true, message: "Stop status updated", order });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
 };
-
 
 // =====================================
 // UPDATE ORDER STATUS
@@ -639,24 +765,44 @@ exports.updateOrderStatus = async (req, res) => {
     }
 
     order.status = status;
+
+    // Handle payment & rider availability when order is completed
+    if (status === "delivered") {
+      order.paymentStatus = "paid";
+      
+      // Free up rider so auto-accept works for their next order
+      if (order.riderId) {
+        await User.findByIdAndUpdate(order.riderId, {
+          "riderProfile.isBusy": false,
+        });
+      }
+    }
+
     await order.save();
 
+    // ================= REAL-TIME SOCKET EMISSIONS =================
     if (io) {
-      io.to(`user_${order.userId}`).emit("orderStatusUpdated", {
+      const payload = {
         orderId: order._id,
         status: order.status,
-      });
+        stops: order.stops,
+        paymentStatus: order.paymentStatus,
+        updatedAt: order.updatedAt,
+      };
 
-      io.to(`order_${order._id}`).emit("orderTrackingStatusLive", {
-        orderId: order._id,
-        status: order.status,
-        updatedAt: new Date(),
-      });
+      // 1. Direct notify customer
+      io.to(`user:${order.userId}`).emit("orderStatusUpdated", payload);
+
+      // 2. Broadcast to specific order room (Customer, Vendor, & Rider active view)
+      io.to(`order:${order._id}`).emit("orderTrackingUpdated", payload);
+
+      // 3. Broadcast to Admin Panel dashboard live tracker
+      io.to("role:admin").emit("adminOrderUpdated", payload);
     }
 
     return res
       .status(200)
-      .json({ success: true, message: "Status updated", order });
+      .json({ success: true, message: "Status updated successfully", order });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -1011,7 +1157,9 @@ exports.trackOrder = async (req, res) => {
       .populate("stops.vendorId", "name address location contact");
 
     if (!order) {
-      return res.status(404).json({ success: false, message: "Order not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
     }
 
     return res.status(200).json({

@@ -67,6 +67,7 @@ const {
   getProductsByRestaurant,
   getProductsByHomeChef,
   getProductsByHomeChefTypes,
+  getProductDetails,
 } = require("../controllers/productController");
 
 router.get("/", auth, getAllProducts);
@@ -83,7 +84,8 @@ router.get("/product-by-restaurant/:restaurantId", auth, getProductsByRestaurant
 router.get("/product-by-home-chef/:homeChefId", auth, getProductsByHomeChef);
 
 router.post("/create", auth, createProduct);
-router.get("/:id", auth, role("admin"), getProductById);
+router.get("/:id", auth, getProductById);
+router.get("/product-details/:id", auth, getProductDetails);
 router.put("/update/:id", auth, role("admin"), updateProduct);
 router.patch("/:id/availability", auth, role("admin"), toggleAvailability);
 router.delete("/delete/:id", auth, role("admin"), deleteProduct);

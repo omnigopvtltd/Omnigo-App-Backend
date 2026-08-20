@@ -1,4 +1,5 @@
 const Deal = require("../models/Deal");
+const Product = require("../models/Product");
 const Restaurant = require("../models/Restaurant");
 const User = require("../models/User");
 
@@ -62,6 +63,86 @@ exports.getDealsById = async (req, res) => {
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// =====================================
+// GET DEALS DETAILS
+// =====================================
+exports.getDealDetails = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const deal = await Deal.findOne({
+      _id: id,
+      isActive: true,
+    })
+      .select(
+        "title description image bannerImage items originalPrice discountPrice dealType tag validFrom validUntil"
+      )
+      .populate("restaurantId", "name logo location")
+      .lean();
+
+    if (!deal) {
+      return res.status(404).json({
+        success: false,
+        message: "Deal not found or inactive",
+      });
+    }
+
+    // 1. Format deal products & calculate item total sum
+    let calculatedItemsTotal = 0;
+
+    const formattedProducts = deal.items.map((item) => {
+      const price = Number(item.price) || 0;
+      const quantity = Number(item.quantity) || 1;
+      const total = price * quantity;
+      
+      calculatedItemsTotal += total;
+
+      return {
+        productId: item.productId,
+        name: item.name,
+        image: item.image,
+        category: item.category,
+        price,
+        quantity,
+        total,
+      };
+    });
+
+    // 2. Compute original, deal, and saved amounts
+    const originalPrice = Number(deal.originalPrice) || calculatedItemsTotal;
+    const discountPrice = Number(deal.discountPrice) || 0;
+    const amountSaved = Math.max(0, originalPrice - discountPrice);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        _id: deal._id,
+        title: deal.title,
+        description: deal.description,
+        image: deal.image,
+        bannerImage: deal.bannerImage,
+        restaurant: deal.restaurantId,
+        dealType: deal.dealType,
+        tag: deal.tag,
+        pricing: {
+          originalPrice,       // Total original price before discount
+          discountPrice,       // Deal final price
+          amountSaved,         // Price saved after discount
+          itemsSubtotal: calculatedItemsTotal, // Sum of all items inside deal
+        },
+        products: formattedProducts, // Array of products inside this deal
+        validFrom: deal.validFrom,
+        validUntil: deal.validUntil,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
   }
 };
 
@@ -132,6 +213,7 @@ exports.createDeal = async (req, res) => {
       image,
       bannerImage,
       restaurantId,
+      items, // 1. Destructured items array
       originalPrice,
       discountPrice,
       dealType,
@@ -140,22 +222,55 @@ exports.createDeal = async (req, res) => {
       validUntil,
     } = req.body;
 
-    const restaurantExists = await Restaurant.findById(restaurantId);
-    if (!restaurantExists) {
+    // 2. Verify restaurant exists
+    const restaurant = await Restaurant.findById(restaurantId);
+    if (!restaurant) {
       return res.status(404).json({
         success: false,
         message: "Restaurant not found",
       });
     }
 
+    // 3. Process & validate items array
+    let formattedItems = [];
+    let calculatedItemsTotal = 0;
+
+    if (Array.isArray(items) && items.length > 0) {
+      for (const item of items) {
+        // Fetch product from DB to auto-populate missing fields if needed
+        const product = await Product.findById(item.productId);
+        
+        const price = Number(item.price || product?.price || 0);
+        const quantity = Number(item.quantity || 1);
+        const total = price * quantity;
+
+        calculatedItemsTotal += total;
+
+        formattedItems.push({
+          productId: item.productId,
+          name: item.name || product?.name || "",
+          image: item.image || product?.image || "",
+          category: item.category || product?.category || "",
+          price,
+          quantity,
+          total,
+        });
+      }
+    }
+
+    // Fallback to calculated total if originalPrice is not explicitly sent
+    const finalOriginalPrice = Number(originalPrice) || calculatedItemsTotal;
+
+    // 4. Create new deal with items
     const newDeal = await Deal.create({
       title,
       description,
       image,
       bannerImage,
       restaurantId,
-      originalPrice,
-      discountPrice,
+      items: formattedItems,
+      originalPrice: finalOriginalPrice,
+      discountPrice: Number(discountPrice) || 0,
       dealType,
       tag,
       isFeatured,
@@ -164,7 +279,7 @@ exports.createDeal = async (req, res) => {
 
     const populatedDeal = await Deal.findById(newDeal._id).populate(
       "restaurantId",
-      "name logo location",
+      "name logo location"
     );
 
     // ========================================================
@@ -172,7 +287,6 @@ exports.createDeal = async (req, res) => {
     // ========================================================
     const io = req.app.get("io");
     if (io) {
-      // Broadcast to all connected app users or room listeners
       io.emit("newDealPublished", {
         message: "New deal available in your town!",
         deal: populatedDeal,
@@ -183,18 +297,17 @@ exports.createDeal = async (req, res) => {
     // FCM PUSH NOTIFICATIONS TO ALL ACTIVE USERS
     // ========================================================
     try {
-      // Find all users/customers with active FCM tokens
       const usersWithToken = await User.find({
         role: "user",
         fcmToken: { $exists: true, $ne: null },
       }).select("fcmToken");
 
+      // Fixed: restaurant variable now correctly matches restaurant.name
       const notificationTitle = `🔥 Deal Alert: ${restaurant.name}!`;
       const notificationBody = title
         ? `${title} for only Rs. ${discountPrice}!`
         : `Check out today's special deal in your town!`;
 
-      // Trigger push notifications asynchronously
       usersWithToken.forEach((u) => {
         if (u.fcmToken) {
           sendNotification(u.fcmToken, notificationTitle, notificationBody, {
@@ -203,14 +316,14 @@ exports.createDeal = async (req, res) => {
             restaurantId: restaurant._id.toString(),
             bannerImage: populatedDeal.bannerImage || "",
           }).catch((fcmErr) =>
-            console.error(`FCM error for token ${u.fcmToken}:`, fcmErr.message),
+            console.error(`FCM error for token ${u.fcmToken}:`, fcmErr.message)
           );
         }
       });
     } catch (notifErr) {
       console.error(
         "DEAL NOTIFICATION ERROR (Non-blocking):",
-        notifErr.message,
+        notifErr.message
       );
     }
 

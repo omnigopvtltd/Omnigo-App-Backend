@@ -1,12 +1,12 @@
 const admin = require("firebase-admin");
-require("./config/firebase");
+require("../config/firebase");
 // const { initializeApp, cert, getApps } = require("firebase-admin/app");
 const { getMessaging } = require("firebase-admin/messaging")
 const path = require("path");
-const Message = require("./models/Message");
-const Conversation = require("./models/Conversation");
-const CallLog = require("./models/CallLog");
-const User = require("./models/User"); 
+const Message = require("../models/Message");
+const Conversation = require("../models/Conversation");
+const CallLog = require("../models/callLog");
+const User = require("../models/User"); 
 
 const serviceAccountPath = path.join(
   __dirname,
