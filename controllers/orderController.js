@@ -8,7 +8,6 @@ const sendNotification = require("../utils/sendNotification");
 const { processRiderBikeInstallment } = require("../helpers/bikeInstallment");
 const Cart = require("../models/Cart");
 
-
 // =====================================
 // CREATE ORDER (Supports Multi-Stop & GeoJSON)
 // =====================================
@@ -769,7 +768,7 @@ exports.updateOrderStatus = async (req, res) => {
     // Handle payment & rider availability when order is completed
     if (status === "delivered") {
       order.paymentStatus = "paid";
-      
+
       // Free up rider so auto-accept works for their next order
       if (order.riderId) {
         await User.findByIdAndUpdate(order.riderId, {
@@ -1180,6 +1179,38 @@ exports.trackOrder = async (req, res) => {
       },
     });
   } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ================================
+// Vendor's Orders
+// ================================
+
+// =====================================
+// Vendor Incoming Orders (Unassigned)
+// =====================================
+exports.getVendorIncomingOrders = async (req, res) => {
+  try {
+    const id = req.user?.id;
+    const vendor = await Vendor.findById(id);
+
+    const allOrders = await Order.find({
+      status: "pending" || "confirmed",
+      isAssigned: false,
+    })
+      .select("orderNumber createdAt items")
+      .populate("userId", "name email phone")
+      .populate("stops.vendorId", "name logo address contact location")
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      count: allOrders.length,
+      orders: allOrders,
+    });
+  } catch (err) {
+    console.error("GET AVAILABLE ORDERS ERROR:", err);
     return res.status(500).json({ success: false, message: err.message });
   }
 };

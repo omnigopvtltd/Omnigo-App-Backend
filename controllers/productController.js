@@ -331,7 +331,7 @@
 const Order = require("../models/Order");
 const Product = require("../models/Product");
 const Restaurant = require("../models/Restaurant");
-const FoodCategory = require("../models/FoodCategories"); 
+const FoodCategory = require("../models/FoodCategories");
 const HomeChef = require("../models/HomeChef");
 const { default: mongoose } = require("mongoose");
 
@@ -504,6 +504,143 @@ exports.getAllProducts = async (req, res) => {
 };
 
 // =====================================
+// GET OMNIGO MART PRODUCTS
+// =====================================
+exports.getOmnigoMartProducts = async (req, res) => {
+  try {
+    const {
+      category,
+      status,
+      type,
+      isAvailable,
+      search,
+      page = 1,
+      limit = 20,
+      sortBy = "createdAt",
+      sortOrder = "desc",
+    } = req.query;
+
+    const query = {};
+
+    // Filter by allowed Omnigo Mart types (grocery, pharmacy, stationary)
+    // If a specific type parameter is passed, use it; otherwise, query all three
+    if (type) {
+      query.belongsTo = type;
+    } else {
+      query.belongsTo = { $in: ["grocery", "pharmacy", "stationary"] };
+    }
+
+    if (category) query.category = category;
+    if (status && status !== "all") query.status = status;
+    if (isAvailable !== undefined) query.isAvailable = isAvailable === "true";
+
+    if (search) {
+      const regex = new RegExp(search, "i");
+      query.$or = [{ name: regex }, { category: regex }, { tags: regex }];
+    }
+
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+    const limitNum = Math.max(parseInt(limit, 10) || 20, 1);
+    const skip = (pageNum - 1) * limitNum;
+    const sort = { [sortBy]: sortOrder === "asc" ? 1 : -1 };
+
+    const [products, total] = await Promise.all([
+      Product.find(query)
+        // .populate("restaurantId", "name logo status type")
+        .sort(sort)
+        .skip(skip)
+        .limit(limitNum),
+      Product.countDocuments(query),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      count: products.length,
+      total,
+      page: pageNum,
+      totalPages: Math.ceil(total / limitNum) || 1,
+      products,
+    });
+  } catch (err) {
+    console.error("GET PRODUCTS ERROR:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// =====================================
+// GET OMNIGO MART PRODUCTS CATEGORIES
+// =====================================
+exports.getOmnigoMartProductsCategries = async (req, res) => {
+  try {
+    const {
+      category,
+      status,
+      type,
+      isAvailable,
+      search,
+      page = 1,
+      limit = 20,
+      sortBy = "createdAt",
+      sortOrder = "desc",
+    } = req.query;
+
+    const query = {};
+
+    // Filter by allowed Omnigo Mart types (grocery, pharmacy, stationary)
+    // If a specific type parameter is passed, use it; otherwise, query all three
+    if (type) {
+      query.belongsTo = type;
+    } else {
+      query.belongsTo = { $in: ["grocery", "pharmacy", "stationary"] };
+    }
+
+    if (category) query.category = category;
+    if (status && status !== "all") query.status = status;
+    if (isAvailable !== undefined) query.isAvailable = isAvailable === "true";
+
+    if (search) {
+      const regex = new RegExp(search, "i");
+      query.$or = [{ name: regex }, { category: regex }, { tags: regex }];
+    }
+
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+    const limitNum = Math.max(parseInt(limit, 10) || 20, 1);
+    const skip = (pageNum - 1) * limitNum;
+    const sort = { [sortBy]: sortOrder === "asc" ? 1 : -1 };
+
+    const [products, total] = await Promise.all([
+      Product.find(query)
+        // .populate("restaurantId", "name logo status type")
+        .sort(sort)
+        .skip(skip)
+        .limit(limitNum)
+        .select("category"),
+      Product.countDocuments(query),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      count: products.length,
+      total,
+      page: pageNum,
+      totalPages: Math.ceil(total / limitNum) || 1,
+      products,
+    });
+  } catch (err) {
+    console.error("GET PRODUCTS ERROR:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// =====================================
 // GET PRODUCTS BY CATEGORY
 // =====================================
 exports.getProductsByCategory = async (req, res) => {
@@ -530,13 +667,11 @@ exports.getProductsByCategory = async (req, res) => {
 
     // 1. Query products matching category/subcategory
     const products = await Product.find(query).select(
-      "name images price tags discountPrice category subcategory rating isAvailable isFavourite restaurantId belongsTo chefId"
+      "name images price tags discountPrice category subcategory rating isAvailable isFavourite restaurantId belongsTo chefId",
     );
 
     // 2. Extract restaurant IDs safely
-    const restaurantIds = products
-      .map((p) => p.restaurantId)
-      .filter(Boolean);
+    const restaurantIds = products.map((p) => p.restaurantId).filter(Boolean);
 
     // 3. Query associated restaurants
     const restaurants = await Restaurant.find({
@@ -545,7 +680,7 @@ exports.getProductsByCategory = async (req, res) => {
 
     // 4. Map restaurant data into product objects
     const restaurantMap = new Map(
-      restaurants.map((r) => [r._id.toString(), r])
+      restaurants.map((r) => [r._id.toString(), r]),
     );
 
     const productsWithVendor = products.map((productDoc) => {
@@ -589,7 +724,9 @@ exports.getProductsByType = async (req, res) => {
     const products = await Product.find(query)
       .populate("restaurantId", "name logo deliveryTime")
       .populate("homeChefId", "name logo deliveryTime")
-      .select("name images price discountPrice rating restaurantId homeChefId belongsTo isFavourite");
+      .select(
+        "name images price discountPrice rating restaurantId homeChefId belongsTo isFavourite",
+      );
 
     // 2. Map through products to format output key cleanly as "restaurant" or "chef"
     const formattedProducts = products.map((product) => {
@@ -607,7 +744,7 @@ exports.getProductsByType = async (req, res) => {
               _id: seller._id,
               name: seller.name,
               logo: seller.logo,
-              deliveryTime: seller.deliveryTime
+              deliveryTime: seller.deliveryTime,
             }
           : null,
       };
@@ -708,7 +845,6 @@ exports.getProductsByHomeChef = async (req, res) => {
   }
 };
 
-
 // =====================================
 // GET PRODUCTS BY RESTAURANT'S CATEGORIES
 // =====================================
@@ -739,9 +875,9 @@ exports.getProductsByRestaurantCategories = async (req, res) => {
       const slugifiedCategory = categoryName
         .trim()
         .toLowerCase()
-        .replace(/&/g, "and")          // Convert "&" to "and"
-        .replace(/[\s_]+/g, "-")        // Convert spaces and underscores to hyphens
-        .replace(/-+/g, "-");          // Normalize multiple hyphens to a single hyphen
+        .replace(/&/g, "and") // Convert "&" to "and"
+        .replace(/[\s_]+/g, "-") // Convert spaces and underscores to hyphens
+        .replace(/-+/g, "-"); // Normalize multiple hyphens to a single hyphen
 
       query.category = slugifiedCategory;
     }
@@ -806,7 +942,7 @@ exports.getProductsByRestaurantSubcategories = async (req, res) => {
     }
 
     const products = await Product.find(query).select(
-      "name images price discountPrice description rating isAvailable subcategory category restaurantId chefId"
+      "name images price discountPrice description rating isAvailable subcategory category restaurantId chefId",
     );
 
     return res.status(200).json({
@@ -853,7 +989,7 @@ exports.getProductsByRestaurantTypes = async (req, res) => {
     if (type.toLowerCase()) query.type = type.toLowerCase();
 
     const products = await Product.find({ restaurantId, ...query }).select(
-      "name images price description"
+      "name images price description",
     );
 
     return res.status(200).json({
@@ -900,7 +1036,7 @@ exports.getProductsByHomeChefTypes = async (req, res) => {
     if (type) query.type = type;
 
     const products = await Product.find({ homeChefId, ...query }).select(
-      "name images price description type"
+      "name images price description type",
     );
 
     return res.status(200).json({
@@ -952,8 +1088,9 @@ exports.getProductById = async (req, res) => {
 // =====================================
 exports.getProductDetails = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id)
-      .select("name image description rating price discountPrice addOns sizes isAvailable isFavourite")
+    const product = await Product.findById(req.params.id).select(
+      "name image description rating price discountPrice addOns sizes isAvailable isFavourite",
+    );
 
     if (!product) {
       return res.status(404).json({
@@ -1110,7 +1247,7 @@ exports.deleteProduct = async (req, res) => {
 // ========================================================
 exports.getPreviouslyOrderedItems = async (req, res) => {
   try {
-    const userId = req.user._id || req.user.id ;
+    const userId = req.user._id || req.user.id;
 
     // 1. Find completed/delivered orders for the logged-in user
     const orders = await Order.find({
@@ -1248,7 +1385,9 @@ exports.getPreviouslyOrderedItemsByCategory = async (req, res) => {
     })
       .populate("restaurantId", "name logo rating offer")
       .populate("chefId", "name logo rating offer")
-      .select("name images image price discountPrice rating isFavourite chefId restaurantId");
+      .select(
+        "name images image price discountPrice rating isFavourite chefId restaurantId",
+      );
 
     // 5. Format response to match product card structure
     const formattedItems = items.map((product) => {

@@ -68,9 +68,13 @@ const {
   getProductsByHomeChef,
   getProductsByHomeChefTypes,
   getProductDetails,
+  getOmnigoMartProducts,
+  getOmnigoMartProductsCategries,
 } = require("../controllers/productController");
 
 router.get("/", auth, getAllProducts);
+router.get("/omnigo-mart-products", auth, getOmnigoMartProducts);
+router.get("/omnigo-mart-products-categories", auth, getOmnigoMartProductsCategries);
 router.get("/product-by-category", auth, getProductsByCategory);
 router.get("/product-by-type", auth, getProductsByType);
 // Endpoint for "Craving It Again?" section

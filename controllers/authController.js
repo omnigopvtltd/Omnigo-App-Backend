@@ -525,7 +525,7 @@ exports.signup = async (req, res) => {
     const {
       phone,
       password,
-      role = "user",
+      role = role || "user",
       email,
       name,
       riderProfile,
@@ -2394,5 +2394,82 @@ exports.selectRiderCategory = async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ====================
+// Vendor Profile
+// ====================
+
+exports.completeVendorProfile = async (req, res) => {
+  try {
+    const vendorId = req.user.id; // Token se rider id
+
+    const {
+      name,
+      email,
+      phone,
+      cnicNumber,
+      cnicPicture,
+      paymentMethod,
+      businessCategory,
+      businessNumber,
+      businessName,
+      businessEmail,
+      vehicleModel,
+      vehicleEngineSize,
+      profilePicture,
+      vehiclePicture,
+    } = req.body;
+
+    const rider = await User.findById(riderId);
+
+    if (!rider || rider.role !== "rider") {
+      return res.status(404).json({
+        success: false,
+        message: "Rider not found",
+      });
+    }
+
+    // Personal Information
+    rider.name = name;
+    rider.email = email;
+    rider.phone = phone;
+
+    // CNIC
+    rider.cnicNumber = cnicNumber;
+    rider.cnicPicture = cnicPicture;
+
+    // Payment
+    rider.paymentMethod = paymentMethod;
+
+    // Vehicle
+    rider.vehicleNumber = vehicleNumber;
+    rider.vehicleModel = vehicleModel;
+    rider.vehicleEngineSize = vehicleEngineSize;
+    rider.riderProfile.category = category;
+
+    // License
+    rider.drivingLicenseNumber = drivingLicenseNumber;
+    rider.drivingLicensePicture = drivingLicensePicture;
+    rider.category = category;
+    // Images
+    rider.profilePicture = profilePicture;
+    rider.vehiclePicture = vehiclePicture;
+
+    rider.isProfileCompleted = true;
+
+    await rider.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Rider profile completed successfully",
+      rider,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
   }
 };

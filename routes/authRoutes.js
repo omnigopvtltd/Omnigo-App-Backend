@@ -62,6 +62,9 @@ const {
   deleteZone,
   updateZone,
   toggleZoneStatus,
+
+  // Vendor
+  completeVendorProfile
  
 } = require("../controllers/authController");
 const { getRiderById } = require("../controllers/riderController");
@@ -158,9 +161,6 @@ router.put(
   completeRiderProfile
 );
 
-
-
-
 router.post(
   "/rider/verification/upload",
   auth,
@@ -217,5 +217,14 @@ router.put("/address/:addressId", auth, updateAddress);
 router.delete("/address/:addressId", auth, deleteAddress);
 router.put("/address/default/:addressId", auth, setDefaultAddress);
 
+// ======================
+// Vendor Profile
+// ======================
+
+router.put(
+  "/vendor/complete-profile",
+  auth,
+  completeVendorProfile
+);
 
 module.exports = router;

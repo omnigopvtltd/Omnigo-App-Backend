@@ -553,6 +553,34 @@ exports.getBookedSessions = async (req, res) => {
     });
   }
 };
+// =====================================
+// RIDER: GET COMPLETED SESSIONS
+// =====================================
+exports.getCompletedSessions = async (req, res) => {
+  try {
+    const riderId = req.user.id;
+
+    // Fetch all participation records where status is 'Completed' (queued)
+    const completedSessions = await RiderSessionParticipation.find({
+      riderId,
+      status: "completed",
+    })
+      .populate("sessionId") 
+      .sort({ createdAt: 1 }); 
+
+    return res.status(200).json({
+      success: true,
+      count: completedSessions.length,
+      data: completedSessions,
+    });
+  } catch (err) {
+    console.error("GET COMPLETED SESSIONS ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
 
 // =====================================
 // ADMIN: GET COMINNG SOON SESSIONS 
@@ -603,23 +631,38 @@ exports.getComingSoonSessions = async (req, res) => {
 // =====================================
 exports.getTodaySessions = async (req, res) => {
   try {
-    // 1. Calculate the start and end of "Today" in UTC/Local time
+    const now = new Date();
+
+    // 1. Calculate start and end of Today
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
 
     const endOfToday = new Date();
     endOfToday.setHours(23, 59, 59, 999);
 
-    // 2. Fetch all active sessions scheduled for today
+    // 2. Automatically mark sessions as "completed" if their endDate has passed
+    await RiderSession.updateMany(
+      {
+        isActive: true,
+        endDate: { $lt: now },
+      },
+      {
+        $set: {
+          status: "completed",
+          isActive: false,
+        },
+      }
+    );
+
+    // 3. Fetch active sessions scheduled for today that haven't ended yet
     const todaySessions = await RiderSession.find({
       isActive: true,
       startDate: {
         $gte: startOfToday,
         $lte: endOfToday,
       },
-    })
-      // .populate("zoneId", "name city") // Optional: populate zone details
-      .sort({ startDate: 1 });
+      endDate: { $gte: now }, // Ensures only ongoing or upcoming sessions for today are returned
+    }).sort({ startDate: 1 });
 
     return res.status(200).json({
       success: true,

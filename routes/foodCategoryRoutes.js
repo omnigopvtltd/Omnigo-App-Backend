@@ -19,18 +19,18 @@ const {
 
 // Category Routes
 router.get("/", auth, getAllCategories);
-router.post("/create", auth, role("admin"), createCategory);
+router.post("/create", auth, createCategory);
 router.put("/reorder", auth, reorderCategories);
 
 // Sub-Category Routes
 router.get("/subcategories", auth, getAllSubCategories);
-router.post("/create/subcategories", auth, role("admin"), createSubCategory);
+router.post("/create/subcategories", auth, createSubCategory);
 router.get("/:categoryId/subcategories", auth, getSubCategoriesByCategory);
 router.get("/subcategories/:subId", auth, getSubCategoryById);
-router.put("/update/subcategories/:subId", auth, role("admin"), updateSubCategory);
-router.delete("/delete/:id", auth, role("admin"), deleteCategory);
-router.delete("/delete/subcategories/:subId", auth, role("admin"), deleteSubCategory);
+router.put("/update/subcategories/:subId", auth, updateSubCategory);
+router.delete("/delete/:id", auth, deleteCategory);
+router.delete("/delete/subcategories/:subId", auth, deleteSubCategory);
 
-router.put("/update/:id", auth, role("admin"), updateCategory);
+router.put("/update/:id", auth, updateCategory);
 router.get("/:id", auth, getCategoryById);
 module.exports = router;
