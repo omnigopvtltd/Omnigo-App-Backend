@@ -635,7 +635,7 @@ exports.getOmnigoMartProductsCategries = async (req, res) => {
       Product.countDocuments(query),
     ]);
 
-     const formattedProducts = products.map((item) => ({
+    const formattedProducts = products.map((item) => ({
       id: item._id,
       name: item.name,
       weight: item.weight,
@@ -671,7 +671,7 @@ exports.getOmnigoMartProductsCategries = async (req, res) => {
 // =====================================
 exports.getProductsByCategory = async (req, res) => {
   try {
-    const { category, subcategory } = req.query;
+    const { category, subcategory, search } = req.query;
 
     const query = {};
 
@@ -679,7 +679,10 @@ exports.getProductsByCategory = async (req, res) => {
     const createFlexibleRegex = (input) => {
       if (!input) return null;
       // Convert hyphens/multiple spaces to a flexible whitespace pattern
-      const sanitized = input.trim().toLowerCase().replace(/[-_\s]+/g, "[-\\s_]*");
+      const sanitized = input
+        .trim()
+        .toLowerCase()
+        .replace(/[-_\s]+/g, "[-\\s_]*");
       return new RegExp(`^${sanitized}$`, "i");
     };
 
@@ -689,6 +692,11 @@ exports.getProductsByCategory = async (req, res) => {
 
     if (subcategory) {
       query.subcategory = createFlexibleRegex(subcategory);
+    }
+
+    if (search) {
+      const regex = new RegExp(search, "i");
+      query.$or = [{ name: regex }, { category: regex }, { tags: regex }];
     }
 
     // 1. Query products matching category/subcategory
