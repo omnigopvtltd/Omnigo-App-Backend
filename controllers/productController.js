@@ -6,7 +6,7 @@
 //   return `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
 // };
 
-// // ================= GET ALL PRODUCTS =================
+// ================= GET ALL PRODUCTS =================
 // exports.getProducts = async (req, res) => {
 //   try {
 //     const { category, q } = req.query;
@@ -553,13 +553,26 @@ exports.getOmnigoMartProducts = async (req, res) => {
       Product.countDocuments(query),
     ]);
 
+    const formattedProducts = products.map((item) => ({
+      id: item._id,
+      name: item.name,
+      weight: item.weight,
+      image: item.image,
+      description: item.description,
+      price: item.price,
+      quantity: item.quantity,
+      category: item.category,
+      likes: item.likes.length,
+      createdAt: item.createdAt,
+    }));
+
     return res.status(200).json({
       success: true,
       count: products.length,
       total,
       page: pageNum,
       totalPages: Math.ceil(total / limitNum) || 1,
-      products,
+      products: formattedProducts,
     });
   } catch (err) {
     console.error("GET PRODUCTS ERROR:", err);
@@ -615,12 +628,25 @@ exports.getOmnigoMartProductsCategries = async (req, res) => {
     const [products, total] = await Promise.all([
       Product.find(query)
         // .populate("restaurantId", "name logo status type")
+        // .select("category"),
         .sort(sort)
         .skip(skip)
-        .limit(limitNum)
-        .select("category"),
+        .limit(limitNum),
       Product.countDocuments(query),
     ]);
+
+     const formattedProducts = products.map((item) => ({
+      id: item._id,
+      name: item.name,
+      weight: item.weight,
+      image: item.image,
+      description: item.description,
+      price: item.price,
+      quantity: item.quantity,
+      category: item.category,
+      likes: item.likes.length,
+      createdAt: item.createdAt,
+    }));
 
     return res.status(200).json({
       success: true,
@@ -628,7 +654,7 @@ exports.getOmnigoMartProductsCategries = async (req, res) => {
       total,
       page: pageNum,
       totalPages: Math.ceil(total / limitNum) || 1,
-      products,
+      products: formattedProducts,
     });
   } catch (err) {
     console.error("GET PRODUCTS ERROR:", err);

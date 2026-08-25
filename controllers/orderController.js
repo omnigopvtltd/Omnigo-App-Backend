@@ -8,107 +8,6 @@ const sendNotification = require("../utils/sendNotification");
 const { processRiderBikeInstallment } = require("../helpers/bikeInstallment");
 const Cart = require("../models/Cart");
 
-// =====================================
-// CREATE ORDER (Supports Multi-Stop & GeoJSON)
-// =====================================
-// exports.createOrder = async (req, res) => {
-//   try {
-//     const {
-//       address,
-//       stops = [],
-//       paymentMethod = "cash_on_delivery",
-//       promoDiscount = 0,
-//       items = [],
-//       instructions = "",
-//       deliveryFee = 200,
-//       tax = 2.5,
-//       routingMetrics,
-//     } = req.body;
-
-//     const user = await User.findById(req.user.id);
-//     if (!user) {
-//       return res
-//         .status(404)
-//         .json({ success: false, message: "User not found" });
-//     }
-
-//     if (!Array.isArray(items) || items.length === 0) {
-//       return res
-//         .status(400)
-//         .json({ success: false, message: "Order items cannot be empty" });
-//     }
-
-//     const cartItems = await Cart.find()
-
-//     // Process items & subtotal
-//     let subtotal = 0;
-//     const formattedItems = items.map((item) => {
-//       const price = Number(item.price) || 0;
-//       const quantity = Number(item.quantity) || 1;
-//       const total = price * quantity;
-//       subtotal += total;
-
-//       return {
-//         productId: item.productId,
-//         name: item.name,
-//         orderFrom: item.orderFrom || "fast-food",
-//         image: item.image,
-//         category: item.category,
-//         weight: item.weight,
-//         price,
-//         quantity,
-//         total,
-//       };
-//     });
-
-//     // Format delivery address with GeoJSON fallback
-//     const formattedAddress = {
-//       phone: address?.phone || user.phone || "",
-//       address: address?.address || user.address || "",
-//       city: address?.city || "Karachi",
-//       zipCode: address?.zipCode || "",
-//       country: address?.country || "Pakistan",
-//       location: {
-//         type: "Point",
-//         coordinates: address?.location?.coordinates ||
-//           user.location?.coordinates || [0, 0],
-//       },
-//     };
-
-//     const discount = Number(promoDiscount) || 0;
-//     const totalAmount = subtotal + Number(deliveryFee) + Number(tax) - discount;
-
-//     const order = await Order.create({
-//       orderNumber: "ORD" + Date.now() + Math.floor(Math.random() * 1000),
-//       userId: req.user.id,
-//       address: formattedAddress,
-//       stops,
-//       items: formattedItems,
-//       paymentMethod,
-//       paymentStatus: "pending",
-//       subtotal,
-//       deliveryFee: Number(deliveryFee),
-//       tax: Number(tax),
-//       instructions,
-//       promoDiscount: discount,
-//       totalAmount,
-//       routingMetrics,
-//       status: "pending",
-//       riderId: null,
-//       isAssigned: false,
-//     });
-
-//     return res.status(201).json({
-//       success: true,
-//       message: "Order placed successfully",
-//       order,
-//       orderId: order._id,
-//     });
-//   } catch (err) {
-//     console.error("CREATE ORDER ERROR:", err);
-//     return res.status(500).json({ success: false, message: err.message });
-//   }
-// };
 exports.createOrder = async (req, res) => {
   try {
     const {
@@ -459,7 +358,21 @@ exports.acceptOrder = async (req, res) => {
         .json({ success: false, message: "Rider not found" });
     }
 
-    if (rider.riderProfile.isBusy == true) {
+    const activeOrders = await Order.find({
+      riderId: req.user.id,
+      status: {
+        $in: [
+          "confirmed",
+          "preparing",
+          "arrived_at_vendor",
+          "picked_up",
+          "ongoing",
+        ],
+      },
+    });
+    // console.log(activeOrders);
+    
+    if (activeOrders !== []) {
       return res
         .status(404)
         .json({ success: false, message: "Deliver your ongoing order first" });
