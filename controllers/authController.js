@@ -11,6 +11,8 @@ const nodemailer = require("nodemailer");
 
 const { OAuth2Client } = require("google-auth-library");
 const { body, validationResult } = require("express-validator");
+const Order = require("../models/Order");
+const Product = require("../models/Product");
 
 // ======================================================
 // GOOGLE CLIENT
@@ -1938,6 +1940,60 @@ exports.getUsers = async (req, res) => {
   }
 };
 
+
+exports.getUserProfile = async (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    // Fetch user details and verify role
+    const user = await User.findOne({ _id: userId, role: "user" }).select(
+      "name email phone profilePicture addresses isBlocked"
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User profile not found",
+      });
+    }
+
+    // Fetch all orders for this user
+    const orders = await Order.find({ userId }).sort({ createdAt: -1 });
+
+    // Filter orders to find pending/in-progress orders
+    const pendingOrders = orders.filter((order) =>
+      ["pending", "accepted", "preparing", "in_progress", "on_the_way"].includes(
+        order.status
+      )
+    );
+
+    // Fetch favorite/saved products directly where user's ID exists in the 'likes' array
+    const savedItems = await Product.find({ likes: userId }).select(
+      "name price image category rating likes"
+    );
+
+    const userProfile = {
+      user,
+      order: orders.length || 0,
+      // pendingOrders,
+      PendingOrder: pendingOrders.length || 0,
+      // savedItems,
+      savedItemsCount: savedItems.length || 0,
+    };
+
+    return res.status(200).json({
+      success: true,
+      userProfile,
+    });
+  } catch (err) {
+    console.error("GET USER PROFILE ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
 //------------------------------------  Rider Otps -------------------------------------
 
 exports.sendRiderOTP = async (req, res) => {
@@ -2473,3 +2529,4 @@ exports.completeVendorProfile = async (req, res) => {
     });
   }
 };
+

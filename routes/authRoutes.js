@@ -64,7 +64,8 @@ const {
   toggleZoneStatus,
 
   // Vendor
-  completeVendorProfile
+  completeVendorProfile,
+  getUserProfile
  
 } = require("../controllers/authController");
 const { getRiderById } = require("../controllers/riderController");
@@ -86,6 +87,7 @@ router.post("/facebook-login", facebookLogin);
 // ======================================================
 router.get("/all-users", getAllUsers);
 router.get("/users", getUsers);
+router.get("/my-profile/:id", getUserProfile);
 router.patch("/users/update/:id/status", updateUserStatus);
 
 

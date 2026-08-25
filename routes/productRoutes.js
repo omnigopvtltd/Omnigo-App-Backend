@@ -27,7 +27,7 @@
 // router.post("/", upload.single("image"), createProduct);
 // // Update Product
 // router.put(
-//   "/:id",
+  //   "/:id",
 //   upload.single("image"),
 //   updateProduct
 // );

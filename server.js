@@ -45,6 +45,7 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 // ================= ROUTES =================
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/products", require("./routes/productRoutes"));
+app.use("/api/orders", orderRoutes);
 app.use("/api/cart", require("./routes/cartRoutes"));
 
 // ================= VENDORS =================
@@ -74,7 +75,6 @@ const { getNotification } = require("./utils/sendNotification");
 
 //  ================= Restaurant ===========================
 // app.use("/api/restaurants/menu", require("./routes/menuRoutes"));
-app.use("/api/orders", orderRoutes);
 app.use("/api/restaurants", restaurantRoutes);
 app.use("/api/homeChefs", homeChefRoutes);
 app.use("/api/categories", foodCategoryRoutes);
