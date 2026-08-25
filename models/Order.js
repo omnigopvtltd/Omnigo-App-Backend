@@ -204,7 +204,7 @@ const orderSchema = new mongoose.Schema(
     stops: [
       {
         stopNumber: { type: Number, default: 1 },
-        vendorId: { type: mongoose.Schema.Types.ObjectId, ref: "Restaurant" },
+        vendorId: { type: mongoose.Schema.Types.ObjectId, ref: "Vendor" },
         vendorName: { type: String, default: "" },
         vendorType: {
           type: String,
@@ -292,6 +292,7 @@ const orderSchema = new mongoose.Schema(
         "pending",
         "confirmed",
         "preparing",
+        "ready",
         "arrived_at_vendor",
         "picked_up",
         "ongoing",

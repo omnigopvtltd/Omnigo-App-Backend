@@ -7,6 +7,7 @@ const RiderSessionParticipation = require("../models/RiderSessionParticipation")
 const sendNotification = require("../utils/sendNotification");
 const { processRiderBikeInstallment } = require("../helpers/bikeInstallment");
 const Cart = require("../models/Cart");
+const WalletTransaction = require("../models/WalletTransaction");
 
 exports.createOrder = async (req, res) => {
   try {
@@ -198,10 +199,7 @@ exports.getOrderById = async (req, res) => {
 // =====================================
 exports.cancelOrder = async (req, res) => {
   try {
-    const order = await Order.findOne({
-      _id: req.params.id,
-      // userId: req.user.id,
-    });
+    const order = await Order.findById(req.params.id);
 
     if (!order) {
       return res
@@ -209,45 +207,158 @@ exports.cancelOrder = async (req, res) => {
         .json({ success: false, message: "Order not found" });
     }
 
-    // Refund float if assigned and unsettled
-    if (
-      order.riderId &&
-      order.riderFloatAmount > 0 &&
-      !order.riderFloatSettled
-    ) {
-      const WalletTransaction = require("../models/WalletTransaction");
+    // Process rider unassignment & float refund if a rider was attached
+    if (order.riderId) {
       const rider = await User.findById(order.riderId);
 
       if (rider) {
-        const newBalance =
-          (rider.wallet?.balance || 0) + order.riderFloatAmount;
-        rider.wallet = { balance: newBalance };
-        await rider.save();
+        // 1. Refund Float if held and unsettled
+        if (order.riderFloatAmount > 0 && !order.riderFloatSettled) {
+          const newBalance =
+            (rider.wallet?.balance || 0) + order.riderFloatAmount;
 
-        await WalletTransaction.create({
-          userId: rider._id,
-          type: "credit",
-          amount: order.riderFloatAmount,
-          reason: `Float refunded — ${order.orderNumber} was cancelled`,
-          balanceAfter: newBalance,
-          source: "order_refund",
-          orderId: order._id,
-        });
+          rider.wallet = rider.wallet || {};
+          rider.wallet.balance = newBalance; // Safely update balance without wiping subdocument
+
+          await WalletTransaction.create({
+            userId: rider._id,
+            type: "credit",
+            amount: order.riderFloatAmount,
+            reason: `Float refunded — ${order.orderNumber} was cancelled`,
+            balanceAfter: newBalance,
+            source: "order_refund",
+            orderId: order._id,
+          });
+
+          order.riderFloatSettled = true;
+        }
+
+        // 2. Update Rider Availability & Tracking
+        if (rider.riderProfile) {
+          rider.riderProfile.isBusy = false;
+          // rider.riderProfile.riderCanceledOrder = order._id;
+        }
+
+        await rider.save();
       }
-      order.riderFloatSettled = true;
     }
 
+    // 3. Reset Order State so it can be picked up by another rider
+    order.riderId = null;
+    order.isAssigned = false;
     order.status = "cancelled";
+
     await order.save();
 
-    return res
-      .status(200)
-      .json({ success: true, message: "Order cancelled successfully", order });
+    return res.status(200).json({
+      success: true,
+      message: "Order Cancelled by Customer",
+      order,
+    });
   } catch (err) {
+    console.error("CANCEL ORDER ERROR:", err);
     return res.status(500).json({ success: false, message: err.message });
   }
 };
 
+exports.cancelRiderOrder = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+
+    if (!order) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    }
+
+    const rider = await User.findById(req.user?.id);
+
+    // Check if Rider previously cancelled this order
+    const isCancelledByRider = rider.riderProfile?.riderCanceledOrder?.some(
+      (orderId) => orderId.toString() === req.params.id,
+    );
+    console.log("is Order Cancelled By Rider", isCancelledByRider);
+
+    if (isCancelledByRider) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "You have previously cancelled this order and cannot accept it again.",
+      });
+    }
+
+    if (order.riderId == null) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Accept Order First" });
+    }
+
+    // Process rider unassignment & float refund if a rider was attached
+    if (order.riderId) {
+      // const rider = await User.findById(order.riderId);
+      console.log(rider);
+      if (rider) {
+        // Refund Float if held and unsettled
+        if (order.riderFloatAmount > 0 && !order.riderFloatSettled) {
+          const newBalance =
+            (rider.wallet?.balance || 0) + order.riderFloatAmount;
+
+          rider.wallet = rider.wallet || {};
+          rider.wallet.balance = newBalance; // Safely update balance without wiping subdocument
+
+          await WalletTransaction.create({
+            userId: rider._id,
+            type: "credit",
+            amount: order.riderFloatAmount,
+            reason: `Float refunded — ${order.orderNumber} was cancelled`,
+            balanceAfter: newBalance,
+            source: "order_refund",
+            orderId: order._id,
+          });
+
+          order.riderFloatSettled = true;
+        }
+
+        // Update Rider Availability & Tracking
+        if (rider.riderProfile) {
+          rider.riderProfile.isBusy = false;
+
+          // Ensure array exists and avoid duplicate entries
+          if (!rider.riderProfile.riderCanceledOrder) {
+            rider.riderProfile.riderCanceledOrder = [];
+          }
+
+          const orderIdStr = order._id.toString();
+          const alreadyInList = rider.riderProfile.riderCanceledOrder.some(
+            (id) => id.toString() === orderIdStr,
+          );
+
+          if (!alreadyInList) {
+            rider.riderProfile.riderCanceledOrder.push(order._id);
+          }
+        }
+
+        await rider.save();
+      }
+    }
+
+    // 3. Reset Order State so it can be picked up by another rider
+    order.riderId = null;
+    order.isAssigned = false;
+    order.status = "pending";
+
+    await order.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Order Cancelled by Rider",
+      order,
+    });
+  } catch (err) {
+    console.error("CANCEL ORDER ERROR:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
 // =====================================
 // CONFIRM ORDER
 // =====================================
@@ -358,6 +469,7 @@ exports.acceptOrder = async (req, res) => {
         .json({ success: false, message: "Rider not found" });
     }
 
+    // Check for any existing active orders
     const activeOrders = await Order.find({
       riderId: req.user.id,
       status: {
@@ -370,45 +482,57 @@ exports.acceptOrder = async (req, res) => {
         ],
       },
     });
-    // console.log(activeOrders);
-    
-    if (activeOrders !== []) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Deliver your ongoing order first" });
-    }
 
-    if (rider.wallet.balance < order.totalAmount) {
-      return res.status(404).json({
+    // Check if Rider previously cancelled this order
+    const isCancelledByRider = rider.riderProfile?.riderCanceledOrder?.some(
+      (orderId) => orderId.toString() === req.params.id,
+    );
+
+    if (isCancelledByRider) {
+      return res.status(400).json({
         success: false,
-        message: "You have unsufficient balance to accept this order",
+        message:
+          "You have previously cancelled this order and cannot accept it again.",
       });
     }
 
+    if (activeOrders.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Deliver your ongoing order first",
+      });
+    }
+
+    if ((rider.wallet?.balance || 0) < order.totalAmount) {
+      return res.status(400).json({
+        success: false,
+        message: "You have insufficient balance to accept this order",
+      });
+    }
+
+    // Update Order Details
     order.riderId = rider._id;
     order.isAssigned = true;
     order.acceptedAt = new Date();
     order.status = "ongoing";
 
-    await order.save();
+    // Mark Rider Busy
+    if (rider.riderProfile) {
+      rider.riderProfile.isBusy = true;
+      await rider.save();
+    }
 
-    rider.riderProfile.isBusy = true;
-
-    await rider.save();
-
-    // Increment bonus session completed orders count
+    // Link Active Participation Session
     const activeParticipation = await RiderSessionParticipation.findOne({
       riderId: rider._id,
       status: "in_progress",
     });
 
     if (activeParticipation) {
-      activeParticipation.completedOrders =
-        (activeParticipation.completedOrders || 0) + 1;
       order.sessionParticipationId = activeParticipation._id;
-      await activeParticipation.save();
-      await order.save();
     }
+
+    await order.save();
 
     // WebSockets Notifications
     const io = req.app.get("io");
@@ -1105,22 +1229,74 @@ exports.trackOrder = async (req, res) => {
 // =====================================
 exports.getVendorIncomingOrders = async (req, res) => {
   try {
-    const id = req.user?.id;
-    const vendor = await Vendor.findById(id);
-
-    const allOrders = await Order.find({
-      status: "pending" || "confirmed",
+    const vendorId = req.user?.id;
+    const vendor = await Vendor.findById({ id: vendorId });
+    // Fetch all orders for this user
+    const orders = await Order.find({
       isAssigned: false,
-    })
-      .select("orderNumber createdAt items")
-      .populate("userId", "name email phone")
-      .populate("stops.vendorId", "name logo address contact location")
-      .sort({ createdAt: -1 });
+    }).sort({ createdAt: -1 });
+
+    const vendorOrders = orders.stops.map((vendor) => {
+      vendor.vendorId == vendorId;
+    });
+
+    // Filter orders to find pending/in-progress orders
+    const pendingOrders = orders
+      .filter((order) =>
+        [
+          "pending",
+          "confirmed",
+          "preparing",
+          "in_progress",
+          "on_the_way",
+        ].includes(order.status),
+      )
+      .select(
+        "orderNumber createdAt instructions items totalAmount deliveryFee status",
+      );
 
     return res.status(200).json({
       success: true,
-      count: allOrders.length,
-      orders: allOrders,
+      count: pendingOrders.length,
+      orders: pendingOrders,
+    });
+  } catch (err) {
+    console.error("GET AVAILABLE ORDERS ERROR:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// =====================================
+// Vendor Incoming Orders (Unassigned)
+// =====================================
+exports.getVendorOrders = async (req, res) => {
+  try {
+    const vendorId = req.user?.id;
+    const vendor = await Vendor.findById({ id: vendorId });
+    // Fetch all orders for this user
+    const orders = await Order.find({
+      isAssigned: true,
+    }).sort({ createdAt: -1 });
+
+    // Filter orders to find pending/in-progress orders
+    const pendingOrders = orders
+      .filter((order) =>
+        [
+          "pending",
+          "confirmed",
+          "preparing",
+          "in_progress",
+          "on_the_way",
+        ].includes(order.status),
+      )
+      .select(
+        "orderNumber createdAt instructions items totalAmount deliveryFee status",
+      );
+
+    return res.status(200).json({
+      success: true,
+      count: pendingOrders.length,
+      orders: pendingOrders,
     });
   } catch (err) {
     console.error("GET AVAILABLE ORDERS ERROR:", err);

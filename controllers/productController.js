@@ -679,7 +679,7 @@ exports.getProductsByCategory = async (req, res) => {
     const createFlexibleRegex = (input) => {
       if (!input) return null;
       // Convert hyphens/multiple spaces to a flexible whitespace pattern
-      const sanitized = input.trim().replace(/[-_\s]+/g, "[-\\s_]*");
+      const sanitized = input.trim().toLowerCase().replace(/[-_\s]+/g, "[-\\s_]*");
       return new RegExp(`^${sanitized}$`, "i");
     };
 

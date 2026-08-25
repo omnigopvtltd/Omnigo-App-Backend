@@ -66,7 +66,7 @@ const userSchema = new mongoose.Schema(
 
     // RIDER PROFILE & LIVE TRACKING
     riderProfile: {
-     categories: {
+      categories: {
         type: [
           {
             name: { type: String, required: true },
@@ -143,6 +143,13 @@ const userSchema = new mongoose.Schema(
         average: { type: Number, default: 0 },
         count: { type: Number, default: 0 },
       },
+
+      riderCanceledOrder: [
+        {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Order",
+        },
+      ],
 
       autoAcceptOrders: {
         type: Boolean,
