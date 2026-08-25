@@ -21,6 +21,7 @@ const {
   reorder,
   trackOrder,
   updateOrderStatus,
+  cancelRiderOrder,
 } = require("../controllers/orderController");
 
 
@@ -51,6 +52,7 @@ router.get("/rider/available", auth, getAvailableOrders);
 router.patch("/rider/auto-accept", auth, toggleAutoAccept);
 
 router.put("/rider/accept/:id", auth, role("rider"), acceptOrder);
+router.put("/rider/cancel/:id", auth, cancelRiderOrder);
 
 router.get("/rider/my-orders", auth, role("rider"), getRiderOrders);
 router.get("/rider/active-orders", auth, role("rider"), getRiderActiveOrders);
