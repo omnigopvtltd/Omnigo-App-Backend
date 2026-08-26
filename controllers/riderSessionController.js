@@ -560,6 +560,8 @@ exports.getRiderCompletedSessions = async (req, res) => {
   try {
     const riderId = req.user.id;
 
+    const {startDate} = req.query;
+    
     // Fetch all participation records where status is 'Completed' (queued)
     const completedSessions = await RiderSessionParticipation.find({
       riderId,

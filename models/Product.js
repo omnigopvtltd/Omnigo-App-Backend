@@ -59,7 +59,7 @@ const productSchema = new mongoose.Schema(
       count: { type: Number, default: 0 },
     },
     
-    isFavourite: { type: Boolean, default: true }, 
+    isFavourite: { type: Boolean, default: false }, 
     likes: [
       {
         type: mongoose.Schema.Types.ObjectId,

@@ -165,6 +165,18 @@ const vendorSchema = new mongoose.Schema(
         default: "",
       },
 
+      status: {
+        type: String,
+        enum: [
+          "pending",
+          "assigned",
+          "preparing",
+          "ready",
+          "completed"
+        ],
+        default: "",
+      },
+
       // ---------------------------------------------
       // Business Verification
       // ---------------------------------------------
