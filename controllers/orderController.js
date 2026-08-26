@@ -345,7 +345,7 @@ exports.cancelRiderOrder = async (req, res) => {
     // 3. Reset Order State so it can be picked up by another rider
     order.riderId = null;
     order.isAssigned = false;
-    order.status = "pending";
+    order.status = "confirmed";
 
     await order.save();
 
@@ -426,7 +426,7 @@ exports.getOngoingOrders = async (req, res) => {
 exports.getAvailableOrders = async (req, res) => {
   try {
     const allOrders = await Order.find({
-      status: "pending",
+      status: "confirmed",
       isAssigned: false,
     })
       .populate("userId", "name email phone")
@@ -628,14 +628,105 @@ exports.markDelivered = async (req, res) => {
     if (!order) {
       return res
         .status(404)
-        .json({ success: false, message: "Order not found" });
+        .json({ success: false, message: "Order not found or unassigned" });
     }
 
+    if (order.status === "delivered") {
+      return res
+        .status(400)
+        .json({ success: false, message: "Order is already delivered" });
+    }
+
+    // 1. Fetch Rider
+    const rider = await User.findById(req.user.id);
+    if (!rider) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Rider not found" });
+    }
+
+    if (rider.isBlocked) {
+      return res
+        .status(403)
+        .json({ success: false, message: "Your account is blocked" });
+    }
+
+    let bonusAwarded = false;
+    let bonusAmount = 0;
+
+    // 2. Process active session participation & check for completed bonus
+    const currentParticipation = await RiderSessionParticipation.findOne({
+      riderId: rider._id,
+      status: "in_progress",
+    }).populate("sessionId"); // Populating to access requiredOrders & bonusAmount from target session
+
+    if (currentParticipation) {
+      currentParticipation.completedOrders =
+        (currentParticipation.completedOrders || 0) + 1;
+
+      if (!currentParticipation.orderIds) {
+        currentParticipation.orderIds = [];
+      }
+      if (!currentParticipation.orderIds.includes(order._id)) {
+        currentParticipation.orderIds.push(order._id);
+      }
+
+      // Read target goals from session model (or participation model)
+      const targetOrders =
+        currentParticipation.requiredOrders ||
+        currentParticipation.sessionId?.requiredOrders ||
+        0;
+
+      const rewardBonus =
+        currentParticipation.bonusAmount ||
+        currentParticipation.sessionId?.bonusAmount ||
+        0;
+
+      // Check if session order goal is met
+      if (
+        targetOrders > 0 &&
+        currentParticipation.completedOrders >= targetOrders
+      ) {
+        currentParticipation.status = "completed";
+        currentParticipation.completedAt = new Date();
+        bonusAwarded = true;
+        bonusAmount = rewardBonus;
+
+        // Credit rider wallet balance with bonus
+        const currentBalance = rider.wallet?.balance || 0;
+        const newBalance = currentBalance + rewardBonus;
+
+        rider.wallet = rider.wallet || {};
+        rider.wallet.balance = newBalance;
+
+        // Create transaction history record
+        await WalletTransaction.create({
+          userId: rider._id,
+          type: "credit",
+          amount: rewardBonus,
+          reason: `Bonus reward earned for completing session goal (${currentParticipation.completedOrders}/${targetOrders} orders)`,
+          balanceAfter: newBalance,
+          source: "session_bonus",
+          orderId: order._id,
+        });
+      }
+
+      await currentParticipation.save();
+    }
+
+    // 3. Update Order Status
     order.status = "delivered";
     order.paymentStatus = "paid";
+    order.deliveredAt = new Date();
     await order.save();
 
-    // Live Socket Updates
+    // 4. Reset Rider Busy Status
+    if (rider.riderProfile) {
+      rider.riderProfile.isBusy = false;
+    }
+    await rider.save();
+
+    // 5. Live Socket Updates
     const io = req.app.get("io");
     if (io) {
       io.to(`order_${order._id}`).emit("orderTrackingStatusLive", {
@@ -648,17 +739,32 @@ exports.markDelivered = async (req, res) => {
         orderId: order._id,
         status: order.status,
       });
+
+      // Notify rider via socket if bonus was earned
+      if (bonusAwarded) {
+        io.to(`rider_${rider._id}`).emit("sessionBonusUnlocked", {
+          message: `Congratulations! You unlocked a bonus of PKR ${bonusAmount}`,
+          bonusAmount,
+        });
+      }
     }
 
-    // Fixed riderId scope bug
-    await processRiderBikeInstallment(req.user.id);
+    // Process Bike Installment deduction/tracking if applicable
+    if (typeof processRiderBikeInstallment === "function") {
+      await processRiderBikeInstallment(req.user.id);
+    }
 
     return res.status(200).json({
       success: true,
-      message: "Order delivered successfully",
+      message: bonusAwarded
+        ? `Order delivered & PKR ${bonusAmount} session bonus rewarded!`
+        : "Order delivered successfully",
+      bonusAwarded,
+      bonusAmount,
       order,
     });
   } catch (err) {
+    console.error("MARK DELIVERED ERROR:", err);
     return res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -778,8 +884,10 @@ exports.updateOrderStatus = async (req, res) => {
     const allowedStatuses = [
       "pending",
       "confirmed",
+      "on_the_way",
+      "assigned",
       "preparing",
-      "Shopping_at_omni_mart",
+      "ready",
       "arrived_at_vendor",
       "picked_up",
       "ongoing",

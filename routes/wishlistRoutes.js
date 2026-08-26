@@ -1,5 +1,4 @@
 const router = require("express").Router();
-
 const auth = require("../middleware/authMiddleware");
 
 const {
@@ -9,19 +8,16 @@ const {
   checkFavorite,
 } = require("../controllers/wishlistController");
 
-router.post("/toggle", auth, toggleFavorite);
+// POST /api/wishlist/toggle - Add/Remove favorite toggle
+router.patch("/toggle", auth, toggleFavorite);
 
+// GET /api/wishlist - Fetch all user favorites
 router.get("/", auth, getFavorites);
 
-router.get(
-  "/check/:productId",
-  auth,
-  checkFavorite
-);
-router.delete(
-  "/remove/:productId",
-  auth,
-  removeFavorite
-);
+// GET /api/wishlist/check/:productId - Check if a specific product is favorited
+router.get("/check/:productId", auth, checkFavorite);
+
+// DELETE /api/wishlist/:productId (or /remove/:productId) - Remove favorite directly
+router.delete("/remove/:productId", auth, removeFavorite);
 
 module.exports = router;
