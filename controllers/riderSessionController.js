@@ -556,7 +556,7 @@ exports.getBookedSessions = async (req, res) => {
 // =====================================
 // RIDER: GET COMPLETED SESSIONS
 // =====================================
-exports.getCompletedSessions = async (req, res) => {
+exports.getRiderCompletedSessions = async (req, res) => {
   try {
     const riderId = req.user.id;
 
@@ -572,6 +572,73 @@ exports.getCompletedSessions = async (req, res) => {
       success: true,
       count: completedSessions.length,
       data: completedSessions,
+    });
+  } catch (err) {
+    console.error("GET COMPLETED SESSIONS ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+// =====================================
+// RIDER: GET Cancelled SESSIONS
+// =====================================
+exports.getRiderCancelledSessions = async (req, res) => {
+  try {
+    const riderId = req.user.id;
+
+    // Fetch all participation records where status is 'Cancelled' (queued)
+    const cancelledSession = await RiderSessionParticipation.find({
+      riderId,
+      status: "cancelled",
+    })
+      .populate("sessionId") 
+      .sort({ createdAt: 1 }); 
+
+    return res.status(200).json({
+      success: true,
+      count: cancelledSession.length,
+      data: cancelledSession,
+    });
+  } catch (err) {
+    console.error("GET COMPLETED SESSIONS ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// =====================================
+// RIDER: GET SESSIONS HISTORY
+// =====================================
+exports.getRiderSessionHistory = async (req, res) => {
+  try {
+    const riderId = req.user.id;
+
+    // Fetch all participation records where status is 'Completed' (queued)
+    const completedSessions = await RiderSessionParticipation.find({
+      riderId,
+      status: "completed",
+    })
+      .populate("sessionId") 
+      .sort({ createdAt: 1 }); 
+
+    // Fetch all participation records where status is 'Cancelled' (queued)
+    const cancelledSession = await RiderSessionParticipation.find({
+      riderId,
+      status: "cancelled",
+    })
+      .populate("sessionId") 
+      .sort({ createdAt: 1 }); 
+
+      const getSessionHistory = [...completedSessions ,...cancelledSession];
+
+    return res.status(200).json({
+      success: true,
+      count: getSessionHistory.length,
+      data: getSessionHistory,
     });
   } catch (err) {
     console.error("GET COMPLETED SESSIONS ERROR:", err);

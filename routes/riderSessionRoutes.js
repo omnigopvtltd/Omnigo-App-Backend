@@ -16,7 +16,9 @@ const {
   getBookedSessions,
   getTodaySessions,
   extendSession,
-  getCompletedSessions,
+  getRiderCompletedSessions,
+  getRiderCancelledSessions,
+  getRiderSessionHistory,
 } = require("../controllers/riderSessionController");
 
 router.get("/", auth, getAllSessions);
@@ -29,7 +31,9 @@ router.get("/:id", auth, getSessionById);
 router.get("/my/status", auth, role("rider"), getMySessionStatus);
 router.post("/my/leave", auth, role("rider"), leaveSession);
 router.post("/:id/join", auth, role("rider"), joinSession);
-router.get("/my/completed", auth, role("rider"), getCompletedSessions);
+router.get("/my/completed", auth, role("rider"), getRiderCompletedSessions);
+router.get("/my/cancel", auth, role("rider"), getRiderCancelledSessions);
+router.get("/my/history", auth, role("rider"), getRiderSessionHistory);
 
 // Shared list/detail (role-aware inside the controller)
 
