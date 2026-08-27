@@ -13,6 +13,7 @@ const { OAuth2Client } = require("google-auth-library");
 const { body, validationResult } = require("express-validator");
 const Order = require("../models/Order");
 const Product = require("../models/Product");
+const Cart = require("../models/Cart");
 
 // ======================================================
 // GOOGLE CLIENT
@@ -751,6 +752,54 @@ exports.facebookLogin = async (req, res) => {
 };
 
 // ======================================================
+// LOGOUT
+// ======================================================
+exports.logout = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    const user = await User.findById(userId);
+
+    if (user) {
+      if (user.fcmToken) {
+        user.fcmToken = null;
+      }
+
+      if (userRole === "rider" && user.riderProfile) {
+        user.riderProfile.isOnline = false;
+        user.riderProfile.isBusy = false;
+      }
+
+      // Clear refresh tokens if you store them in DB/Schema
+      if (user.refreshToken) {
+        user.refreshToken = null;
+      }
+
+      await user.save();
+    }
+
+    // 2. Clear HTTP-Only authentication cookie (if cookies are used)
+    // res.clearCookie("token", {
+    //   httpOnly: true,
+    //   secure: process.env.NODE_ENV === "production",
+    //   sameSite: "strict",
+    // });
+
+    return res.status(200).json({
+      success: true,
+      message: `${userRole ? userRole.toUpperCase() : "User"} logged out successfully`,
+    });
+  } catch (err) {
+    console.error("LOGOUT ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error during logout",
+    });
+  }
+};
+
+// ======================================================
 // LOCATION (FIXED)
 // ======================================================
 exports.enableCurrentLocation = async (req, res) => {
@@ -1321,9 +1370,11 @@ exports.addZone = async (req, res) => {
     // =========================
     if (existingZone) {
       // FIX: Update country and city fields for existing documents
-      existingZone.country = country ? country.trim() : existingZone.country || "Pakistan";
+      existingZone.country = country
+        ? country.trim()
+        : existingZone.country || "Pakistan";
       existingZone.city = city ? city.trim() : existingZone.city || "";
-      
+
       if (typeof isActive !== "undefined") {
         existingZone.isActive = isActive;
       }
@@ -1334,9 +1385,8 @@ exports.addZone = async (req, res) => {
         ];
       }
 
-      console.log("Exisiting Zone",existingZone);
-      
-      
+      console.log("Exisiting Zone", existingZone);
+
       await existingZone.save();
 
       return res.status(200).json({
@@ -1345,8 +1395,8 @@ exports.addZone = async (req, res) => {
         zone: existingZone,
       });
     }
-    
-    console.log("data",country, city, zone, areas);
+
+    console.log("data", country, city, zone, areas);
     // =========================
     // CREATE NEW ZONE
     // =========================
@@ -1417,7 +1467,7 @@ exports.updateZone = async (req, res) => {
     const updatedZone = await Zone.findByIdAndUpdate(
       id,
       { $set: updateData },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
 
     if (!updatedZone) {
@@ -1456,7 +1506,7 @@ exports.toggleZoneStatus = async (req, res) => {
     const updatedZone = await Zone.findByIdAndUpdate(
       id,
       { $set: { isActive } },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
 
     if (!updatedZone) {
@@ -1940,14 +1990,13 @@ exports.getUsers = async (req, res) => {
   }
 };
 
-
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.params.id;
 
     // Fetch user details and verify role
     const user = await User.findOne({ _id: userId, role: "user" }).select(
-      "name email phone profilePicture addresses isBlocked"
+      "name email phone profilePicture addresses isBlocked",
     );
 
     if (!user) {
@@ -1962,15 +2011,22 @@ exports.getUserProfile = async (req, res) => {
 
     // Filter orders to find pending/in-progress orders
     const pendingOrders = orders.filter((order) =>
-      ["pending", "accepted", "preparing", "in_progress", "on_the_way"].includes(
-        order.status
-      )
+      [
+        "pending",
+        "accepted",
+        "preparing",
+        "in_progress",
+        "on_the_way",
+      ].includes(order.status),
     );
 
     // Fetch favorite/saved products directly where user's ID exists in the 'likes' array
     const savedItems = await Product.find({ likes: userId }).select(
-      "name price image category rating likes"
+      "name price image category rating likes",
     );
+
+    // Fetch favorite/saved products directly where user's ID exists in the 'likes' array
+    const cartItems = await Cart.find({ userId }).sort({ createdAt: -1 });
 
     const userProfile = {
       user,
@@ -1979,6 +2035,7 @@ exports.getUserProfile = async (req, res) => {
       PendingOrder: pendingOrders.length || 0,
       // savedItems,
       savedItemsCount: savedItems.length || 0,
+      cartItems: cartItems.length || 0,
     };
 
     return res.status(200).json({
@@ -1987,6 +2044,50 @@ exports.getUserProfile = async (req, res) => {
     });
   } catch (err) {
     console.error("GET USER PROFILE ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+exports.updateUserProfile = async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const { profilePicture } = req.body;
+
+    // Validate input
+    if (!profilePicture) {
+      return res.status(400).json({
+        success: false,
+        message: "Profile picture URL/path is required",
+      });
+    }
+
+    // Find and update user in MongoDB
+    const updatedUser = await User.findOneAndUpdate(
+      { _id: userId, role: "user" },
+      { $set: { profilePicture } },
+      { new: true, select: "-password" }, // 'new: true' returns updated doc, excludes password
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User profile not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Profile picture updated successfully",
+      user: {
+        id: updatedUser.id,
+        profilePicture: updatedUser.profilePicture,
+      },
+    });
+  } catch (err) {
+    console.error("UPDATE USER PROFILE ERROR:", err);
     return res.status(500).json({
       success: false,
       message: err.message,
@@ -2529,4 +2630,3 @@ exports.completeVendorProfile = async (req, res) => {
     });
   }
 };
-

@@ -65,7 +65,9 @@ const {
 
   // Vendor
   completeVendorProfile,
-  getUserProfile
+  getUserProfile,
+  logout,
+  updateUserProfile
  
 } = require("../controllers/authController");
 const { getRiderById } = require("../controllers/riderController");
@@ -77,6 +79,7 @@ const { getRiderById } = require("../controllers/riderController");
 // router.post("/signup", signup);
 router.post("/signup", validateSignup, signup);
 router.post("/login", login);
+router.post("/logout", auth, logout);
 
 // SOCIAL LOGIN
 router.post("/google-login", googleLogin);
@@ -88,6 +91,7 @@ router.post("/facebook-login", facebookLogin);
 router.get("/all-users", getAllUsers);
 router.get("/users", getUsers);
 router.get("/my-profile/:id", getUserProfile);
+router.put("/my-profile/update/:id", updateUserProfile);
 router.patch("/users/update/:id/status", updateUserStatus);
 
 

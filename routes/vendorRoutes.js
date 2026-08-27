@@ -100,12 +100,12 @@ router.post("/login", login);
 // @route   POST /api/vendor/google-login
 // @desc    Authenticate/Register vendor using Google OAuth
 // @access  Public
-router.post("/google-login", googleLogin);
+// router.post("/google-login", googleLogin);
 
 // @route   POST /api/vendor/facebook-login
 // @desc    Authenticate/Register vendor using Facebook OAuth
 // @access  Public
-router.post("/facebook-login", facebookLogin);
+// router.post("/facebook-login", facebookLogin);
 
 // ======================================================
 // VERIFICATION & OTP MANAGEMENT
