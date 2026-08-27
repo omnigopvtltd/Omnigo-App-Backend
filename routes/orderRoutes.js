@@ -24,6 +24,8 @@ const {
   cancelRiderOrder,
 } = require("../controllers/orderController");
 
+const {completeOrderDelivery} = require("../controllers/riderOrderFlowController");
+
 
 router.get("/all-orders", auth, role("admin", "superadmin"), getAllOrders);
 
@@ -57,7 +59,8 @@ router.put("/rider/cancel/:id", auth, cancelRiderOrder);
 router.get("/rider/my-orders", auth, role("rider"), getRiderOrders);
 router.get("/rider/active-orders", auth, role("rider"), getRiderActiveOrders);
 
-router.put("/rider/deliver/:id", auth, role("rider"), markDelivered);
+// router.put("/rider/deliver/:id", auth, role("rider"), markDelivered);
+router.put("/rider/deliver/:id", auth, role("rider"), completeOrderDelivery);
 router.post("/reorder/:id", auth, reorder);
 router.get("/track/:id", auth, trackOrder);
 router.put("/status/:id", auth, updateOrderStatus);
