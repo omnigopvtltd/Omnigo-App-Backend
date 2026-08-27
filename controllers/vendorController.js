@@ -212,7 +212,7 @@ exports.signup = async (req, res) => {
       return res.status(400).json({ success: false, errors: errors.array() });
     }
 
-    const { phone, password, name } = req.body;
+    const { phone, password, name, } = req.body;
 
     const normalizedPhone = String(phone).trim();
     // const normalizedEmail = email.toLowerCase().trim();
