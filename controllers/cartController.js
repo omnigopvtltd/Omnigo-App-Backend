@@ -51,7 +51,7 @@ exports.addToCart = async (req, res) => {
         // Add new item entry
         cart.items.push({
           productId: product._id,
-          orderFrom: newItem.orderFrom || product.orderFrom || product.category || "fast-food",
+          orderFrom: newItem.orderFrom || "fast-food",
           name: product.name,
           image: product.image,
           category: product.category,
@@ -108,7 +108,7 @@ exports.getCart = async (req, res) => {
 // ================= UPDATE CART =================
 exports.updateCart = async (req, res) => {
   try {
-    const io = getIO();
+    const io = req.app.get("io");
 
     const { productId, quantity } = req.body;
 
@@ -168,7 +168,7 @@ exports.updateCart = async (req, res) => {
 // ================= REMOVE ITEM =================
 exports.removeItem = async (req, res) => {
   try {
-    const io = getIO();
+    const io = req.app.get("io");
 
     const cart = await Cart.findOne({
       userId: req.user.id,
@@ -207,7 +207,7 @@ exports.removeItem = async (req, res) => {
 // ================= CLEAR CART =================
 exports.clearCart = async (req, res) => {
   try {
-    const io = getIO();
+    const io = req.app.get("io");
 
     const cart = await Cart.findOne({
       userId: req.user.id,
@@ -244,7 +244,7 @@ exports.clearCart = async (req, res) => {
 // ================= BULK ADD TO CART =================
 exports.bulkAddToCart = async (req, res) => {
   try {
-    const io = getIO();
+    const io = req.app.get("io");
 
     const { products } = req.body;
 
