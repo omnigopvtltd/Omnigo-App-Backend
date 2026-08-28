@@ -406,6 +406,7 @@ exports.getOngoingOrders = async (req, res) => {
           "arrived_at_vendor",
           "picked_up",
           "ongoing",
+          "on_the_way"
         ],
       },
     })
@@ -451,7 +452,7 @@ exports.acceptOrder = async (req, res) => {
   try {
     const order = await Order.findOne({
       _id: req.params.id,
-      status: "pending",
+      status: "confirmed",
       isAssigned: false,
     });
 
@@ -474,11 +475,11 @@ exports.acceptOrder = async (req, res) => {
       riderId: req.user.id,
       status: {
         $in: [
-          "confirmed",
           "preparing",
           "arrived_at_vendor",
           "picked_up",
           "ongoing",
+          "on_the_way"
         ],
       },
     });
@@ -514,7 +515,7 @@ exports.acceptOrder = async (req, res) => {
     order.riderId = rider._id;
     order.isAssigned = true;
     order.acceptedAt = new Date();
-    order.status = "ongoing";
+    order.status = "on_the_way";
 
     // Mark Rider Busy
     if (rider.riderProfile) {
@@ -597,6 +598,7 @@ exports.getRiderActiveOrders = async (req, res) => {
           "arrived_at_vendor",
           "picked_up",
           "ongoing",
+          "on_the_way"
         ],
       },
     })
@@ -991,7 +993,7 @@ exports.handleOrderAssignment = async (req, res) => {
       order.riderId = candidateRider._id;
       order.isAssigned = true;
       order.acceptedAt = new Date();
-      order.status = "ongoing";
+      order.status = "on_the_way";
       await order.save();
 
       // Mark rider busy so they don't get assigned another active order

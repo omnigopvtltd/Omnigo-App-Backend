@@ -9,7 +9,7 @@ const riderSessionSchema = new mongoose.Schema(
       enum: ["in_progress", "booked", "completed", "expired", "cancelled"],
       default: "in_progress",
     },
-    
+
     requiredOrders: { type: Number, required: true, min: 1, default: 6 },
     bonusAmount: { type: Number, required: true, min: 0 },
 
@@ -17,22 +17,36 @@ const riderSessionSchema = new mongoose.Schema(
     // "commitment" idea as the order float in Option 1).
     minWalletBalance: { type: Number, default: 0 },
 
-    // Optional time limit to finish once joined, in hours. Null = no limit.
-    timeLimitHours: { type: Number, default: null },
+    // Optional time limit to finish once joined, in hours. Default 8 hours for example
+    timeLimitHours: { type: Number, default: 8 },
 
     isActive: { type: Boolean, default: true },
-    startDate: { type: Date, required: true },
-    endDate: { type: Date, required: true },
+    startDate: { type: Date },
+    endDate: { type: Date },
   },
   { timestamps: true },
 );
 
-// riderSessionSchema.pre("validate", function (next) {
-riderSessionSchema.pre("validate", function () {
+// Pre-validate hook: Start Date aur End Date auto calculate karne ke liye
+riderSessionSchema.pre("validate", function (next) {
+  // 1. Agar startDate nahi di gayi, to current time ko startDate bana do
+  if (!this.startDate) {
+    this.startDate = new Date();
+  }
+
+  // 2. Agar timeLimitHours maujood hai, to endDate = startDate + timeLimitHours
+  if (this.timeLimitHours && !this.endDate) {
+    const end = new Date(this.startDate);
+    end.setHours(end.getHours() + this.timeLimitHours);
+    this.endDate = end;
+  }
+
+  // 3. Validation check
   if (this.endDate < this.startDate) {
     return next(new Error("endDate must be after startDate"));
   }
-  // next();
+
+  next();
 });
 
 riderSessionSchema.methods.isCurrentlyJoinable = function () {

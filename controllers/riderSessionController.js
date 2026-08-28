@@ -15,29 +15,59 @@ function isFullyVerified(rider) {
 exports.createSession = async (req, res) => {
   try {
     const {
-      title, description, requiredOrders, bonusAmount,
-      minWalletBalance, timeLimitHours, startDate, endDate, isActive,
+      title,
+      description,
+      requiredOrders,
+      bonusAmount,
+      minWalletBalance,
+      timeLimitHours,
+      startDate,
+      endDate,
+      isActive,
     } = req.body;
 
-    if (!title) return res.status(400).json({ success: false, message: "Title is required" });
+    if (!title)
+      return res
+        .status(400)
+        .json({ success: false, message: "Title is required" });
     if (!requiredOrders || requiredOrders < 1) {
-      return res.status(400).json({ success: false, message: "requiredOrders must be at least 1" });
+      return res
+        .status(400)
+        .json({ success: false, message: "requiredOrders must be at least 1" });
     }
     if (bonusAmount === undefined || bonusAmount < 0) {
-      return res.status(400).json({ success: false, message: "bonusAmount is required" });
+      return res
+        .status(400)
+        .json({ success: false, message: "bonusAmount is required" });
     }
     if (!startDate || !endDate) {
-      return res.status(400).json({ success: false, message: "startDate and endDate are required" });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "startDate and endDate are required",
+        });
     }
 
     const session = await RiderSession.create({
-      title, description, requiredOrders, bonusAmount,
+      title,
+      description,
+      requiredOrders,
+      bonusAmount,
       minWalletBalance: minWalletBalance || 0,
       timeLimitHours: timeLimitHours || null,
-      startDate, endDate, isActive,
+      startDate,
+      endDate,
+      isActive,
     });
 
-    return res.status(201).json({ success: true, message: "Session created successfully", session });
+    return res
+      .status(201)
+      .json({
+        success: true,
+        message: "Session created successfully",
+        session,
+      });
   } catch (err) {
     console.log("CREATE SESSION ERROR:", err);
     return res.status(500).json({ success: false, message: err.message });
@@ -66,7 +96,10 @@ exports.getAllSessions = async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
 
     const [sessions, total] = await Promise.all([
-      RiderSession.find(query).sort({ createdAt: -1 }).skip(skip).limit(limitNum),
+      RiderSession.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum),
       RiderSession.countDocuments(query),
     ]);
 
@@ -87,7 +120,10 @@ exports.getAllSessions = async (req, res) => {
 exports.getSessionById = async (req, res) => {
   try {
     const session = await RiderSession.findById(req.params.id);
-    if (!session) return res.status(404).json({ success: false, message: "Session not found" });
+    if (!session)
+      return res
+        .status(404)
+        .json({ success: false, message: "Session not found" });
     return res.status(200).json({ success: true, session });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -100,11 +136,21 @@ exports.getSessionById = async (req, res) => {
 exports.updateSession = async (req, res) => {
   try {
     const session = await RiderSession.findById(req.params.id);
-    if (!session) return res.status(404).json({ success: false, message: "Session not found" });
+    if (!session)
+      return res
+        .status(404)
+        .json({ success: false, message: "Session not found" });
 
     const fields = [
-      "title", "description", "requiredOrders", "bonusAmount",
-      "minWalletBalance", "timeLimitHours", "startDate", "endDate", "isActive",
+      "title",
+      "description",
+      "requiredOrders",
+      "bonusAmount",
+      "minWalletBalance",
+      "timeLimitHours",
+      "startDate",
+      "endDate",
+      "isActive",
     ];
     fields.forEach((field) => {
       if (req.body[field] !== undefined) session[field] = req.body[field];
@@ -112,7 +158,13 @@ exports.updateSession = async (req, res) => {
 
     await session.save();
 
-    return res.status(200).json({ success: true, message: "Session updated successfully", session });
+    return res
+      .status(200)
+      .json({
+        success: true,
+        message: "Session updated successfully",
+        session,
+      });
   } catch (err) {
     console.log("UPDATE SESSION ERROR:", err);
     return res.status(500).json({ success: false, message: err.message });
@@ -131,14 +183,20 @@ exports.deleteSession = async (req, res) => {
     if (activeParticipants > 0) {
       return res.status(400).json({
         success: false,
-        message: "Can't delete a session with riders currently in progress. Deactivate it instead.",
+        message:
+          "Can't delete a session with riders currently in progress. Deactivate it instead.",
       });
     }
 
     const session = await RiderSession.findByIdAndDelete(req.params.id);
-    if (!session) return res.status(404).json({ success: false, message: "Session not found" });
+    if (!session)
+      return res
+        .status(404)
+        .json({ success: false, message: "Session not found" });
 
-    return res.status(200).json({ success: true, message: "Session deleted successfully" });
+    return res
+      .status(200)
+      .json({ success: true, message: "Session deleted successfully" });
   } catch (err) {
     console.log("DELETE SESSION ERROR:", err);
     return res.status(500).json({ success: false, message: err.message });
@@ -222,10 +280,15 @@ exports.deleteSession = async (req, res) => {
 exports.joinSession = async (req, res) => {
   try {
     const rider = await User.findOne({ _id: req.user.id, role: "rider" });
-    if (!rider) return res.status(404).json({ success: false, message: "Rider not found" });
+    if (!rider)
+      return res
+        .status(404)
+        .json({ success: false, message: "Rider not found" });
 
     if (rider.isBlocked) {
-      return res.status(403).json({ success: false, message: "Your account is blocked" });
+      return res
+        .status(403)
+        .json({ success: false, message: "Your account is blocked" });
     }
     // if (!isFullyVerified(rider)) {
     //   return res.status(403).json({
@@ -249,12 +312,16 @@ exports.joinSession = async (req, res) => {
     if (existingActive && existingBooked) {
       return res.status(400).json({
         success: false,
-        message: "You already have an active session AND a booked session queued up.",
+        message:
+          "You already have an active session AND a booked session queued up.",
       });
     }
     const session = await RiderSession.findById(req.params.id);
     console.log(session);
-    if (!session) return res.status(404).json({ success: false, message: "Session not found" });
+    if (!session)
+      return res
+        .status(404)
+        .json({ success: false, message: "Session not found" });
 
     // if (!session.isCurrentlyJoinable()) {
     //   return res.status(400).json({ success: false, message: "This session isn't currently open to join" });
@@ -289,9 +356,10 @@ exports.joinSession = async (req, res) => {
     const startedAt = isBookedMode ? null : new Date();
 
     // Timer only calculates if it starts immediately
-    const expiresAt = (!isBookedMode && session.timeLimitHours)
-      ? new Date(Date.now() + session.timeLimitHours * 60 * 60 * 1000)
-      : null;
+    const expiresAt =
+      !isBookedMode && session.timeLimitHours
+        ? new Date(Date.now() + session.timeLimitHours * 60 * 60 * 1000)
+        : null;
 
     const participation = await RiderSessionParticipation.create({
       sessionId: session._id,
@@ -312,7 +380,12 @@ exports.joinSession = async (req, res) => {
     });
   } catch (err) {
     if (err.code === 11000) {
-      return res.status(400).json({ success: false, message: "You already have a participation record for this session." });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "You already have a participation record for this session.",
+        });
     }
     console.log("JOIN SESSION ERROR:", err);
     return res.status(500).json({ success: false, message: err.message });
@@ -330,7 +403,7 @@ exports.activateNextBookedSession = async (riderId) => {
 
   const session = bookedSession.sessionId;
   const now = new Date();
-  
+
   // Calculate expiry based on the activation time
   const expiresAt = session?.timeLimitHours
     ? new Date(now.getTime() + session.timeLimitHours * 60 * 60 * 1000)
@@ -352,11 +425,15 @@ exports.completeSession = async (req, res) => {
     // 1. Verify rider existence and status
     const rider = await User.findOne({ _id: req.user.id, role: "rider" });
     if (!rider) {
-      return res.status(404).json({ success: false, message: "Rider not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Rider not found" });
     }
 
     if (rider.isBlocked) {
-      return res.status(403).json({ success: false, message: "Your account is blocked" });
+      return res
+        .status(403)
+        .json({ success: false, message: "Your account is blocked" });
     }
 
     // 2. Find current active session
@@ -373,7 +450,10 @@ exports.completeSession = async (req, res) => {
     }
 
     // 3. Check for expiration
-    if (currentParticipation.expiresAt && new Date() > new Date(currentParticipation.expiresAt)) {
+    if (
+      currentParticipation.expiresAt &&
+      new Date() > new Date(currentParticipation.expiresAt)
+    ) {
       currentParticipation.status = "expired";
       await currentParticipation.save();
 
@@ -388,7 +468,9 @@ exports.completeSession = async (req, res) => {
     }
 
     // 4. Verify completion condition (Required orders met)
-    if (currentParticipation.completedOrders < currentParticipation.requiredOrders) {
+    if (
+      currentParticipation.completedOrders < currentParticipation.requiredOrders
+    ) {
       return res.status(400).json({
         success: false,
         message: `You haven't reached the required orders yet. (${currentParticipation.completedOrders}/${currentParticipation.requiredOrders})`,
@@ -437,10 +519,12 @@ exports.leaveSession = async (req, res) => {
   try {
     const participation = await RiderSessionParticipation.findOne({
       riderId: req.user.id,
-      status: "in_progress",
+      status: "in_progress" || "booked",
     });
     if (!participation) {
-      return res.status(404).json({ success: false, message: "You don't have an active session" });
+      return res
+        .status(404)
+        .json({ success: false, message: "You don't have an active session" });
     }
 
     participation.status = "abandoned";
@@ -450,7 +534,8 @@ exports.leaveSession = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "You've left the session. No bonus will be paid for this attempt.",
+      message:
+        "You've left the session. No bonus will be paid for this attempt.",
       participation,
     });
   } catch (err) {
@@ -464,14 +549,15 @@ exports.leaveSession = async (req, res) => {
 // =====================================
 exports.getMySessionStatus = async (req, res) => {
   try {
-
     const participation = await RiderSessionParticipation.findOne({
       riderId: req.user.id,
-      status: "in_progress",
+      status: "in_progress" || "booked",
     }).populate("sessionId", "title description requiredOrders bonusAmount");
 
     if (!participation) {
-      return res.status(200).json({ success: true, active: false, participation: null });
+      return res
+        .status(200)
+        .json({ success: true, active: false, participation: null });
     }
 
     // Auto-expire if a time limit was set and has passed
@@ -480,7 +566,9 @@ exports.getMySessionStatus = async (req, res) => {
       participation.abandonedAt = new Date();
       participation.abandonReason = "Time limit expired";
       await participation.save();
-      return res.status(200).json({ success: true, active: false, participation, expired: true });
+      return res
+        .status(200)
+        .json({ success: true, active: false, participation, expired: true });
     }
 
     return res.status(200).json({ success: true, active: true, participation });
@@ -537,8 +625,8 @@ exports.getBookedSessions = async (req, res) => {
       riderId,
       status: "booked",
     })
-      .populate("sessionId") 
-      .sort({ createdAt: 1 }); 
+      .populate("sessionId")
+      .sort({ createdAt: 1 });
 
     return res.status(200).json({
       success: true,
@@ -560,15 +648,15 @@ exports.getRiderCompletedSessions = async (req, res) => {
   try {
     const riderId = req.user.id;
 
-    const {startDate} = req.query;
-    
+    const { startDate } = req.query;
+
     // Fetch all participation records where status is 'Completed' (queued)
     const completedSessions = await RiderSessionParticipation.find({
       riderId,
       status: "completed",
     })
-      .populate("sessionId") 
-      .sort({ createdAt: 1 }); 
+      .populate("sessionId")
+      .sort({ createdAt: 1 });
 
     return res.status(200).json({
       success: true,
@@ -595,8 +683,8 @@ exports.getRiderCancelledSessions = async (req, res) => {
       riderId,
       status: "cancelled",
     })
-      .populate("sessionId") 
-      .sort({ createdAt: 1 }); 
+      .populate("sessionId")
+      .sort({ createdAt: 1 });
 
     return res.status(200).json({
       success: true,
@@ -624,18 +712,18 @@ exports.getRiderSessionHistory = async (req, res) => {
       riderId,
       status: "completed",
     })
-      .populate("sessionId") 
-      .sort({ createdAt: 1 }); 
+      .populate("sessionId")
+      .sort({ createdAt: 1 });
 
     // Fetch all participation records where status is 'Cancelled' (queued)
     const cancelledSession = await RiderSessionParticipation.find({
       riderId,
       status: "cancelled",
     })
-      .populate("sessionId") 
-      .sort({ createdAt: 1 }); 
+      .populate("sessionId")
+      .sort({ createdAt: 1 });
 
-      const getSessionHistory = [...completedSessions ,...cancelledSession];
+    const getSessionHistory = [...completedSessions, ...cancelledSession];
 
     return res.status(200).json({
       success: true,
@@ -652,7 +740,7 @@ exports.getRiderSessionHistory = async (req, res) => {
 };
 
 // =====================================
-// ADMIN: GET COMINNG SOON SESSIONS 
+// ADMIN: GET COMINNG SOON SESSIONS
 // =====================================
 exports.getComingSoonSessions = async (req, res) => {
   try {
@@ -666,7 +754,7 @@ exports.getComingSoonSessions = async (req, res) => {
     }).select("sessionId");
 
     const excludeSessionIds = activeOrBookedParticipations.map(
-      (p) => p.sessionId
+      (p) => p.sessionId,
     );
 
     // 2. Query upcoming sessions:
@@ -696,7 +784,7 @@ exports.getComingSoonSessions = async (req, res) => {
   }
 };
 // =====================================
-// ADMIN: GET TODAY's SESSIONS 
+// ADMIN: GET TODAY's SESSIONS
 // =====================================
 exports.getTodaySessions = async (req, res) => {
   try {
@@ -720,7 +808,7 @@ exports.getTodaySessions = async (req, res) => {
           status: "completed",
           isActive: false,
         },
-      }
+      },
     );
 
     // 3. Fetch active sessions scheduled for today that haven't ended yet
@@ -797,16 +885,26 @@ exports.cancelBookedSession = async (req, res) => {
 // =====================================
 exports.extendSession = async (req, res) => {
   try {
-    const { extendHours } = req.body
-    const session = await RiderSession.findById(req.params.id).select("timeLimitHours");
-    if (!session) return res.status(404).json({ success: false, message: "Session not found" });
+    const { extendHours } = req.body;
+    const session = await RiderSession.findById(req.params.id).select(
+      "timeLimitHours",
+    );
+    if (!session)
+      return res
+        .status(404)
+        .json({ success: false, message: "Session not found" });
 
-   
     if (extendHours !== undefined) session.timeLimitHours = extendHours;
 
     await session.save();
 
-    return res.status(200).json({ success: true, message: "Session updated successfully", session });
+    return res
+      .status(200)
+      .json({
+        success: true,
+        message: "Session updated successfully",
+        session,
+      });
   } catch (err) {
     console.log("UPDATE SESSION ERROR:", err);
     return res.status(500).json({ success: false, message: err.message });
