@@ -100,7 +100,7 @@ exports.completeOrderDelivery = async (req, res) => {
     const order = await Order.findOne({
       _id: req.params.id,
       riderId: req.user.id,
-      status: "ongoing",
+      status: "on_the_way" || "ongoing",
     });
     if (!order) {
       return res.status(404).json({ success: false, message: "Order not found" });
@@ -155,6 +155,7 @@ exports.completeOrderDelivery = async (req, res) => {
 // Shared with riderSessionController's internal logic — kept here to avoid a
 // circular require, since order delivery is what drives session progress.
 async function advanceSessionProgress(participationId, orderId) {
+  
   const participation = await RiderSessionParticipation.findById(participationId);
   if (!participation || participation.status !== "in_progress") return null;
 
