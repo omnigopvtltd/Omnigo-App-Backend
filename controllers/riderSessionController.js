@@ -41,12 +41,10 @@ exports.createSession = async (req, res) => {
         .json({ success: false, message: "bonusAmount is required" });
     }
     if (!startDate || !endDate) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "startDate and endDate are required",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "startDate and endDate are required",
+      });
     }
 
     const session = await RiderSession.create({
@@ -61,13 +59,11 @@ exports.createSession = async (req, res) => {
       isActive,
     });
 
-    return res
-      .status(201)
-      .json({
-        success: true,
-        message: "Session created successfully",
-        session,
-      });
+    return res.status(201).json({
+      success: true,
+      message: "Session created successfully",
+      session,
+    });
   } catch (err) {
     console.log("CREATE SESSION ERROR:", err);
     return res.status(500).json({ success: false, message: err.message });
@@ -158,13 +154,11 @@ exports.updateSession = async (req, res) => {
 
     await session.save();
 
-    return res
-      .status(200)
-      .json({
-        success: true,
-        message: "Session updated successfully",
-        session,
-      });
+    return res.status(200).json({
+      success: true,
+      message: "Session updated successfully",
+      session,
+    });
   } catch (err) {
     console.log("UPDATE SESSION ERROR:", err);
     return res.status(500).json({ success: false, message: err.message });
@@ -380,12 +374,10 @@ exports.joinSession = async (req, res) => {
     });
   } catch (err) {
     if (err.code === 11000) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "You already have a participation record for this session.",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "You already have a participation record for this session.",
+      });
     }
     console.log("JOIN SESSION ERROR:", err);
     return res.status(500).json({ success: false, message: err.message });
@@ -814,11 +806,13 @@ exports.getTodaySessions = async (req, res) => {
     // 3. Fetch active sessions scheduled for today that haven't ended yet
     const todaySessions = await RiderSession.find({
       isActive: true,
-      startDate: {
-        $gte: startOfToday,
-        $lte: endOfToday,
-      },
-      endDate: { $gte: now }, // Ensures only ongoing or upcoming sessions for today are returned
+      startDate: { $lte: now },
+      endDate: { $gte: now },
+      // startDate: {
+      //   $gte: startOfToday,
+      //   $lte: endOfToday,
+      // },
+      // endDate: { $gte: now }, // Ensures only ongoing or upcoming sessions for today are returned
     }).sort({ startDate: 1 });
 
     return res.status(200).json({
@@ -898,13 +892,11 @@ exports.extendSession = async (req, res) => {
 
     await session.save();
 
-    return res
-      .status(200)
-      .json({
-        success: true,
-        message: "Session updated successfully",
-        session,
-      });
+    return res.status(200).json({
+      success: true,
+      message: "Session updated successfully",
+      session,
+    });
   } catch (err) {
     console.log("UPDATE SESSION ERROR:", err);
     return res.status(500).json({ success: false, message: err.message });
