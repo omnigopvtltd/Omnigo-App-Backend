@@ -2054,13 +2054,21 @@ exports.getUserProfile = async (req, res) => {
 exports.updateUserProfile = async (req, res) => {
   try {
     const userId = req.params.id;
-    const { profilePicture } = req.body;
+
+    let profilePicture;
+    
+    if (req.file) {
+      // Relative URL path for frontend access (e.g. /uploads/image-12345.jpg)
+      profilePicture = `/uploads/${req.file.filename}`;
+    } else if (req.body?.profilePicture) {
+      profilePicture = req.body.profilePicture;
+    }
 
     // Validate input
     if (!profilePicture) {
       return res.status(400).json({
         success: false,
-        message: "Profile picture URL/path is required",
+        message: "Profile picture file or URL string is required",
       });
     }
 
@@ -2068,7 +2076,7 @@ exports.updateUserProfile = async (req, res) => {
     const updatedUser = await User.findOneAndUpdate(
       { _id: userId, role: "user" },
       { $set: { profilePicture } },
-      { new: true, select: "-password" }, // 'new: true' returns updated doc, excludes password
+      { new: true, select: "-password" }
     );
 
     if (!updatedUser) {

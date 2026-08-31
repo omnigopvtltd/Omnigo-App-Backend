@@ -16,7 +16,7 @@ function initSocket(server) {
   });
 
   io.use((socket, next) => {
-    const userId = socket.handshake.auth?.userId || socket.handshake.query?.userId;
+    const userId = socket.handshake.auth?.user.id || socket.handshake.query?.userId;
     if (!userId) return next(new Error("Authentication error: userId required"));
     socket.userId = userId;
     next();
@@ -31,6 +31,7 @@ function initSocket(server) {
     
     // Unified room naming convention: "order:123"
     socket.join(`user:${userId}`);
+    socket.join(userId);
 
     // Standardized Room Handlers across all roles
     socket.on("joinOrderRoom", (orderId) => {
@@ -56,9 +57,14 @@ function initSocket(server) {
     });
   });
 
-  // Attach Sub-Socket Modules
-  trackingSocket(io);
-  chatSocket(io);
+  // // Attach Sub-Socket Modules
+  // trackingSocket(io);
+  // chatSocket(io);
+
+  // return io;
+  // Attach Sub-Socket Modules with onlineUsers Map passed cleanly
+  if (typeof trackingSocket === "function") trackingSocket(io, onlineUsers);
+  if (typeof chatSocket === "function") chatSocket(io, onlineUsers);
 
   return io;
 }
