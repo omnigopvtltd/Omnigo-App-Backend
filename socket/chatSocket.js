@@ -1,17 +1,14 @@
 const admin = require("firebase-admin");
 require("../config/firebase");
 // const { initializeApp, cert, getApps } = require("firebase-admin/app");
-const { getMessaging } = require("firebase-admin/messaging")
+const { getMessaging } = require("firebase-admin/messaging");
 const path = require("path");
 const Message = require("../models/Message");
 const Conversation = require("../models/Conversation");
 const CallLog = require("../models/callLog");
-const User = require("../models/User"); 
-
-const serviceAccountPath = path.join(
-  __dirname,
-  "serviceAccountKey.json",
-);
+const User = require("../models/User");
+const onlineUsers  = require("../socket");
+// const serviceAccountPath = path.join(__dirname, "serviceAccountKey.json");
 
 async function handleOfflineNotification(
   receiverId,
@@ -20,7 +17,7 @@ async function handleOfflineNotification(
   messageType,
 ) {
   try {
-    // 1. Find token of Receiver 
+    // 1. Find token of Receiver
     const user = await User.findById(receiverId);
     const fcmToken =
       "cb3sjZ5J9QIxGNWRk4lMFE:APA91bGHjkGgfP3D4Y8IvP6KeGwI636astufuR44zxZ0JMXkEPb6bo_gdxfn_Nbq6UVgaw0jEfS92_SXwm97DxYw9LZLqstqTliNLgys0gw2mgEqvV-e0E4"; // Hardcoded for testing purposes
@@ -54,10 +51,10 @@ async function handleOfflineNotification(
   }
 }
 
-const onlineUsers = new Map();
+// const onlineUsers = new Map();
 const activeCallSessions = new Map();
 
-const chatSocket = (io) => {
+const chatSocket = (io, onlineUsers) => {
   io.on("connection", (socket) => {
     console.log(`>>> Chat Connected Subsystem: ${socket.id}`);
 
@@ -100,7 +97,7 @@ const chatSocket = (io) => {
 
         // Dynamic Room Checking System logic adjustment
         let isReceiverInRoom = false;
-        if (roomClients) {
+        if (roomClients && onlineUsers) {
           // Check if receiver's socket ID is linked and present in room array
           const targetSocketId = onlineUsers.get(data.receiver);
           if (targetSocketId && roomClients.has(targetSocketId)) {
