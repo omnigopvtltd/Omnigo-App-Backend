@@ -139,6 +139,34 @@ exports.completeOrderDelivery = async (req, res) => {
       sessionResult = await advanceSessionProgress(order.sessionParticipationId, order._id);
     }
 
+    // 2. Get Global Socket IO instance
+    const io = req.app.get("io");
+
+    // 3. Emit Sockets directly from Controller!
+    // Broadcast to Specific User
+    io.to(`user:${order.userId}`).emit("orderStatusUpdated", {
+      orderId: order._id,
+      status: "Delivered",
+      message: "Your order has been delivered successfully"
+    });
+
+     // FCM Push Notification
+    const customer = await User.findById(order.userId);
+    if (customer?.fcmToken) {
+      await sendNotification(
+        customer.fcmToken,
+        "Order Delivered",
+        `Your order has delivered  #${order.orderNumber}`,
+        {
+          riderId: rider._id.toString(),
+          riderName: rider.name || "",
+          riderEmail: rider.email || "",
+          riderPhone: rider.phone || "",
+        },
+      );
+    }
+
+
     return res.status(200).json({
       success: true,
       message: "Order delivered — wallet credited",

@@ -250,6 +250,34 @@ exports.cancelOrder = async (req, res) => {
 
     await order.save();
 
+    // 2. Get Global Socket IO instance
+    const io = req.app.get("io");
+
+    // 3. Emit Sockets directly from Controller!
+    // Broadcast to Specific User
+    io.to(`user:${order.userId}`).emit("orderStatusUpdated", {
+      orderId: order._id,
+      status: "cancelled",
+      message: "Your order has cancelled."
+    });
+
+     // FCM Push Notification
+    const customer = await User.findById(order.userId);
+    if (customer?.fcmToken) {
+      await sendNotification(
+        customer.fcmToken,
+        "Order Cancelled",
+        `Your order has cancelled #${order.orderNumber}`,
+        {
+          riderId: rider._id.toString(),
+          riderName: rider.name || "",
+          riderEmail: rider.email || "",
+          riderPhone: rider.phone || "",
+        },
+      );
+    }
+
+
     return res.status(200).json({
       success: true,
       message: "Order Cancelled by Customer",
@@ -384,6 +412,36 @@ exports.confirmOrder = async (req, res) => {
 
     order.status = "confirmed";
     await order.save();
+
+    // 2. Get Global Socket IO instance
+    const io = req.app.get("io");
+
+    // 3. Emit Sockets directly from Controller!
+    // Broadcast to all Riders
+    io.to("role:rider").emit("newRiderOrderAvailable", order);
+
+    // Broadcast to Specific User
+    io.to(`user:${order.userId}`).emit("orderStatusUpdated", {
+      orderId: order._id,
+      status: "confirmed",
+      message: "Your order has been confirmed by the vendor!"
+    });
+
+     // FCM Push Notification
+    const customer = await User.findById(order.userId);
+    if (customer?.fcmToken) {
+      await sendNotification(
+        customer.fcmToken,
+        "Order Confirmed",
+        `Your order has confirmed #${order.orderNumber}`,
+        // {
+        //   riderId: rider._id.toString(),
+        //   riderName: rider.name || "",
+        //   riderEmail: rider.email || "",
+        //   riderPhone: rider.phone || "",
+        // },
+      );
+    }
 
     return res
       .status(200)
