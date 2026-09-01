@@ -2059,7 +2059,7 @@ exports.updateUserProfile = async (req, res) => {
     
     if (req.file) {
       // Relative URL path for frontend access (e.g. /uploads/image-12345.jpg)
-      profilePicture = `/uploads/${req.file.filename}`;
+      profilePicture = `https://omnigo-app-backend-production.up.railway.app/uploads/${req.file.filename}`;
     } else if (req.body?.profilePicture) {
       profilePicture = req.body.profilePicture;
     }
