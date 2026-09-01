@@ -4,6 +4,7 @@ const Vendor = require("../models/Vendor");
 const VendorBranch = require("../models/VendorBranch");
 const OTP = require("../models/Otp");
 
+const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const axios = require("axios");
@@ -117,7 +118,7 @@ exports.sendOTP = async (req, res) => {
       new: true,
     });
 
-    console.log("OTP", otp, otpData)
+    console.log("OTP", otp, otpData);
 
     if (type === "email") {
       await transporter.sendMail({
@@ -194,6 +195,17 @@ exports.verifyOTP = async (req, res) => {
   }
 };
 
+// Random Password Generator (e.g. "Omnigo@8a3f9")
+const generateRandomPassword = (length = 8) => {
+  const chars =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$";
+  let password = "Omnigo@"; // Prefix for brand consistency
+  for (let i = 0; i < length; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return password;
+};
+
 // ======================================================
 // SIGNUP & LOGIN
 // ======================================================
@@ -212,46 +224,177 @@ exports.signup = async (req, res) => {
       return res.status(400).json({ success: false, errors: errors.array() });
     }
 
-    const { phone, password, name, } = req.body;
+    const {
+      phone,
+      password,
+      name,
+      // Vendor Documents & Verification
+      cnicNumber,
+      cnicFrontPicture,
+      cnicBackPicture,
+      businessRegistrationDocument,
+      foodLicenseDocument,
+      // Vendor Profile Details
+      businessName,
+      businessType,
+      businessPhone,
+      businessEmail,
+      category,
+      logo,
+      coverImage,
+      description,
+      businessRegistrationNumber,
+      taxNumber,
+      foodLicenseNumber,
+      // Payout Configuration
+      payoutBankName,
+      payoutAccountTitle,
+      payoutAccountNumber,
+      // Initial Branch Details
+      branchData,
+    } = req.body;
 
     const normalizedPhone = String(phone).trim();
-    // const normalizedEmail = email.toLowerCase().trim();
 
-    const existingVendor = await Vendor.findOne({
-      // $or: [{ phone: normalizedPhone }, { email: normalizedEmail }],
-      $or: [{ phone: normalizedPhone }],
-    });
-
+    // 1. Check existing vendor
+    const existingVendor = await Vendor.findOne({ phone: normalizedPhone });
     if (existingVendor) {
       return res.status(400).json({
         success: false,
-        message:
-          existingVendor.phone === normalizedPhone
-            && "Phone number already registered to a vendor"
-            // : "Email already registered to a vendor",
+        message: "Phone number already registered to a vendor",
       });
     }
 
-    const hash = await bcrypt.hash(password, 12);
+    // 2. AUTO-GENERATE RANDOM PASSWORD
+    const rawAutoPassword = generateRandomPassword(6); // Generates e.g., "Omnigo@k79f2"
+    const hash = await bcrypt.hash(rawAutoPassword, 12);
 
+    // 2. Build vendorData Object cleanly (No 'vendor' variable reference before creation!)
     const vendorData = {
       phone: normalizedPhone,
-      // email: normalizedEmail,
       password: hash,
       name: name || `Vendor_${normalizedPhone.slice(-4)}`,
       isPhoneVerified: false,
       isEmailVerified: false,
-      verificationStatus: "pending",
-      // vendorProfile: {
-      //   businessName: businessName || "",
-      // },
+      verificationStatus: "pending", // Default to pending until Admin approves
+      isProfileCompleted: true,
+      businessRegistrationDocument: businessRegistrationDocument || null,
+      foodLicenseDocument: foodLicenseDocument || null,
+      cnic: {
+        number: cnicNumber || "",
+        frontPicture: cnicFrontPicture || null,
+        backPicture: cnicBackPicture || null,
+      },
+      vendorProfile: {
+        businessName: businessName || name || "",
+        businessPhone: businessPhone || normalizedPhone,
+        businessEmail: businessEmail || "",
+        businessType: businessType || "restaurant",
+        category: category || "fast-food",
+        logo: logo || null,
+        coverImage: coverImage || null,
+        description: description || "",
+        businessRegistrationNumber: businessRegistrationNumber || "",
+        taxNumber: taxNumber || "",
+        foodLicenseNumber: foodLicenseNumber || "",
+      },
+      payoutInformation: {
+        bankName: payoutBankName || "",
+        accountTitle: payoutAccountTitle || "",
+        accountNumber: payoutAccountNumber || "",
+      },
     };
 
+    // 3. Save Vendor to MongoDB
     const vendor = await Vendor.create(vendorData);
+
+    // 4. Create Initial Operational Branch (If Provided)
+    let defaultBranch = null;
+    if (branchData) {
+      const {
+        branchName,
+        phone: branchPhone,
+        address,
+        area,
+        city,
+        longitude,
+        latitude,
+      } = branchData;
+
+      defaultBranch = await VendorBranch.create({
+        vendorId: vendor._id,
+        branchName: branchName || `${businessName || vendor.name} Main Branch`,
+        phone: branchPhone || vendor.phone,
+        address: address || "",
+        area: area || "",
+        city: city || "",
+        location: {
+          type: "Point",
+          coordinates: [Number(longitude) || 0, Number(latitude) || 0],
+        },
+        isActive: true,
+        isOpen: true,
+      });
+    }
+
+    // =========================================================================
+    // 📡 5. REAL-TIME SOCKET EMIT & PUSH NOTIFICATIONS
+    // =========================================================================
+    const io = req.app.get("io");
+
+    const payloadData = {
+      vendorId: vendor._id,
+      businessName: vendor.vendorProfile.businessName,
+      logo: vendor.vendorProfile.logo,
+      category: vendor.vendorProfile.category,
+      branch: defaultBranch,
+    };
+
+    if (io) {
+      // 1. Emit to ALL Connected Users (Real-time update on user main screen)
+      io.to("role:user").emit("newVendorAdded", {
+        message: "A new vendor has joined Omnigo!",
+        vendor: payloadData,
+      });
+
+      // 2. Emit to Admin Panel (For verification review)
+      io.to("role:admin").emit("newVendorRegisteredAdmin", {
+        message: "New vendor registered and pending approval",
+        vendorId: vendor._id,
+      });
+    }
+
+    // 3. Send Push Notifications via FCM (If FCM Service is configured)
+    try {
+      // Send FCM to Users
+      await sendFCMNotificationToTopic({
+        topic: "users",
+        title: `New ${vendor.vendorProfile.businessType} On Omnigo!`,
+        body: `${vendor.vendorProfile.businessName} is now available near you. Order now!`,
+        data: { type: "NEW_VENDOR", vendorId: String(vendor._id) },
+      });
+
+      // Send FCM to Riders
+      await sendFCMNotificationToTopic({
+        topic: "riders",
+        title: "New Partner Onboarded 🚀",
+        body: `${vendor.vendorProfile.businessName} joined Omnigo. Get ready for new pickup orders!`,
+        data: { type: "NEW_VENDOR_RIDER", vendorId: String(vendor._id) },
+      });
+    } catch (notifErr) {
+      console.error("FCM Notification Error (Non-blocking):", notifErr.message);
+    }
+
+    // Response Preparation
     const vendorResponse = vendor.toObject();
     delete vendorResponse.password;
 
-    return sendVendorResponse(res, "Vendor signup successful", vendorResponse);
+    return sendVendorResponse(
+      res,
+      "Vendor signup successful",
+      { vendor: vendorResponse, branch: defaultBranch },
+      201,
+    );
   } catch (err) {
     console.error("VENDOR SIGNUP ERROR:", err);
     return res.status(500).json({ success: false, message: err.message });
@@ -529,7 +672,7 @@ exports.completeVendorProfile = async (req, res) => {
       businessRegistrationNumber,
       taxNumber,
       foodLicenseNumber,
-      
+
       // Payout Configuration
       payoutBankName,
       payoutAccountTitle,
@@ -553,7 +696,6 @@ exports.completeVendorProfile = async (req, res) => {
     if (email) vendor.email = email;
     if (phone) vendor.phone = phone;
 
-
     // 2. KYC Verification Payload
     vendor.cnic = {
       number: cnicNumber || vendor.cnic?.number || "",
@@ -568,18 +710,22 @@ exports.completeVendorProfile = async (req, res) => {
     vendor.vendorProfile = {
       ...vendor.vendorProfile,
       businessName: businessName || vendor.vendorProfile?.businessName || name,
-      businessPhone: businessPhone || vendor.vendorProfile?.businessPhone || phone,
+      businessPhone:
+        businessPhone || vendor.vendorProfile?.businessPhone || phone,
       businessEmail: businessEmail || vendor.vendorProfile?.businessEmail || "",
       businessType:
         businessType || vendor.vendorProfile?.businessType || "restaurant",
-      category:
-        category || vendor.vendorProfile?.category || "fast-food",
+      category: category || vendor.vendorProfile?.category || "fast-food",
       logo: logo || vendor.vendorProfile?.logo || null,
       coverImage: coverImage || vendor.vendorProfile?.coverImage || null,
       description: description || vendor.vendorProfile?.description || "",
-      businessRegistrationNumber: businessRegistrationNumber || vendor.vendorProfile?.businessRegistrationNumber || "",
+      businessRegistrationNumber:
+        businessRegistrationNumber ||
+        vendor.vendorProfile?.businessRegistrationNumber ||
+        "",
       taxNumber: taxNumber || vendor.vendorProfile?.taxNumber || "",
-      foodLicenseNumber: foodLicenseNumber || vendor.vendorProfile?.foodLicenseNumber || "",
+      foodLicenseNumber:
+        foodLicenseNumber || vendor.vendorProfile?.foodLicenseNumber || "",
     };
 
     // 4. Financial Details
@@ -672,8 +818,7 @@ exports.getAllVendors = async (req, res) => {
 // =======================
 exports.getVendorById = async (req, res) => {
   try {
-
-     const vendorId = req.params.vendorId || req.user?.id;
+    const vendorId = req.params.vendorId || req.user?.id;
 
     if (!vendorId) {
       return res.status(400).json({
@@ -681,7 +826,6 @@ exports.getVendorById = async (req, res) => {
         message: "Vendor ID is required",
       });
     }
-
 
     const vendor = await Vendor.findById(vendorId);
     const vendorBranch = await VendorBranch.findById(vendorId);
@@ -716,7 +860,7 @@ exports.getVendorHomeScreenDetails = async (req, res) => {
 
     // 1. Fetch Vendor Profile details
     const vendor = await Vendor.findById(vendorId).select(
-      "name email phone vendorProfile.businessName vendorProfile.logo vendorProfile.coverImage verificationStatus isProfileCompleted"
+      "name email phone vendorProfile.businessName vendorProfile.logo vendorProfile.coverImage verificationStatus isProfileCompleted",
     );
 
     if (!vendor) {
@@ -728,7 +872,7 @@ exports.getVendorHomeScreenDetails = async (req, res) => {
 
     // 2. Fetch all Operational Branches associated with this Vendor
     const branches = await VendorBranch.find({ vendorId }).select(
-      "branchName phone address city area isOpen isActive location openingHours"
+      "branchName phone address city area isOpen isActive location openingHours",
     );
 
     return res.status(200).json({

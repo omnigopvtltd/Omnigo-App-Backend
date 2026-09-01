@@ -7,26 +7,26 @@ const vendorSchema = new mongoose.Schema(
     // ACCOUNT / SIGNUP INFORMATION
     // =====================================================
 
-    // name: {
-    //   type: String,
-    //   required: true,
-    //   trim: true,
-    // },
+    businessName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
 
-    // email: {
-    //   type: String,
-    //   // required: true,
-    //   unique: true,
-    //   lowercase: true,
-    //   trim: true,
-    // },
+    businessEmail: {
+      type: String,
+      // required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+    },
 
     password: {
       type: String,
       required: true,
     },
 
-    phone: {
+    businessPhone: {
       type: String,
       required: true,
       unique: true,
@@ -106,7 +106,7 @@ const vendorSchema = new mongoose.Schema(
     // VENDOR / BUSINESS PROFILE
     // =====================================================
 
-    // vendorProfile: {
+    vendorProfile: {
       // ---------------------------------------------
       // Business Information
       // ---------------------------------------------
@@ -265,7 +265,7 @@ const vendorSchema = new mongoose.Schema(
         type: Boolean,
         default: false,
       },
-    // },
+    },
 
     // =====================================================
     // PAYMENT / PAYOUT INFORMATION
