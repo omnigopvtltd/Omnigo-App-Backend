@@ -458,6 +458,7 @@ exports.confirmOrder = async (req, res) => {
 exports.getOngoingOrders = async (req, res) => {
   try {
     const orders = await Order.find({
+      userId: req.user.id,
       status: {
         $in: [
           "confirmed",
