@@ -22,6 +22,8 @@ const {
   trackOrder,
   updateOrderStatus,
   cancelRiderOrder,
+  getVendorIncomingOrders,
+  getVendorOrders,
 } = require("../controllers/orderController");
 
 const {completeOrderDelivery} = require("../controllers/riderOrderFlowController");
@@ -67,4 +69,9 @@ router.put("/status/:id", auth, updateOrderStatus);
 router.patch("/status/:id", auth, updateOrderStatus);
 router.put("/:orderId/stops/:stopId/status", auth, updateOrderStatus);
 
+// vendor routes
+router.get("/vendor/orders", auth, role("vendor"), getVendorOrders);
+// router.get("/vendor/orders/:id", auth, role("vendor"), getOrderById);
+// router.put("/vendor/orders/:id/cancel", auth, role("vendor"), cancelOrder);
+// router.put("/vendor/orders/:id/confirm", auth, role("vendor"), confirmOrder);
 module.exports = router;

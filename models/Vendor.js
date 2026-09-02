@@ -69,7 +69,7 @@ const vendorSchema = new mongoose.Schema(
 
     cnicNumber: {
       type: String,
-      default: "",
+      required: true,
       trim: true,
     },
 
@@ -106,16 +106,10 @@ const vendorSchema = new mongoose.Schema(
     // VENDOR / BUSINESS PROFILE
     // =====================================================
 
-    vendorProfile: {
+    // vendorProfile: {
       // ---------------------------------------------
       // Business Information
       // ---------------------------------------------
-
-      businessName: {
-        type: String,
-        default: "",
-        trim: true,
-      },
 
       businessType: {
         type: String,
@@ -142,19 +136,6 @@ const vendorSchema = new mongoose.Schema(
         trim: true,
       },
 
-      businessEmail: {
-        type: String,
-        default: "",
-        lowercase: true,
-        trim: true,
-      },
-
-      businessPhone: {
-        type: String,
-        default: "",
-        trim: true,
-      },
-
       logo: {
         type: String,
         default: "",
@@ -174,7 +155,7 @@ const vendorSchema = new mongoose.Schema(
           "ready",
           "completed"
         ],
-        default: "",
+        default: "pending",
       },
 
       // ---------------------------------------------
@@ -196,17 +177,17 @@ const vendorSchema = new mongoose.Schema(
         default: "",
       },
 
-      businessRegistrationDocument: {
+      incorporationCertificate: {
         type: String,
         default: "",
       },
 
-      foodLicenseDocument: {
+      foodSafetyLicense: {
         type: String,
         default: "",
       },
 
-      taxDocument: {
+      ntnCertificate: {
         type: String,
         default: "",
       },
@@ -233,7 +214,7 @@ const vendorSchema = new mongoose.Schema(
         type: String,
         enum: [
           "draft",
-          "pending_review",
+          "pending",
           "approved",
           "rejected",
           "suspended",
@@ -265,7 +246,7 @@ const vendorSchema = new mongoose.Schema(
         type: Boolean,
         default: false,
       },
-    },
+    // },
 
     // =====================================================
     // PAYMENT / PAYOUT INFORMATION
