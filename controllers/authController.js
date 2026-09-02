@@ -2074,7 +2074,7 @@ exports.updateUserProfile = async (req, res) => {
 
     // Find and update user in MongoDB
     const updatedUser = await User.findOneAndUpdate(
-      { _id: userId, role: "user" },
+      { _id: userId },
       { $set: { profilePicture } },
       { new: true, select: "-password" }
     );
