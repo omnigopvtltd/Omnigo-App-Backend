@@ -8,6 +8,7 @@ const sendNotification = require("../utils/sendNotification");
 const { processRiderBikeInstallment } = require("../helpers/bikeInstallment");
 const Cart = require("../models/Cart");
 const WalletTransaction = require("../models/WalletTransaction");
+const Vendor = require("../models/Vendor");
 
 exports.createOrder = async (req, res) => {
   try {
@@ -1398,7 +1399,7 @@ exports.trackOrder = async (req, res) => {
 exports.getVendorIncomingOrders = async (req, res) => {
   try {
     const vendorId = req.user?.id;
-    const vendor = await Vendor.findById({ id: vendorId });
+    // const vendor = await Vendor.findById({ id: vendorId });
     // Fetch all orders for this user
     const orders = await Order.find({
       isAssigned: false,
@@ -1435,39 +1436,111 @@ exports.getVendorIncomingOrders = async (req, res) => {
 };
 
 // =====================================
-// Vendor Incoming Orders (Unassigned)
+// Vendor Incoming / Active Orders Detail
 // =====================================
 exports.getVendorOrders = async (req, res) => {
   try {
-    const vendorId = req.user?.id;
-    const vendor = await Vendor.findById({ id: vendorId });
-    // Fetch all orders for this user
-    const orders = await Order.find({
-      isAssigned: true,
-    }).sort({ createdAt: -1 });
+    const vendorId = req.user?.id || req.user?._id;
 
-    // Filter orders to find pending/in-progress orders
-    const pendingOrders = orders
-      .filter((order) =>
-        [
+    if (!vendorId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized access: Vendor ID missing",
+      });
+    }
+
+    const vendor = await Vendor.findById(vendorId);
+    if (!vendor) {
+      return res.status(404).json({
+        success: false,
+        message: "Vendor account not found",
+      });
+    }
+
+    // Direct Mongoose query to populate items and filter active orders
+    const activeOrders = await Order.find({
+      "stops.vendorId": vendorId,
+      status: {
+        $in: [
           "pending",
           "confirmed",
           "preparing",
-          "in_progress",
+          "ready",
+          "assigned",
+          "arrived_at_vendor",
           "on_the_way",
-        ].includes(order.status),
-      )
+          "ongoing",
+        ],
+      },
+    })
       .select(
-        "orderNumber createdAt instructions items totalAmount deliveryFee status",
-      );
+        "orderNumber createdAt instructions items subtotal deliveryFee tax totalAmount status stops address paymentMethod allergyWarning"
+      )
+      .sort({ createdAt: -1 });
+
+    // Format output according to UI Design Card
+    const formattedOrders = activeOrders.map((order) => {
+      // Date Formatting (e.g. 08/09/26 at 7:45 pm)
+      const dateObj = new Date(order.createdAt);
+      const formattedDate =
+        dateObj.toLocaleDateString("en-GB", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "2-digit",
+        }) +
+        ". at " +
+        dateObj
+          .toLocaleTimeString("en-US", {
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true,
+          })
+          .toLowerCase();
+
+      return {
+        _id: order._id,
+        orderNumber: order.orderNumber, // e.g. "Order #1052"
+        placedAt: formattedDate,
+        deliveryType: order.deliveryFee === 0 ? "Free" : `${order.deliveryFee} PKR`,
+        isFreeDelivery: order.deliveryFee === 0,
+        
+        // Allergy Warning Box (UI Red Box)
+        allergyAlert: order.allergyWarning || null, // e.g. { title: "Peanut Allergy", message: "Please confirm no peanuts or peanut oil are used." }
+        
+        // Items Array (Quantity, Name, Options Note, Total Price)
+        items: order.items.map((item) => ({
+          itemId: item.productId,
+          quantity: item.quantity,
+          name: item.name,
+          note: item.note || item.itemInstructions || "", // e.g. "No onions, extra raita"
+          price: item.total || item.price * item.quantity,
+          formattedPrice: `${item.total || item.price * item.quantity} PKR`,
+        })),
+
+        // Financial Totals
+        subtotal: order.subtotal,
+        deliveryFee: order.deliveryFee,
+        totalAmount: order.totalAmount,
+        formattedTotal: `${order.totalAmount?.toLocaleString()} PKR`,
+
+        // Customer Instructions (UI Blue Box)
+        customerNote: order.instructions || "",
+
+        // Current Order Status
+        status: order.status,
+      };
+    });
 
     return res.status(200).json({
       success: true,
-      count: pendingOrders.length,
-      orders: pendingOrders,
+      count: formattedOrders.length,
+      orders: formattedOrders,
     });
   } catch (err) {
-    console.error("GET AVAILABLE ORDERS ERROR:", err);
-    return res.status(500).json({ success: false, message: err.message });
+    console.error("GET VENDOR ORDERS ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
   }
 };

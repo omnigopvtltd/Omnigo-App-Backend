@@ -41,9 +41,9 @@ const sendVendorResponse = (res, message, vendor) => {
     token,
     vendor: {
       id: vendor._id,
-      name: vendor.name,
-      email: vendor.email,
-      phone: vendor.phone,
+      businessName: vendor.businessName,
+      businessEmail: vendor.businessEmail,
+      businessPhone: vendor.businessPhone,
       role: "vendor",
       isPhoneVerified: vendor.isPhoneVerified || false,
       isEmailVerified: vendor.isEmailVerified || false,
@@ -51,7 +51,34 @@ const sendVendorResponse = (res, message, vendor) => {
       isBlocked: vendor.isBlocked || false,
       isProfileCompleted: vendor.isProfileCompleted || false,
       lastLogin: vendor.lastLogin || null,
-      vendorProfile: vendor.vendorProfile || {},
+      // Owner Details
+      ownerName: vendor.ownerName,
+      ownerPhone: vendor.ownerPhone,
+      ownerEmail: vendor.ownerEmail,
+      profilePicture: vendor.profilePicture,
+
+      // Flat CNIC & Personal Details (As defined in Schema)
+      cnicNumber: vendor.cnicNumber,
+      cnicFrontPicture: vendor.cnicFrontPicture,
+      cnicBackPicture: vendor.cnicBackPicture,
+
+      // Document Files / URLs
+      incorporationCertificate: vendor.incorporationCertificate,
+      foodSafetyLicense: vendor.foodSafetyLicense,
+      ntnCertificate: vendor.ntnCertificate,
+
+      // Profile & Store Details
+      businessType: vendor.businessType,
+      category: vendor.category,
+      logo: vendor.logo,
+      coverImage: vendor.coverImage,
+      description: vendor.description,
+      businessRegistrationNumber: vendor.businessRegistrationNumber,
+      taxNumber: vendor.taxNumber,
+      foodLicenseNumber: vendor.foodLicenseNumber,
+
+      // Payout Object (Schema name matches 'payout')
+      payout: vendor.payout || {},
     },
   });
 };
@@ -99,27 +126,33 @@ exports.sendOTP = async (req, res) => {
       });
     }
 
-    const otp = generateOtp();
-    const otpData = {
-      userId: vendorId, // Using core OTP schema target
+    const otp = generateOtp(); // e.g. "123456"
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiration
+
+    const queryFilter = { vendorId, purpose, type };
+    const updateData = {
+      vendorId,
       otp,
       type,
       purpose,
       verified: false,
       isUsed: false,
-      expiresAt: Date.now() + 5 * 60 * 1000,
+      attempts: 0,
+      expiresAt,
+      phone: type === "phone" ? value : null,
+      email: type === "email" ? value : null,
     };
 
-    if (type === "phone") otpData.phone = value;
-    if (type === "email") otpData.email = value;
-
-    await OTP.findOneAndUpdate({ userId: vendorId, purpose }, otpData, {
+    // Upsert record cleanly into Database
+    const savedOtp = await OTP.findOneAndUpdate(queryFilter, updateData, {
       upsert: true,
       new: true,
+      setDefaultsOnInsert: true,
     });
 
-    console.log("OTP", otp, otpData);
+    console.log("OTP Saved in DB Successfully:", savedOtp);
 
+    // Send Email if channel is email
     if (type === "email") {
       await transporter.sendMail({
         from: process.env.EMAIL_USER,
@@ -132,8 +165,11 @@ exports.sendOTP = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "OTP sent successfully",
+      // Production par 'otp' strip kar sakti hain:
+      otp: process.env.NODE_ENV === "development" ? otp : undefined,
     });
   } catch (err) {
+    console.error("SEND OTP ERROR:", err);
     return res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -149,48 +185,65 @@ exports.verifyOTP = async (req, res) => {
       });
     }
 
-    const record = await OTP.findOne({ userId: vendorId, purpose });
+    // Find active non-used OTP
+    const record = await OTP.findOne({
+      vendorId,
+      purpose,
+      isUsed: false,
+    });
 
     if (!record) {
-      return res.status(400).json({ success: false, message: "OTP not found" });
-    }
-
-    if (record.expiresAt < Date.now()) {
-      return res.status(400).json({ success: false, message: "OTP expired" });
-    }
-
-    if (record.otp !== otp) {
-      return res.status(400).json({ success: false, message: "Invalid OTP" });
-    }
-
-    record.verified = true;
-    await record.save();
-
-    const vendor = await Vendor.findById(vendorId);
-    if (!vendor) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Vendor not found" });
-    }
-
-    if (purpose === "phone-verification") {
-      vendor.phone = record.phone;
-      vendor.isPhoneVerified = true;
-      await vendor.save();
-
-      return res.json({
-        success: true,
-        message: "Vendor phone verified successfully",
-        vendor,
+      return res.status(400).json({
+        success: false,
+        message: "OTP not found or already used. Please request a new OTP.",
       });
     }
 
-    return res.json({
+    // Check expiration
+    if (new Date(record.expiresAt).getTime() < Date.now()) {
+      return res.status(400).json({ success: false, message: "OTP has expired" });
+    }
+
+    // Check OTP Match
+    if (String(record.otp).trim() !== String(otp).trim()) {
+      // Increment attempt counter
+      record.attempts = (record.attempts || 0) + 1;
+      await record.save();
+      return res.status(400).json({ success: false, message: "Invalid OTP code" });
+    }
+
+    // Mark OTP as verified & used
+    record.verified = true;
+    record.isUsed = true;
+    await record.save();
+
+    // Fetch Vendor
+    const vendor = await Vendor.findById(vendorId);
+    if (!vendor) {
+      return res.status(404).json({ success: false, message: "Vendor not found" });
+    }
+
+    // Update Vendor Verification status according to schema keys
+    if (purpose === "phone-verification") {
+      if (record.phone) vendor.businessPhone = record.phone;
+      vendor.isPhoneVerified = true;
+      await vendor.save();
+    } else if (purpose === "email-verification") {
+      if (record.email) vendor.businessEmail = record.email;
+      vendor.isEmailVerified = true;
+      await vendor.save();
+    }
+
+    const vendorResponse = vendor.toObject();
+    delete vendorResponse.password;
+
+    return res.status(200).json({
       success: true,
-      vendorId,
       message: "OTP verified successfully",
+      vendor: vendorResponse,
     });
   } catch (err) {
+    console.error("VERIFY OTP ERROR:", err);
     return res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -210,12 +263,35 @@ const generateRandomPassword = (length = 8) => {
 // SIGNUP & LOGIN
 // ======================================================
 exports.validateSignup = [
-  body("phone").notEmpty().withMessage("Phone number is required"),
-  // body("email").isEmail().withMessage("Valid email is required"),
-  body("password")
-    .isLength({ min: 6 })
-    .withMessage("Password must be at least 6 characters"),
+  body("businessPhone").notEmpty().withMessage("Phone number is required"),
+  // body("businessEmail").isEmail().withMessage("Valid email is required"),
+  // body("password")
+  //   .isLength({ min: 6 })
+  //   .withMessage("Password must be at least 6 characters"),
 ];
+
+const BACKEND_URL = "https://omnigo-app-backend-production.up.railway.app";
+
+// Helper Function: Local file upload ya URL string dono ko absolute backend URL me convert kar
+const processMediaField = (bodyField, fileField, existingFieldValue) => {
+  // 1. Agar new file upload hui hai via Multer
+  if (fileField && fileField.filename) {
+    return `${BACKEND_URL}/uploads/${fileField.filename}`;
+  }
+
+  // 2. Agar frontend ne simple filename ya local path pass kiya hai
+  if (bodyField && typeof bodyField === "string" && bodyField.startsWith("uploads/")) {
+    return `${BACKEND_URL}/${bodyField}`;
+  }
+
+  // 3. Agar naya URL string pass kiya hai
+  if (bodyField && typeof bodyField === "string" && bodyField.trim() !== "") {
+    return bodyField.trim();
+  }
+
+  // 4. Agar koi nayi file ya string nahi di, toh existing document/database value retained rahegi
+  return existingFieldValue || "";
+};
 
 exports.signup = async (req, res) => {
   try {
@@ -225,15 +301,13 @@ exports.signup = async (req, res) => {
     }
 
     const {
-      phone,
-      password,
-      name,
       // Vendor Documents & Verification
       cnicNumber,
       cnicFrontPicture,
       cnicBackPicture,
-      businessRegistrationDocument,
-      foodLicenseDocument,
+      incorporationCertificate,
+      foodSafetyLicense,
+      ntnCertificate,
       // Vendor Profile Details
       businessName,
       businessType,
@@ -246,18 +320,33 @@ exports.signup = async (req, res) => {
       businessRegistrationNumber,
       taxNumber,
       foodLicenseNumber,
+
+      // Owner information
+      ownerName,
+      ownerEmail,
+      ownerPhone,
+      profilePicture,
+
       // Payout Configuration
       payoutBankName,
       payoutAccountTitle,
       payoutAccountNumber,
+      payoutPaymentMethod,
+      payoutIban,
+      payoutWalletNumber,
       // Initial Branch Details
       branchData,
     } = req.body;
 
-    const normalizedPhone = String(phone).trim();
+    // File Object Extractors (Multer `req.files` support agar files upload ho rahi hain)
+    const files = req.files || {};
+
+    const normalizedPhone = String(businessPhone).trim();
 
     // 1. Check existing vendor
-    const existingVendor = await Vendor.findOne({ phone: normalizedPhone });
+    const existingVendor = await Vendor.findOne({
+      businessPhone: normalizedPhone,
+    });
     if (existingVendor) {
       return res.status(400).json({
         success: false,
@@ -269,48 +358,85 @@ exports.signup = async (req, res) => {
     const rawAutoPassword = generateRandomPassword(6); // Generates e.g., "Omnigo@k79f2"
     const hash = await bcrypt.hash(rawAutoPassword, 12);
 
-    // 2. Build vendorData Object cleanly (No 'vendor' variable reference before creation!)
+    // 3. Build vendorData Object cleanly matching your Schema EXACTLY
     const vendorData = {
-      phone: normalizedPhone,
+      businessName: businessName || `Vendor_${normalizedPhone.slice(-4)}`,
+      businessPhone: normalizedPhone,
+      businessEmail: businessEmail
+        ? String(businessEmail).toLowerCase().trim()
+        : "",
       password: hash,
-      name: name || `Vendor_${normalizedPhone.slice(-4)}`,
+
+      // Account Status Flags
       isPhoneVerified: false,
       isEmailVerified: false,
-      verificationStatus: "pending", // Default to pending until Admin approves
-      isProfileCompleted: true,
-      businessRegistrationDocument: businessRegistrationDocument || null,
-      foodLicenseDocument: foodLicenseDocument || null,
-      cnic: {
-        number: cnicNumber || "",
-        frontPicture: cnicFrontPicture || null,
-        backPicture: cnicBackPicture || null,
-      },
-      vendorProfile: {
-        businessName: businessName || name || "",
-        businessPhone: businessPhone || normalizedPhone,
-        businessEmail: businessEmail || "",
-        businessType: businessType || "restaurant",
-        category: category || "fast-food",
-        logo: logo || null,
-        coverImage: coverImage || null,
-        description: description || "",
-        businessRegistrationNumber: businessRegistrationNumber || "",
-        taxNumber: taxNumber || "",
-        foodLicenseNumber: foodLicenseNumber || "",
-      },
-      payoutInformation: {
+      verificationStatus: "pending", // Schema Enum match: ["draft", "pending_review", "approved", "rejected", "suspended"]
+      isBlocked: false,
+
+      // Owner Details
+      ownerName: ownerName || "",
+      ownerPhone: ownerPhone || "",
+      ownerEmail: ownerEmail ? String(ownerEmail).toLowerCase().trim() : String(businessEmail).toLowerCase().trim(),
+      profilePicture: processMediaField(
+        profilePicture,
+        files.profilePicture?.[0],
+      ),
+
+      // Flat CNIC & Personal Details (As defined in Schema)
+      cnicNumber: cnicNumber || "",
+      cnicFrontPicture: processMediaField(
+        cnicFrontPicture,
+        files.cnicFrontPicture?.[0],
+      ),
+      cnicBackPicture: processMediaField(
+        cnicBackPicture,
+        files.cnicBackPicture?.[0],
+      ),
+
+      // Document Files / URLs
+      incorporationCertificate: processMediaField(
+        incorporationCertificate,
+        files.incorporationCertificate?.[0],
+      ),
+      foodSafetyLicense: processMediaField(
+        foodSafetyLicense,
+        files.foodSafetyLicense?.[0],
+      ),
+      ntnCertificate: processMediaField(
+        ntnCertificate,
+        files.ntnCertificate?.[0],
+      ),
+
+      // Profile & Store Details
+      businessType: businessType || "restaurant",
+      category: category || "",
+      logo: processMediaField(logo, files.logo?.[0]),
+      coverImage: processMediaField(coverImage, files.coverImage?.[0]),
+      description: description || "",
+      businessRegistrationNumber: businessRegistrationNumber || "",
+      taxNumber: taxNumber || "",
+      foodLicenseNumber: foodLicenseNumber || "",
+
+      // Payout Object (Schema name matches 'payout')
+      payout: {
+        accountHolderName: payoutAccountTitle || "",
+        paymentMethod: payoutPaymentMethod || "bank",
         bankName: payoutBankName || "",
-        accountTitle: payoutAccountTitle || "",
         accountNumber: payoutAccountNumber || "",
+        iban: payoutIban || "",
+        walletNumber: payoutWalletNumber || "",
+        isVerified: false,
       },
     };
 
-    // 3. Save Vendor to MongoDB
+    // 4. Save Vendor to MongoDB
     const vendor = await Vendor.create(vendorData);
 
-    // 4. Create Initial Operational Branch (If Provided)
+    // 5. Create Initial Operational Branch (If Provided)
     let defaultBranch = null;
     if (branchData) {
+      const parsedBranch =
+        typeof branchData === "string" ? JSON.parse(branchData) : branchData;
       const {
         branchName,
         phone: branchPhone,
@@ -319,12 +445,12 @@ exports.signup = async (req, res) => {
         city,
         longitude,
         latitude,
-      } = branchData;
+      } = parsedBranch;
 
       defaultBranch = await VendorBranch.create({
         vendorId: vendor._id,
-        branchName: branchName || `${businessName || vendor.name} Main Branch`,
-        phone: branchPhone || vendor.phone,
+        branchName: branchName || `${vendor.businessName} Main Branch`,
+        phone: branchPhone || vendor.businessPhone,
         address: address || "",
         area: area || "",
         city: city || "",
@@ -338,15 +464,15 @@ exports.signup = async (req, res) => {
     }
 
     // =========================================================================
-    // 📡 5. REAL-TIME SOCKET EMIT & PUSH NOTIFICATIONS
+    // 📡 6. REAL-TIME SOCKET EMIT & PUSH NOTIFICATIONS
     // =========================================================================
     const io = req.app.get("io");
 
     const payloadData = {
       vendorId: vendor._id,
-      businessName: vendor.vendorProfile.businessName,
-      logo: vendor.vendorProfile.logo,
-      category: vendor.vendorProfile.category,
+      businessName: vendor.businessName,
+      logo: vendor.logo,
+      category: vendor.category,
       branch: defaultBranch,
     };
 
@@ -369,8 +495,8 @@ exports.signup = async (req, res) => {
       // Send FCM to Users
       await sendFCMNotificationToTopic({
         topic: "users",
-        title: `New ${vendor.vendorProfile.businessType} On Omnigo!`,
-        body: `${vendor.vendorProfile.businessName} is now available near you. Order now!`,
+        title: `New ${vendor.businessType} On Omnigo!`,
+        body: `${vendor.businessName} is now available near you. Order now!`,
         data: { type: "NEW_VENDOR", vendorId: String(vendor._id) },
       });
 
@@ -378,7 +504,7 @@ exports.signup = async (req, res) => {
       await sendFCMNotificationToTopic({
         topic: "riders",
         title: "New Partner Onboarded 🚀",
-        body: `${vendor.vendorProfile.businessName} joined Omnigo. Get ready for new pickup orders!`,
+        body: `${vendor.businessName} joined Omnigo. Get ready for new pickup orders!`,
         data: { type: "NEW_VENDOR_RIDER", vendorId: String(vendor._id) },
       });
     } catch (notifErr) {
@@ -389,11 +515,11 @@ exports.signup = async (req, res) => {
     const vendorResponse = vendor.toObject();
     delete vendorResponse.password;
 
-    return sendVendorResponse(
+   return sendVendorResponse(
       res,
       "Vendor signup successful",
-      { vendor: vendorResponse, branch: defaultBranch },
-      201,
+      { vendor: vendorResponse, branch: defaultBranch, tempPassword: rawAutoPassword },
+      201
     );
   } catch (err) {
     console.error("VENDOR SIGNUP ERROR:", err);
@@ -403,13 +529,13 @@ exports.signup = async (req, res) => {
 
 exports.login = async (req, res) => {
   try {
-    const { phone, email, password } = req.body;
+    const { businessPhone, businessEmail, password } = req.body;
     let vendor = null;
 
-    if (email) {
-      vendor = await Vendor.findOne({ email: email.toLowerCase().trim() });
-    } else if (phone) {
-      vendor = await Vendor.findOne({ phone: String(phone).trim() });
+    if (businessEmail) {
+      vendor = await Vendor.findOne({ businessEmail: businessEmail.toLowerCase().trim() });
+    } else if (businessPhone) {
+      vendor = await Vendor.findOne({ businessPhone: String(businessPhone).trim() });
     } else {
       return res.status(400).json({
         success: false,
@@ -431,13 +557,13 @@ exports.login = async (req, res) => {
       });
     }
 
-    const match = await bcrypt.compare(password, vendor.password);
-    if (!match) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid credentials",
-      });
-    }
+    // const match = await bcrypt.compare(password, vendor.password);
+    // if (!match) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Invalid credentials",
+    //   });
+    // }
 
     vendor.lastLogin = new Date();
     await vendor.save();
@@ -515,9 +641,9 @@ exports.facebookLogin = async (req, res) => {
 // ======================================================
 exports.forgotPassword = async (req, res) => {
   try {
-    const { email, phone } = req.body;
+    const { businessEmail, businessPhone } = req.body;
 
-    if (!email && !phone) {
+    if (!businessEmail && !businessPhone) {
       return res.status(400).json({
         success: false,
         message: "Email or phone is required",
@@ -525,7 +651,7 @@ exports.forgotPassword = async (req, res) => {
     }
 
     const vendor = await Vendor.findOne({
-      $or: [...(email ? [{ email }] : []), ...(phone ? [{ phone }] : [])],
+      $or: [...(businessEmail ? [{ businessEmail }] : []), ...(businessPhone ? [{ businessPhone }] : [])],
     });
 
     if (!vendor) {
@@ -536,12 +662,12 @@ exports.forgotPassword = async (req, res) => {
 
     const otp = generateOtp();
 
-    if (email) {
+    if (businessEmail) {
       await OTP.findOneAndUpdate(
         { userId: vendor._id, purpose: "forgot-password" },
         {
           userId: vendor._id,
-          email: vendor.email,
+          businessEmail: vendor.businessEmail,
           otp,
           type: "email",
           purpose: "forgot-password",
@@ -554,7 +680,7 @@ exports.forgotPassword = async (req, res) => {
 
       await transporter.sendMail({
         from: process.env.EMAIL_USER,
-        to: email,
+        to: businessEmail,
         subject: "Vendor Password Reset OTP",
         html: `<h2>Password Reset OTP</h2><h1>${otp}</h1><p>Expires in 5 minutes</p>`,
       });
@@ -567,12 +693,12 @@ exports.forgotPassword = async (req, res) => {
       });
     }
 
-    if (phone) {
+    if (businessPhone) {
       await OTP.findOneAndUpdate(
         { userId: vendor._id, purpose: "forgot-password" },
         {
           userId: vendor._id,
-          phone: vendor.phone,
+          businessPhone: vendor.businessPhone,
           otp,
           type: "phone",
           purpose: "forgot-password",
@@ -645,21 +771,18 @@ exports.resetPassword = async (req, res) => {
 // ======================================================
 // COMPLETE VENDOR PROFILE & INITIAL BRANCH CREATION
 // ======================================================
-exports.completeVendorProfile = async (req, res) => {
+exports.updateVendorProfile = async (req, res) => {
   try {
-    const vendorId = req.user.id;
+    const vendorId = req.user.id || req.user._id;
 
     const {
-      // Core Contact Information
-      name,
-      email,
-      phone,
       // Vendor Documents & Verification
       cnicNumber,
       cnicFrontPicture,
       cnicBackPicture,
-      businessRegistrationDocument,
-      foodLicenseDocument,
+      incorporationCertificate,
+      foodSafetyLicense,
+      ntnCertificate,
       // Vendor Profile Details
       businessName,
       businessType,
@@ -673,15 +796,28 @@ exports.completeVendorProfile = async (req, res) => {
       taxNumber,
       foodLicenseNumber,
 
+      // Owner Information
+      ownerName,
+      ownerEmail,
+      ownerPhone,
+      profilePicture,
+
       // Payout Configuration
       payoutBankName,
       payoutAccountTitle,
       payoutAccountNumber,
-      // payoutIban,
-      // Initial Branch Details (Optional payload fields)
+      payoutPaymentMethod,
+      payoutIban,
+      payoutWalletNumber,
+
+      // Initial Branch Details
       branchData,
     } = req.body;
 
+    // Files Object from Multer Middleware
+    const files = req.files || {};
+
+    // 1. Fetch Vendor
     const vendor = await Vendor.findById(vendorId);
 
     if (!vendor) {
@@ -691,60 +827,57 @@ exports.completeVendorProfile = async (req, res) => {
       });
     }
 
-    // 1. Core Profile Details
-    if (name) vendor.name = name;
-    if (email) vendor.email = email;
-    if (phone) vendor.phone = phone;
+    // 2. Core & Business Profile Details Update
+    if (businessName) vendor.businessName = businessName;
+    if (businessEmail) vendor.businessEmail = String(businessEmail).toLowerCase().trim();
+    if (businessPhone) vendor.businessPhone = String(businessPhone).trim();
 
-    // 2. KYC Verification Payload
-    vendor.cnic = {
-      number: cnicNumber || vendor.cnic?.number || "",
-      frontPicture: cnicFrontPicture || vendor.cnic?.frontPicture || null,
-      backPicture: cnicBackPicture || vendor.cnic?.backPicture || null,
-    };
-    if (businessRegistrationDocument)
-      vendor.businessRegistrationDocument = businessRegistrationDocument;
-    if (foodLicenseDocument) vendor.foodLicenseDocument = foodLicenseDocument;
+    if (businessType) vendor.businessType = businessType;
+    if (category) vendor.category = category;
+    if (description) vendor.description = description;
 
-    // 3. Storefront Metadata
-    vendor.vendorProfile = {
-      ...vendor.vendorProfile,
-      businessName: businessName || vendor.vendorProfile?.businessName || name,
-      businessPhone:
-        businessPhone || vendor.vendorProfile?.businessPhone || phone,
-      businessEmail: businessEmail || vendor.vendorProfile?.businessEmail || "",
-      businessType:
-        businessType || vendor.vendorProfile?.businessType || "restaurant",
-      category: category || vendor.vendorProfile?.category || "fast-food",
-      logo: logo || vendor.vendorProfile?.logo || null,
-      coverImage: coverImage || vendor.vendorProfile?.coverImage || null,
-      description: description || vendor.vendorProfile?.description || "",
-      businessRegistrationNumber:
-        businessRegistrationNumber ||
-        vendor.vendorProfile?.businessRegistrationNumber ||
-        "",
-      taxNumber: taxNumber || vendor.vendorProfile?.taxNumber || "",
-      foodLicenseNumber:
-        foodLicenseNumber || vendor.vendorProfile?.foodLicenseNumber || "",
-    };
+    if (businessRegistrationNumber) vendor.businessRegistrationNumber = businessRegistrationNumber;
+    if (taxNumber) vendor.taxNumber = taxNumber;
+    if (foodLicenseNumber) vendor.foodLicenseNumber = foodLicenseNumber;
 
-    // 4. Financial Details
-    vendor.payoutInformation = {
-      bankName: payoutBankName || vendor.payoutInformation?.bankName || "",
-      accountTitle:
-        payoutAccountTitle || vendor.payoutInformation?.accountTitle || "",
-      accountNumber:
-        payoutAccountNumber || vendor.payoutInformation?.accountNumber || "",
-      // iban: payoutIban || vendor.payoutInformation?.iban || "",
+    // 3. Owner Information Update
+    if (ownerName) vendor.ownerName = ownerName;
+    if (ownerPhone) vendor.ownerPhone = ownerPhone;
+    if (ownerEmail) vendor.ownerEmail = String(ownerEmail).toLowerCase().trim();
+
+    // 4. Process Images and Document Uploads (Supports File Objects & Direct URLs)
+    vendor.profilePicture = processMediaField(profilePicture, files.profilePicture?.[0], vendor.profilePicture);
+    vendor.logo = processMediaField(logo, files.logo?.[0], vendor.logo);
+    vendor.coverImage = processMediaField(coverImage, files.coverImage?.[0], vendor.coverImage);
+
+    vendor.cnicNumber = cnicNumber || vendor.cnicNumber || "";
+    vendor.cnicFrontPicture = processMediaField(cnicFrontPicture, files.cnicFrontPicture?.[0], vendor.cnicFrontPicture);
+    vendor.cnicBackPicture = processMediaField(cnicBackPicture, files.cnicBackPicture?.[0], vendor.cnicBackPicture);
+
+    vendor.incorporationCertificate = processMediaField(incorporationCertificate, files.incorporationCertificate?.[0], vendor.incorporationCertificate);
+    vendor.foodSafetyLicense = processMediaField(foodSafetyLicense, files.foodSafetyLicense?.[0], vendor.foodSafetyLicense);
+    vendor.ntnCertificate = processMediaField(ntnCertificate, files.ntnCertificate?.[0], vendor.ntnCertificate);
+
+    // 5. Payout Details Update (Matching your Mongoose Schema)
+    vendor.payout = {
+      accountHolderName: payoutAccountTitle || vendor.payout?.accountHolderName || "",
+      paymentMethod: payoutPaymentMethod || vendor.payout?.paymentMethod || "bank",
+      bankName: payoutBankName || vendor.payout?.bankName || "",
+      accountNumber: payoutAccountNumber || vendor.payout?.accountNumber || "",
+      iban: payoutIban || vendor.payout?.iban || "",
+      walletNumber: payoutWalletNumber || vendor.payout?.walletNumber || "",
+      isVerified: vendor.payout?.isVerified || false,
     };
 
-    vendor.isProfileCompleted = true;
-    vendor.verificationStatus = "pending"; // Trigger admin review
+    // Status Update
+    vendor.verificationStatus = "pending_review"; // Matches enum: ["draft", "pending_review", "approved", "rejected", "suspended"]
+    
     await vendor.save();
 
-    // 5. Create Initial Operational Branch (If Provided)
+    // 6. Create or Update Branch (If Provided)
     let defaultBranch = null;
     if (branchData) {
+      const parsedBranch = typeof branchData === "string" ? JSON.parse(branchData) : branchData;
       const {
         branchName,
         phone: branchPhone,
@@ -753,12 +886,12 @@ exports.completeVendorProfile = async (req, res) => {
         city,
         longitude,
         latitude,
-      } = branchData;
+      } = parsedBranch;
 
       defaultBranch = await VendorBranch.create({
         vendorId: vendor._id,
-        branchName: branchName || `${businessName || vendor.name} Main Branch`,
-        phone: branchPhone || vendor.phone,
+        branchName: branchName || `${vendor.businessName} Main Branch`,
+        phone: branchPhone || vendor.businessPhone,
         address: address || "",
         area: area || "",
         city: city || "",
@@ -771,13 +904,18 @@ exports.completeVendorProfile = async (req, res) => {
       });
     }
 
+    // Prepare Clean Response
+    const vendorResponse = vendor.toObject();
+    delete vendorResponse.password;
+
     return res.status(200).json({
       success: true,
-      message: "Vendor profile completed and submitted for verification",
-      vendor,
+      message: "Vendor profile updated successfully and submitted for review",
+      vendor: vendorResponse,
       branch: defaultBranch,
     });
   } catch (err) {
+    console.error("UPDATE VENDOR PROFILE ERROR:", err);
     return res.status(500).json({
       success: false,
       message: err.message,
