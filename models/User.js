@@ -56,11 +56,13 @@ const userSchema = new mongoose.Schema(
     // ADDRESSES
     addresses: [
       {
+        phone: { type: String },
         address: { type: String, required: true },
         city: { type: String, required: true },
         zipCode: { type: String, required: true },
         country: { type: String, required: true },
         isDefault: { type: Boolean, default: false },
+        isSave: { type: Boolean, default: false },
       },
     ],
 

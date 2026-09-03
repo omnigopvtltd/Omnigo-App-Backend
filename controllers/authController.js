@@ -1724,7 +1724,7 @@ exports.addAddress = async (req, res) => {
       city,
       zipCode,
       country,
-      isSave: typeof isSave === "boolean" ? isSave : false,
+      isSave: isSave || false,
     });
 
     await user.save();
@@ -1760,7 +1760,7 @@ exports.addAddress = async (req, res) => {
 
 exports.getAddresses = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
+    const user = await User.findById(req.user.id).select("addresses name");
 
     if (!user) {
       return res.status(404).json({
@@ -1775,7 +1775,11 @@ exports.getAddresses = async (req, res) => {
 
     return res.json({
       success: true,
-      addresses: savedAddresses,
+      user: {
+        id: user._id,
+        name: user.name,
+        addresses: savedAddresses,
+      },
     });
   } catch (err) {
     return res.status(500).json({
@@ -2006,7 +2010,7 @@ exports.getUser = async (req, res) => {
       });
     }
 
-    if(user.isBlocked === true) {
+    if (user.isBlocked === true) {
       return res.status(403).json({
         success: false,
         message: "User account is blocked",
@@ -2014,8 +2018,7 @@ exports.getUser = async (req, res) => {
     }
 
     // Fetch all orders for this user
-    const order = await Order.findOne(
-      { 
+    const order = await Order.findOne({
       userId,
       status: {
         $in: [
@@ -2024,7 +2027,7 @@ exports.getUser = async (req, res) => {
           "arrived_at_vendor",
           "picked_up",
           "ongoing",
-          "on_the_way"
+          "on_the_way",
         ],
       },
     })
