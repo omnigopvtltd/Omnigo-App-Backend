@@ -1990,6 +1990,69 @@ exports.getUsers = async (req, res) => {
   }
 };
 
+exports.getUser = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Fetch user details and verify role
+    const user = await User.findOne({ _id: userId, role: "user" }).select(
+      "name email phone profilePicture addresses isBlocked",
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User profile not found",
+      });
+    }
+
+    if(user.isBlocked === true) {
+      return res.status(403).json({
+        success: false,
+        message: "User account is blocked",
+      });
+    }
+
+    // Fetch all orders for this user
+    const order = await Order.findOne(
+      { 
+      userId,
+      status: {
+        $in: [
+          "confirmed",
+          "preparing",
+          "arrived_at_vendor",
+          "picked_up",
+          "ongoing",
+          "on_the_way"
+        ],
+      },
+    })
+      .sort({ createdAt: -1 })
+      .select("status orderNumber createdAt")
+      .populate("riderId", "name phone profilePicture");
+
+    // Fetch favorite/saved products directly where user's ID exists in the 'likes' array
+    const cartItems = await Cart.find({ userId }).sort({ createdAt: -1 });
+
+    const data = {
+      user,
+      order,
+      cartItems: cartItems.length || 0,
+    };
+
+    return res.status(200).json({
+      success: true,
+      data,
+    });
+  } catch (err) {
+    console.error("GET USER PROFILE ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.params.id;
@@ -2056,7 +2119,7 @@ exports.updateUserProfile = async (req, res) => {
     const userId = req.params.id;
 
     let profilePicture;
-    
+
     if (req.file) {
       // Relative URL path for frontend access (e.g. /uploads/image-12345.jpg)
       profilePicture = `https://omnigo-app-backend-production.up.railway.app/uploads/${req.file.filename}`;
@@ -2076,7 +2139,7 @@ exports.updateUserProfile = async (req, res) => {
     const updatedUser = await User.findOneAndUpdate(
       { _id: userId },
       { $set: { profilePicture } },
-      { new: true, select: "-password" }
+      { new: true, select: "-password" },
     );
 
     if (!updatedUser) {
