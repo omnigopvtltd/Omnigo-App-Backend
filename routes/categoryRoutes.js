@@ -1,34 +1,38 @@
 const express = require("express");
 const router = express.Router();
-
+const auth = require("../middleware/authMiddleware");
+const role = require("../middleware/rolemiddleware");
 const {
-  addCategory,
-  getCategories,
+  getAllCategories,
+  createCategory,
+  reorderCategories,
   getCategoryById,
   updateCategory,
   deleteCategory,
-
-  addSubCategory,
   getAllSubCategories,
+  getSubCategoriesByCategory,
   getSubCategoryById,
-  getSubCategoriesByCategoryId,
+  createSubCategory,
   updateSubCategory,
   deleteSubCategory,
+  AllCategoriesWithoutSubCategories,
 } = require("../controllers/categoryController");
 
-// Category
-router.post("/category", addCategory);
-router.get("/categories", getCategories);
-router.get("/category/:id", getCategoryById);
-router.put("/category/:id", updateCategory);
-router.delete("/category/:id", deleteCategory);
+// Category Routes
+router.get("/", auth, getAllCategories);
+router.post("/create", auth, createCategory);
+router.put("/reorder", auth, reorderCategories);
 
-// Sub Category
-router.post("/subcategory", addSubCategory);
-router.get("/subcategories", getAllSubCategories);
-router.get("/subcategory/category/:categoryId", getSubCategoriesByCategoryId);
-router.get("/subcategory/:id", getSubCategoryById);
-router.put("/subcategory/:id", updateSubCategory);
-router.delete("/subcategory/:id", deleteSubCategory);
+// Sub-Category Routes
+router.get("/all-categories", auth, AllCategoriesWithoutSubCategories);
+router.get("/subcategories", auth, getAllSubCategories);
+router.post("/create/subcategories", auth, createSubCategory);
+router.get("/:categoryId/subcategories", auth, getSubCategoriesByCategory);
+router.get("/subcategories/:subId", auth, getSubCategoryById);
+router.put("/update/subcategories/:subId", auth, updateSubCategory);
+router.delete("/delete/:id", auth, deleteCategory);
+router.delete("/delete/subcategories/:subId", auth, deleteSubCategory);
 
+router.put("/update/:id", auth, updateCategory);
+router.get("/:id", auth, getCategoryById);
 module.exports = router;

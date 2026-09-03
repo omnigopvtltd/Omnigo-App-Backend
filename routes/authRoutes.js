@@ -67,11 +67,13 @@ const {
   completeVendorProfile,
   getUserProfile,
   logout,
-  updateUserProfile
+  updateUserProfile,
+  getUser
  
 } = require("../controllers/authController");
 const { getRiderById } = require("../controllers/riderController");
 const upload = require("../middleware/upload");
+const role= require("../middleware/rolemiddleware");
 
 // ======================================================
 // AUTH
@@ -90,6 +92,7 @@ router.post("/facebook-login", facebookLogin);
 // ======================================================
 router.get("/all-users", getAllUsers);
 router.get("/users", getUsers);
+router.get("/user/me", auth, getUser);
 router.get("/my-profile/:id", getUserProfile);
 router.put("/my-profile/update/:id", upload.single("profilePicture"), updateUserProfile);
 router.patch("/users/update/:id/status", updateUserStatus);
