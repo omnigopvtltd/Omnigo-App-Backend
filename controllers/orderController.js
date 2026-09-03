@@ -14,6 +14,7 @@ exports.createOrder = async (req, res) => {
   try {
     const {
       address,
+      addressId,
       stops = [],
       paymentMethod = "cash_on_delivery",
       promoDiscount = 0,
@@ -23,7 +24,10 @@ exports.createOrder = async (req, res) => {
       routingMetrics,
     } = req.body;
 
-    const user = await User.findById(req.user.id);
+    const user = await User.findById({
+      _id: req.user.id,
+      addresses: { $elemMatch: { _id: addressId } },
+    });
     if (!user) {
       return res
         .status(404)
@@ -63,16 +67,20 @@ exports.createOrder = async (req, res) => {
       };
     });
 
+    const savedAddresses = user.addresses.filter(
+      (addr) => addr.isSave === true,
+    );
+
     // Format delivery address with GeoJSON fallback
     const formattedAddress = {
-      phone: address?.phone || user.phone || "",
-      address: address?.address || user.address || "",
-      city: address?.city || "Karachi",
-      zipCode: address?.zipCode || "",
-      country: address?.country || "Pakistan",
+      phone: savedAddresses[0]?.phone || user.phone || "",
+      address: savedAddresses[0]?.address || user.address || "",
+      city: savedAddresses[0]?.city || "Karachi",
+      zipCode: savedAddresses[0]?.zipCode || "",
+      country: savedAddresses[0]?.country || "Pakistan",
       location: {
         type: "Point",
-        coordinates: address?.location?.coordinates ||
+        coordinates: savedAddresses[0]?.location?.coordinates ||
           user.location?.coordinates || [0, 0],
       },
     };
@@ -259,10 +267,10 @@ exports.cancelOrder = async (req, res) => {
     io.to(`user:${order.userId}`).emit("orderStatusUpdated", {
       orderId: order._id,
       status: "cancelled",
-      message: "Your order has cancelled."
+      message: "Your order has cancelled.",
     });
 
-     // FCM Push Notification
+    // FCM Push Notification
     const customer = await User.findById(order.userId);
     if (customer?.fcmToken) {
       await sendNotification(
@@ -277,7 +285,6 @@ exports.cancelOrder = async (req, res) => {
         },
       );
     }
-
 
     return res.status(200).json({
       success: true,
@@ -425,10 +432,10 @@ exports.confirmOrder = async (req, res) => {
     io.to(`user:${order.userId}`).emit("orderStatusUpdated", {
       orderId: order._id,
       status: "confirmed",
-      message: "Your order has been confirmed by the vendor!"
+      message: "Your order has been confirmed by the vendor!",
     });
 
-     // FCM Push Notification
+    // FCM Push Notification
     const customer = await User.findById(order.userId);
     if (customer?.fcmToken) {
       await sendNotification(
@@ -466,7 +473,7 @@ exports.getOngoingOrders = async (req, res) => {
           "arrived_at_vendor",
           "picked_up",
           "ongoing",
-          "on_the_way"
+          "on_the_way",
         ],
       },
     })
@@ -539,7 +546,7 @@ exports.acceptOrder = async (req, res) => {
           "arrived_at_vendor",
           "picked_up",
           "ongoing",
-          "on_the_way"
+          "on_the_way",
         ],
       },
     });
@@ -658,7 +665,7 @@ exports.getRiderActiveOrders = async (req, res) => {
           "arrived_at_vendor",
           "picked_up",
           "ongoing",
-          "on_the_way"
+          "on_the_way",
         ],
       },
     })
@@ -1475,7 +1482,7 @@ exports.getVendorOrders = async (req, res) => {
       },
     })
       .select(
-        "orderNumber createdAt instructions items subtotal deliveryFee tax totalAmount status stops address paymentMethod allergyWarning"
+        "orderNumber createdAt instructions items subtotal deliveryFee tax totalAmount status stops address paymentMethod allergyWarning",
       )
       .sort({ createdAt: -1 });
 
@@ -1502,12 +1509,13 @@ exports.getVendorOrders = async (req, res) => {
         _id: order._id,
         orderNumber: order.orderNumber, // e.g. "Order #1052"
         placedAt: formattedDate,
-        deliveryType: order.deliveryFee === 0 ? "Free" : `${order.deliveryFee} PKR`,
+        deliveryType:
+          order.deliveryFee === 0 ? "Free" : `${order.deliveryFee} PKR`,
         isFreeDelivery: order.deliveryFee === 0,
-        
+
         // Allergy Warning Box (UI Red Box)
         allergyAlert: order.allergyWarning || null, // e.g. { title: "Peanut Allergy", message: "Please confirm no peanuts or peanut oil are used." }
-        
+
         // Items Array (Quantity, Name, Options Note, Total Price)
         items: order.items.map((item) => ({
           itemId: item.productId,

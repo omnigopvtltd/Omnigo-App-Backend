@@ -208,7 +208,7 @@ const orderSchema = new mongoose.Schema(
         vendorName: { type: String, default: "" },
         vendorType: {
           type: String,
-          enum: ["fast-food", "grocery", "pharmacy", "bakery", "other"],
+          enum: ["fast-food", "grocery", "pharmacy", "other"],
           default: "fast-food",
         },
         address: { type: String, default: "" },
