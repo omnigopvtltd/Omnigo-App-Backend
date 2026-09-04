@@ -100,7 +100,7 @@ exports.completeOrderDelivery = async (req, res) => {
     const order = await Order.findOne({
       _id: req.params.id,
       riderId: req.user.id,
-      status: "on_the_way" || "ongoing",
+      status: "on_the_way" || "ongoing" || "ready",
     });
     if (!order) {
       return res.status(404).json({ success: false, message: "Order not found" });
