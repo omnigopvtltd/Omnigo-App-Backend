@@ -1,51 +1,3 @@
-// const router = require("express").Router();
-// const upload = require("../middleware/upload");
-
-// const {
-//   getProducts,
-//   getProduct,
-//   createProduct,
-//   updateProduct,
-//   deleteProduct,
-//   likeProduct,
-//   unlikeProduct,
-//   getCategories,
-// } = require("../controllers/productController");
-
-// // ================= GET ROUTES =================
-
-// router.get("/getcategories", getCategories);
-// // Get All Products
-// router.get("/", getProducts);
-
-// // Get Single Product By ID
-// router.get("/:id", getProduct);
-
-// // ================= CRUD ROUTES =================
-
-// // Create Product
-// router.post("/", upload.single("image"), createProduct);
-// // Update Product
-// router.put(
-  //   "/:id",
-//   upload.single("image"),
-//   updateProduct
-// );
-
-// // Delete Product
-// router.delete("/:id", deleteProduct);
-
-// // ================= LIKE ROUTES =================
-
-// // Like Product
-// router.post("/:id/like", likeProduct);
-
-// // Unlike Product
-// router.post("/:id/unlike", unlikeProduct);
-
-
-// module.exports = router;
-
 const express = require("express");
 const router = express.Router();
 const auth = require("../middleware/authMiddleware");
@@ -90,8 +42,8 @@ router.get("/product-by-home-chef/:homeChefId", auth, getProductsByHomeChef);
 router.post("/create", auth, createProduct);
 router.get("/:id", auth, getProductById);
 router.get("/product-details/:id", auth, getProductDetails);
-router.put("/update/:id", auth, role("admin"), updateProduct);
-router.patch("/:id/availability", auth, role("admin"), toggleAvailability);
-router.delete("/delete/:id", auth, role("admin"), deleteProduct);
+router.put("/update/:id", auth, updateProduct);
+router.patch("/:id/availability", auth, toggleAvailability);
+router.delete("/delete/:id", auth, deleteProduct);
 
 module.exports = router;

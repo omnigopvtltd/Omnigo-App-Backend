@@ -13,6 +13,11 @@ const vendorSchema = new mongoose.Schema(
       trim: true,
     },
 
+    businessDescription: {
+      type: String,
+      trim: true,
+    },
+
     businessEmail: {
       type: String,
       // required: true,
@@ -244,7 +249,7 @@ const vendorSchema = new mongoose.Schema(
 
       isActive: {
         type: Boolean,
-        default: false,
+        default: true,
       },
     // },
 

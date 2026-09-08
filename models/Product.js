@@ -7,10 +7,17 @@ const productSchema = new mongoose.Schema(
     images: [{ type: String }], // first image is treated as the primary/cover photo
     weight: { type: String, default: "" },
     quantity: { type: Number, default: 0 },
-    
+
     belongsTo: {
       type: String,
-      enum: ["Restaurant", "HomeChef", "fast-food", "grocery", "pharmacy", "stationary", "bakery"],
+      enum: [
+        "restaurant",
+        "homeChef",
+        "grocery",
+        "pharmacy",
+        "stationary",
+        "bakery",
+      ],
       required: true,
     },
 
@@ -30,10 +37,15 @@ const productSchema = new mongoose.Schema(
     price: { type: Number, required: true, min: 0 },
     discountPrice: { type: Number, default: null, min: 0 },
 
-    sizes: [
+    variations: [
       {
-        name: String,
-        price: { type: Number, default: 0 },
+        title: { type: String }, // e.g. "Size", "Flavour"
+        options: [
+          {
+            name: { type: String }, // e.g. "Large", "Chocolate"
+            price: { type: Number, default: 0 },
+          },
+        ],
       },
     ],
     addOns: [
@@ -43,6 +55,7 @@ const productSchema = new mongoose.Schema(
       },
     ],
 
+    serving: { type: String, default: "full" },
     isVeg: { type: Boolean, default: false },
     tags: [
       {
@@ -53,13 +66,13 @@ const productSchema = new mongoose.Schema(
 
     isAvailable: { type: Boolean, default: true }, // stock / sold-out toggle
     preparationTime: { type: Number, default: 15 }, // minutes
-    
+
     rating: {
       average: { type: Number, default: 0 },
       count: { type: Number, default: 0 },
     },
-    
-    isFavourite: { type: Boolean, default: false }, 
+
+    isFavourite: { type: Boolean, default: false },
     likes: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -74,7 +87,7 @@ const productSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ["popular", "special", "new", "signature"],
+      enum: ["popular", "special", "new", "signature", "featured"],
       default: "new",
     },
   },

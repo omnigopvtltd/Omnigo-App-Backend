@@ -24,6 +24,7 @@ const {
   cancelRiderOrder,
   getVendorIncomingOrders,
   getVendorOrders,
+  readyOrder,
 } = require("../controllers/orderController");
 
 const {completeOrderDelivery} = require("../controllers/riderOrderFlowController");
@@ -52,6 +53,7 @@ router.get("/:id", auth, getOrderById);
 router.put("/cancel/:id", auth, cancelOrder);
 // CONFIRM ORDER
 router.put("/confirm/:id", auth, confirmOrder);
+router.put("/ready/:id", auth, readyOrder);
 
 router.get("/rider/available", auth, getAvailableOrders);
 router.patch("/rider/auto-accept", auth, toggleAutoAccept);
