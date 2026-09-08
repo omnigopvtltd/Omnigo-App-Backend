@@ -1367,7 +1367,8 @@ exports.trackOrder = async (req, res) => {
     // Force a fresh database fetch without lean caching
     const order = await Order.findById(req.params.id)
       .populate("riderId", "name phone location")
-      .populate("stops.vendorId", "name address location contact");
+      .populate("stops.vendorId", "name address location contact")
+      .populate("userId", "name email phone");
 
     if (!order) {
       return res
@@ -1384,6 +1385,8 @@ exports.trackOrder = async (req, res) => {
         address: order.address,
         stops: order.stops, // <-- Contains the updated stop statuses (e.g. picked_up)
         rider: order.riderId,
+        user: order.userId,
+        userName: order.userId?.name || null,
         routingMetrics: order.routingMetrics,
         timeline: {
           orderPlaced: order.createdAt,
@@ -1402,46 +1405,46 @@ exports.trackOrder = async (req, res) => {
 // ================================
 
 // =====================================
-// Vendor Incoming Orders (Unassigned)
+// Vendor pending Orders (Unassigned)
 // =====================================
-exports.getVendorIncomingOrders = async (req, res) => {
-  try {
-    const vendorId = req.user?.id;
-    // const vendor = await Vendor.findById({ id: vendorId });
-    // Fetch all orders for this user
-    const orders = await Order.find({
-      isAssigned: false,
-    }).sort({ createdAt: -1 });
+// exports.getVendorIncomingOrders = async (req, res) => {
+//   try {
+//     const vendorId = req.user?.id;
+//     const vendor = await Vendor.findById({ id: vendorId });
+//     // Fetch all orders for this user
+//     const orders = await Order.find({
+//       isAssigned: false,
+//     }).sort({ createdAt: -1 });
 
-    const vendorOrders = orders.stops.map((vendor) => {
-      vendor.vendorId == vendorId;
-    });
+//     const vendorOrders = orders.stops.map((vendor) => {
+//       vendor.vendorId == vendorId;
+//     });
 
-    // Filter orders to find pending/in-progress orders
-    const pendingOrders = orders
-      .filter((order) =>
-        [
-          "pending",
-          "confirmed",
-          "preparing",
-          "in_progress",
-          "on_the_way",
-        ].includes(order.status),
-      )
-      .select(
-        "orderNumber createdAt instructions items totalAmount deliveryFee status",
-      );
+//     // Filter orders to find pending/in-progress orders
+//     const pendingOrders = orders
+//       .filter((order) =>
+//         [
+//           "pending",
+//           "confirmed",
+//           "preparing",
+//           "in_progress",
+//           "on_the_way",
+//         ].includes(order.status),
+//       )
+//       .select(
+//         "orderNumber createdAt instructions items totalAmount deliveryFee status",
+//       );
 
-    return res.status(200).json({
-      success: true,
-      count: pendingOrders.length,
-      orders: pendingOrders,
-    });
-  } catch (err) {
-    console.error("GET AVAILABLE ORDERS ERROR:", err);
-    return res.status(500).json({ success: false, message: err.message });
-  }
-};
+//     return res.status(200).json({
+//       success: true,
+//       count: pendingOrders.length,
+//       orders: pendingOrders,
+//     });
+//   } catch (err) {
+//     console.error("GET AVAILABLE ORDERS ERROR:", err);
+//     return res.status(500).json({ success: false, message: err.message });
+//   }
+// };
 
 // =====================================
 // Vendor Incoming / Active Orders Detail
@@ -1449,6 +1452,7 @@ exports.getVendorIncomingOrders = async (req, res) => {
 exports.getVendorOrders = async (req, res) => {
   try {
     const vendorId = req.user?.id || req.user?._id;
+    const { status = "pending" } = req.query; // Tabs: pending | confirmed | ready | complete | cancelled | order_issues
 
     if (!vendorId) {
       return res.status(401).json({
@@ -1465,38 +1469,71 @@ exports.getVendorOrders = async (req, res) => {
       });
     }
 
-    // Direct Mongoose query to populate items and filter active orders
+    // 1. Define Status Mapping for Each UI Tab
+    const tabStatusMap = {
+      pending: ["pending"],
+      preparing: ["confirmed", "preparing"],
+      ready: ["ready", "assigned", "arrived_at_vendor", "on_the_way"],
+      complete: ["delivered", "completed"],
+      cancelled: ["cancelled", "rejected_by_vendor", "cancelled_by_user"],
+      order_issues: ["refund_requested", "disputed", "complaint_raised"],
+    };
+
+    const targetStatuses = tabStatusMap[status] || tabStatusMap.pending;
+
+    // 2. Aggregate Counts for Top Navigation Badges [e.g., pending (2), Preparing (1)]
+    const badgeCountsAggregation = await Order.aggregate([
+      { $match: { "stops.vendorId": vendor._id } },
+      {
+        $group: {
+          _id: "$status",
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    // Format badge counts object
+    const counts = {
+      pending: 0,
+      preparing: 0,
+      ready: 0,
+      complete: 0,
+      cancelled: 0,
+      order_issues: 0,
+    };
+
+    badgeCountsAggregation.forEach((item) => {
+      for (const [tabKey, statuses] of Object.entries(tabStatusMap)) {
+        if (statuses.includes(item._id)) {
+          counts[tabKey] += item.count;
+        }
+      }
+    });
+
+    // 3. Query Active Orders for Selected Tab
     const activeOrders = await Order.find({
       "stops.vendorId": vendorId,
-      status: {
-        $in: [
-          "pending",
-          "confirmed",
-          "preparing",
-          "ready",
-          "assigned",
-          "arrived_at_vendor",
-          "on_the_way",
-          "ongoing",
-        ],
-      },
+      status: { $in: targetStatuses },
     })
+      .populate("driverId", "fullName name phone avatar rating") // Rider details for "Ready" tab
+      .populate("userId", "fullName name") // Customer name for "Order Issues" tab
       .select(
-        "orderNumber createdAt instructions items subtotal deliveryFee tax totalAmount status stops address paymentMethod allergyWarning",
+        "orderNumber createdAt instructions items subtotal deliveryFee tax totalAmount status stops address paymentMethod allergyWarning cancellationReason issueDetails paymentStatus"
       )
       .sort({ createdAt: -1 });
 
-    // Format output according to UI Design Card
+    // 4. Format Orders according to UI Screens
     const formattedOrders = activeOrders.map((order) => {
-      // Date Formatting (e.g. 08/09/26 at 7:45 pm)
       const dateObj = new Date(order.createdAt);
+      
+      // Formatting Date (e.g. Today, 12/7/26 or 08/09/26 at 7:45 pm)
       const formattedDate =
         dateObj.toLocaleDateString("en-GB", {
           day: "2-digit",
           month: "2-digit",
           year: "2-digit",
         }) +
-        ". at " +
+        " at " +
         dateObj
           .toLocaleTimeString("en-US", {
             hour: "numeric",
@@ -1505,6 +1542,16 @@ exports.getVendorOrders = async (req, res) => {
           })
           .toLowerCase();
 
+      // Filter only current vendor's items
+      const vendorItems = order.items.filter(
+        (item) => item.vendorId?.toString() === vendorId.toString()
+      );
+
+      // Re-calculate Vendor Subtotal
+      const vendorSubtotal = vendorItems.reduce((acc, item) => {
+        return acc + (item.total || item.price * item.quantity);
+      }, 0);
+
       return {
         _id: order._id,
         orderNumber: order.orderNumber, // e.g. "Order #1052"
@@ -1512,41 +1559,64 @@ exports.getVendorOrders = async (req, res) => {
         deliveryType:
           order.deliveryFee === 0 ? "Free" : `${order.deliveryFee} PKR`,
         isFreeDelivery: order.deliveryFee === 0,
+        paymentStatus: order.paymentStatus || "Paid",
 
-        // Allergy Warning Box (UI Red Box)
-        allergyAlert: order.allergyWarning || null, // e.g. { title: "Peanut Allergy", message: "Please confirm no peanuts or peanut oil are used." }
+        // Red Allergy Box
+        allergyAlert: order.allergyWarning || null,
 
-        // Items Array (Quantity, Name, Options Note, Total Price)
-        items: order.items.map((item) => ({
+        // Customer Note Box
+        customerNote: order.instructions || "",
+
+        // Items Array
+        items: vendorItems.map((item) => ({
           itemId: item.productId,
           quantity: item.quantity,
           name: item.name,
-          note: item.note || item.itemInstructions || "", // e.g. "No onions, extra raita"
+          note: item.note || item.itemInstructions || "",
           price: item.total || item.price * item.quantity,
           formattedPrice: `${item.total || item.price * item.quantity} PKR`,
         })),
 
         // Financial Totals
-        subtotal: order.subtotal,
+        subtotal: vendorSubtotal,
         deliveryFee: order.deliveryFee,
-        totalAmount: order.totalAmount,
-        formattedTotal: `${order.totalAmount?.toLocaleString()} PKR`,
+        totalAmount: vendorSubtotal,
+        formattedTotal: `${vendorSubtotal.toLocaleString()} PKR`,
 
-        // Customer Instructions (UI Blue Box)
-        customerNote: order.instructions || "",
-
-        // Current Order Status
+        // Tab Specific Fields (UI UI Cards)
         status: order.status,
+        
+        // Assigned Rider Info (Shown in "Ready" screen)
+        rider: order.driverId
+          ? {
+              id: order.driverId._id,
+              name: order.driverId.fullName || order.driverId.name,
+              rating: order.driverId.rating || 4.8,
+              phone: order.driverId.phone,
+            }
+          : null,
+
+        // Cancellation Reason (Shown in "Cancelled" red screen card)
+        cancellationReason:
+          order.cancellationReason || "Item wasn't available",
+
+        // Issue/Refund Details (Shown in "Order Issues" yellow screen card)
+        issue: {
+          customerName: order.userId?.fullName || order.userId?.name || "Customer",
+          complainText: order.issueDetails?.reason || "Your food wasn't delivered to me...",
+          refundStatus: order.issueDetails?.status || "Refund customer",
+        },
       };
     });
 
     return res.status(200).json({
       success: true,
-      count: formattedOrders.length,
+      activeTab: status,
+      counts, // Returns badge numbers for tabs: { pending: 2, preparing: 1, ready: 3, complete: 1, cancelled: 1, order_issues: 1 }
       orders: formattedOrders,
     });
   } catch (err) {
-    console.error("GET VENDOR ORDERS ERROR:", err);
+    console.error("GET VENDOR ORDERS TAB ERROR:", err);
     return res.status(500).json({
       success: false,
       message: err.message,

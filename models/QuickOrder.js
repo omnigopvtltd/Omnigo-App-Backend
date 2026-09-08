@@ -1,21 +1,28 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const orderItemSchema = new mongoose.Schema({
   name: { type: String, required: true },
   quantity: { type: Number, required: true, default: 1 },
-  estimatedUnitPrice: { type: Number, required: true },
-  totalItemPrice: { type: Number, required: true }
+  dosage: { type: String, default: '' }, // "500mg", "10ml" (Pharmacy)
+  estimatedUnitPrice: { type: Number, required: true, default: 0 },
+  totalItemPrice: { type: Number, required: true, default: 0 }
 });
 
 const quickOrderSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  category: { 
+    type: String, 
+    enum: ['food', 'mart', 'pharmacy', 'grocery'], 
+    default: 'food' 
+  },
   orderType: { type: String, enum: ['TEXT', 'IMAGE'], default: 'TEXT' },
-  rawInput: { type: String }, // User input text or image URL
+  rawInputText: { type: String, default: '' },
+  prescriptionImageUrl: { type: String, default: '' }, // For Pharmacy 
   
   items: [orderItemSchema],
-  subtotal: { type: Number, required: true },
+  subtotal: { type: Number, required: true, default: 0 },
   deliveryFee: { type: Number, default: 2.00 },
-  grandTotal: { type: Number, required: true },
+  grandTotal: { type: Number, required: true, default: 0 },
   
   customerNotes: { type: String, default: '' },
   
@@ -25,7 +32,6 @@ const quickOrderSchema = new mongoose.Schema({
     default: 'PROPOSED' 
   },
   
-  // Track rider adjustments for transparency
   priceAdjustments: [{
     updatedBy: { type: String, enum: ['ADMIN', 'RIDER'] },
     reason: { type: String },
@@ -35,4 +41,4 @@ const quickOrderSchema = new mongoose.Schema({
   }]
 }, { timestamps: true });
 
-export default mongoose.model('QuickOrder', quickOrderSchema);
+module.exports = mongoose.model('QuickOrder', quickOrderSchema);

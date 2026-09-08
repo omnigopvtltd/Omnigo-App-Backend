@@ -12,6 +12,7 @@ const nodemailer = require("nodemailer");
 
 const { OAuth2Client } = require("google-auth-library");
 const { body, validationResult } = require("express-validator");
+const Order = require("../models/Order");
 
 // ======================================================
 // CONFIGURATIONS & HELPERS
@@ -984,53 +985,180 @@ exports.getVendorById = async (req, res) => {
 // ====================================
 // Get All Vendor Home Screen Details
 // =====================================
-exports.getVendorHomeScreenDetails = async (req, res) => {
+// exports.getVendorHomeScreenDetails = async (req, res) => {
+//   try {
+//     // Determine vendorId from query, params, or decoded JWT auth token
+//     const vendorId = req.params.vendorId || req.user?.id;
+
+//     if (!vendorId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Vendor ID is required",
+//       });
+//     }
+
+//     // 1. Fetch Vendor Profile details
+//     const vendor = await Vendor.findById(vendorId).select(
+//       "name email phone vendorProfile.businessName vendorProfile.logo vendorProfile.coverImage verificationStatus isProfileCompleted",
+//     );
+
+//     if (!vendor) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Vendor not found",
+//       });
+//     }
+
+//     // 2. Fetch all Operational Branches associated with this Vendor
+//     const branches = await VendorBranch.find({ vendorId }).select(
+//       "branchName phone address city area isOpen isActive location openingHours",
+//     );
+
+//     return res.status(200).json({
+//       success: true,
+//       vendor: {
+//         id: vendor._id,
+//         name: vendor.name,
+//         businessName: vendor.vendorProfile?.businessName || vendor.name,
+//         logo: vendor.vendorProfile?.logo || null,
+//         coverImage: vendor.vendorProfile?.coverImage || null,
+//         verificationStatus: vendor.verificationStatus,
+//         isProfileCompleted: vendor.isProfileCompleted,
+//       },
+//       branches,
+//       activeBranchCount: branches.filter((b) => b.isActive).length,
+//     });
+//   } catch (err) {
+//     return res.status(500).json({
+//       success: false,
+//       message: err.message,
+//     });
+//   }
+// };
+
+
+exports.getVendorDashboardOverview = async (req, res) => {
   try {
-    // Determine vendorId from query, params, or decoded JWT auth token
-    const vendorId = req.params.vendorId || req.user?.id;
+    const vendorId = req.user.vendorId; // Extract from Auth middleware
+    const { timeframe = "weekly" } = req.query;
 
-    if (!vendorId) {
-      return res.status(400).json({
-        success: false,
-        message: "Vendor ID is required",
-      });
+    // 1. Calculate Start & End Date based on timeframe filter
+    const now = new Date();
+    let startDate = new Date();
+    
+    if (timeframe === "daily") {
+      startDate.setHours(0, 0, 0, 0);
+    } else if (timeframe === "weekly") {
+      startDate.setDate(now.getDate() - 7);
+    } else if (timeframe === "monthly") {
+      startDate.setMonth(now.getMonth() - 1);
+    } else if (timeframe === "yearly") {
+      startDate.setFullYear(now.getFullYear() - 1);
     }
 
-    // 1. Fetch Vendor Profile details
+    // 2. Fetch Vendor Profile Info
     const vendor = await Vendor.findById(vendorId).select(
-      "name email phone vendorProfile.businessName vendorProfile.logo vendorProfile.coverImage verificationStatus isProfileCompleted",
+      "name logo openTime closeTime rushMode rating"
     );
 
-    if (!vendor) {
-      return res.status(404).json({
-        success: false,
-        message: "Vendor not found",
-      });
-    }
+    // 3. Aggregate Orders & Revenue Metrics
+    const matchStage = {
+      vendorId: vendor._id,
+      createdAt: { $gte: startDate, $lte: now }
+    };
 
-    // 2. Fetch all Operational Branches associated with this Vendor
-    const branches = await VendorBranch.find({ vendorId }).select(
-      "branchName phone address city area isOpen isActive location openingHours",
-    );
+    // Orders Breakdown (Total, Completed, Cancelled)
+    const orderStats = await Order.aggregate([
+      { $match: matchStage },
+      {
+        $group: {
+          _id: null,
+          totalOrders: { $sum: 1 },
+          completedOrders: {
+            $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] }
+          },
+          cancelledOrders: {
+            $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0] }
+          },
+          totalRevenue: {
+            $sum: {
+              $cond: [{ $eq: ["$status", "completed"] }, "$totalAmount", 0]
+            }
+          }
+        }
+      }
+    ]);
 
+    const stats = orderStats[0] || {
+      totalOrders: 0,
+      completedOrders: 0,
+      cancelledOrders: 0,
+      totalRevenue: 0
+    };
+
+    // 4. Aggregate Chart Data (Group by Day / Date)
+    const chartData = await Order.aggregate([
+      { 
+        $match: { 
+          vendorId: vendor._id, 
+          status: "completed", 
+          createdAt: { $gte: startDate, $lte: now } 
+        } 
+      },
+      {
+        $group: {
+          _id: { $dayOfWeek: "$createdAt" }, // 1 = Sun, 2 = Mon, etc.
+          total: { $sum: "$totalAmount" }
+        }
+      },
+      { $sort: { "_id": 1 } }
+    ]);
+
+    // 5. Build Response
     return res.status(200).json({
       success: true,
-      vendor: {
-        id: vendor._id,
-        name: vendor.name,
-        businessName: vendor.vendorProfile?.businessName || vendor.name,
-        logo: vendor.vendorProfile?.logo || null,
-        coverImage: vendor.vendorProfile?.coverImage || null,
-        verificationStatus: vendor.verificationStatus,
-        isProfileCompleted: vendor.isProfileCompleted,
-      },
-      branches,
-      activeBranchCount: branches.filter((b) => b.isActive).length,
+      message: "Vendor overview retrieved successfully",
+      data: {
+        vendor: {
+          id: vendor._id,
+          name: vendor.name,
+          logo: vendor.logo,
+          timings: {
+            openTime: vendor.openTime,
+            closeTime: vendor.closeTime
+          },
+          rushMode: vendor.rushMode,
+          rating: vendor.rating || 0.0
+        },
+        filter: timeframe,
+        revenue: {
+          totalAmount: stats.totalRevenue,
+          currency: "pkr",
+          peakDay: {
+            day: "Saturday", // Dynamic calculate from peak day array
+            amount: 4086,
+            note: "up from 4,086 last week"
+          },
+          percentageChange: 20,
+          chartData: chartData // Format array according to chart library
+        },
+        orders: {
+          total: stats.totalOrders,
+          completed: stats.completedOrders,
+          cancelled: stats.cancelledOrders,
+          statusNote: stats.cancelledOrders === 0 
+            ? `No order is cancelled this ${timeframe === 'weekly' ? 'week' : 'period'}.` 
+            : `${stats.cancelledOrders} order(s) cancelled.`
+        }
+      }
     });
-  } catch (err) {
+
+  } catch (error) {
+    console.error("Dashboard Overview Error:", error);
     return res.status(500).json({
       success: false,
-      message: err.message,
+      message: "Server error fetching vendor overview",
+      error: error.message
     });
   }
 };

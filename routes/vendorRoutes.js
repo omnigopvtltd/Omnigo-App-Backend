@@ -14,6 +14,7 @@ const {
   verifyOTP,
   signup,
   updateVendorProfile,
+  getVendorDashboardOverview,
 } = require("../controllers/vendorController");
 const { saveFcmToken } = require("../controllers/vendorController");
 const upload = require("../middleware/upload");
@@ -76,5 +77,10 @@ router.put(
   auth,
   updateVendorProfile,
 );
+
+// ======================================================
+// Dashboard and Analytics Routes
+// ======================================================
+router.get("/dashboard/overview", auth, getVendorDashboardOverview);
 
 module.exports = router;
