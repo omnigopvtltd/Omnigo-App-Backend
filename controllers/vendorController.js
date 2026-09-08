@@ -13,6 +13,8 @@ const nodemailer = require("nodemailer");
 const { OAuth2Client } = require("google-auth-library");
 const { body, validationResult } = require("express-validator");
 const Order = require("../models/Order");
+const Deal = require("../models/Deal");
+const Product = require("../models/Product");
 
 // ======================================================
 // CONFIGURATIONS & HELPERS
@@ -33,55 +35,78 @@ const generateToken = (vendor) => {
   });
 };
 
-const sendVendorResponse = (res, message, vendor) => {
-  const token = generateToken(vendor);
+const sendVendorResponse = (
+  res,
+  message,
+  payload,
+  statusCode = 200
+) => {
+  // Extract vendor object whether passed directly or nested inside payload
+  const vendorObj = payload.vendor || payload;
+  const branchObj = payload.branch || null;
+  const tempPassword = payload.tempPassword || null;
 
-  return res.status(200).json({
+  // Generate token from the actual vendor object
+  const token = generateToken(vendorObj);
+
+  const responseBody = {
     success: true,
     message,
     token,
     vendor: {
-      id: vendor._id,
-      businessName: vendor.businessName,
-      businessEmail: vendor.businessEmail,
-      businessPhone: vendor.businessPhone,
+      id: vendorObj._id || vendorObj.id,
+      businessName: vendorObj.businessName || "",
+      businessEmail: vendorObj.businessEmail || "",
+      businessPhone: vendorObj.businessPhone || "",
       role: "vendor",
-      isPhoneVerified: vendor.isPhoneVerified || false,
-      isEmailVerified: vendor.isEmailVerified || false,
-      verificationStatus: vendor.verificationStatus || "pending",
-      isBlocked: vendor.isBlocked || false,
-      isProfileCompleted: vendor.isProfileCompleted || false,
-      lastLogin: vendor.lastLogin || null,
-      // Owner Details
-      ownerName: vendor.ownerName,
-      ownerPhone: vendor.ownerPhone,
-      ownerEmail: vendor.ownerEmail,
-      profilePicture: vendor.profilePicture,
+      isPhoneVerified: vendorObj.isPhoneVerified || false,
+      isEmailVerified: vendorObj.isEmailVerified || false,
+      verificationStatus: vendorObj.verificationStatus || "pending",
+      isBlocked: vendorObj.isBlocked || false,
+      isProfileCompleted: vendorObj.isProfileCompleted || false,
+      lastLogin: vendorObj.lastLogin || null,
 
-      // Flat CNIC & Personal Details (As defined in Schema)
-      cnicNumber: vendor.cnicNumber,
-      cnicFrontPicture: vendor.cnicFrontPicture,
-      cnicBackPicture: vendor.cnicBackPicture,
+      // Owner Details
+      ownerName: vendorObj.ownerName || "",
+      ownerPhone: vendorObj.ownerPhone || "",
+      ownerEmail: vendorObj.ownerEmail || "",
+      profilePicture: vendorObj.profilePicture || "",
+
+      // Flat CNIC & Personal Details
+      cnicNumber: vendorObj.cnicNumber || "",
+      cnicFrontPicture: vendorObj.cnicFrontPicture || "",
+      cnicBackPicture: vendorObj.cnicBackPicture || "",
 
       // Document Files / URLs
-      incorporationCertificate: vendor.incorporationCertificate,
-      foodSafetyLicense: vendor.foodSafetyLicense,
-      ntnCertificate: vendor.ntnCertificate,
+      incorporationCertificate: vendorObj.incorporationCertificate || "",
+      foodSafetyLicense: vendorObj.foodSafetyLicense || "",
+      ntnCertificate: vendorObj.ntnCertificate || "",
 
       // Profile & Store Details
-      businessType: vendor.businessType,
-      category: vendor.category,
-      logo: vendor.logo,
-      coverImage: vendor.coverImage,
-      description: vendor.description,
-      businessRegistrationNumber: vendor.businessRegistrationNumber,
-      taxNumber: vendor.taxNumber,
-      foodLicenseNumber: vendor.foodLicenseNumber,
+      businessType: vendorObj.businessType || "restaurant",
+      category: vendorObj.category || "",
+      logo: vendorObj.logo || "",
+      coverImage: vendorObj.coverImage || "",
+      description: vendorObj.description || "",
+      businessRegistrationNumber: vendorObj.businessRegistrationNumber || "",
+      taxNumber: vendorObj.taxNumber || "",
+      foodLicenseNumber: vendorObj.foodLicenseNumber || "",
 
-      // Payout Object (Schema name matches 'payout')
-      payout: vendor.payout || {},
+      // Payout Object
+      payout: vendorObj.payout || {},
     },
-  });
+  };
+
+  // Attach optional details if present
+  if (branchObj) {
+    responseBody.branch = branchObj;
+  }
+
+  if (tempPassword) {
+    responseBody.tempPassword = tempPassword;
+  }
+
+  return res.status(statusCode).json(responseBody);
 };
 
 const generateOtp = () => {
@@ -202,7 +227,9 @@ exports.verifyOTP = async (req, res) => {
 
     // Check expiration
     if (new Date(record.expiresAt).getTime() < Date.now()) {
-      return res.status(400).json({ success: false, message: "OTP has expired" });
+      return res
+        .status(400)
+        .json({ success: false, message: "OTP has expired" });
     }
 
     // Check OTP Match
@@ -210,7 +237,9 @@ exports.verifyOTP = async (req, res) => {
       // Increment attempt counter
       record.attempts = (record.attempts || 0) + 1;
       await record.save();
-      return res.status(400).json({ success: false, message: "Invalid OTP code" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid OTP code" });
     }
 
     // Mark OTP as verified & used
@@ -221,7 +250,9 @@ exports.verifyOTP = async (req, res) => {
     // Fetch Vendor
     const vendor = await Vendor.findById(vendorId);
     if (!vendor) {
-      return res.status(404).json({ success: false, message: "Vendor not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Vendor not found" });
     }
 
     // Update Vendor Verification status according to schema keys
@@ -281,7 +312,11 @@ const processMediaField = (bodyField, fileField, existingFieldValue) => {
   }
 
   // 2. Agar frontend ne simple filename ya local path pass kiya hai
-  if (bodyField && typeof bodyField === "string" && bodyField.startsWith("uploads/")) {
+  if (
+    bodyField &&
+    typeof bodyField === "string" &&
+    bodyField.startsWith("uploads/")
+  ) {
     return `${BACKEND_URL}/${bodyField}`;
   }
 
@@ -371,13 +406,15 @@ exports.signup = async (req, res) => {
       // Account Status Flags
       isPhoneVerified: false,
       isEmailVerified: false,
-      verificationStatus: "pending", // Schema Enum match: ["draft", "pending_review", "approved", "rejected", "suspended"]
+      verificationStatus: "pending", // Schema Enum match: ["draft", "pending", "approved", "rejected", "suspended"]
       isBlocked: false,
 
       // Owner Details
       ownerName: ownerName || "",
       ownerPhone: ownerPhone || "",
-      ownerEmail: ownerEmail ? String(ownerEmail).toLowerCase().trim() : String(businessEmail).toLowerCase().trim(),
+      ownerEmail: ownerEmail
+        ? String(ownerEmail).toLowerCase().trim()
+        : String(businessEmail).toLowerCase().trim(),
       profilePicture: processMediaField(
         profilePicture,
         files.profilePicture?.[0],
@@ -460,6 +497,7 @@ exports.signup = async (req, res) => {
           coordinates: [Number(longitude) || 0, Number(latitude) || 0],
         },
         isActive: true,
+        isRushMode:true,
         isOpen: true,
       });
     }
@@ -511,16 +549,19 @@ exports.signup = async (req, res) => {
     } catch (notifErr) {
       console.error("FCM Notification Error (Non-blocking):", notifErr.message);
     }
+// Response Preparation
+const vendorResponse = vendor.toObject();
+delete vendorResponse.password;
 
-    // Response Preparation
-    const vendorResponse = vendor.toObject();
-    delete vendorResponse.password;
-
-   return sendVendorResponse(
-      res,
-      "Vendor signup successful",
-      { vendor: vendorResponse, branch: defaultBranch, tempPassword: rawAutoPassword },
-      201
+return sendVendorResponse(
+  res,
+  "Vendor signup successful",
+  {
+    vendor: vendorResponse,
+    branch: defaultBranch,
+    tempPassword: rawAutoPassword,
+  },
+  201
     );
   } catch (err) {
     console.error("VENDOR SIGNUP ERROR:", err);
@@ -534,9 +575,13 @@ exports.login = async (req, res) => {
     let vendor = null;
 
     if (businessEmail) {
-      vendor = await Vendor.findOne({ businessEmail: businessEmail.toLowerCase().trim() });
+      vendor = await Vendor.findOne({
+        businessEmail: businessEmail.toLowerCase().trim(),
+      });
     } else if (businessPhone) {
-      vendor = await Vendor.findOne({ businessPhone: String(businessPhone).trim() });
+      vendor = await Vendor.findOne({
+        businessPhone: String(businessPhone).trim(),
+      });
     } else {
       return res.status(400).json({
         success: false,
@@ -652,7 +697,10 @@ exports.forgotPassword = async (req, res) => {
     }
 
     const vendor = await Vendor.findOne({
-      $or: [...(businessEmail ? [{ businessEmail }] : []), ...(businessPhone ? [{ businessPhone }] : [])],
+      $or: [
+        ...(businessEmail ? [{ businessEmail }] : []),
+        ...(businessPhone ? [{ businessPhone }] : []),
+      ],
     });
 
     if (!vendor) {
@@ -777,6 +825,15 @@ exports.updateVendorProfile = async (req, res) => {
     const vendorId = req.user.id || req.user._id;
 
     const {
+      // Basic Info & UI Fields (From App Screen)
+      storeName,
+      businessDescription,
+      logoImage,
+      bannerImage,
+      noOfBranches,
+      isStoreHoursActive,
+      storeHours,
+
       // Vendor Documents & Verification
       cnicNumber,
       cnicFrontPicture,
@@ -784,6 +841,7 @@ exports.updateVendorProfile = async (req, res) => {
       incorporationCertificate,
       foodSafetyLicense,
       ntnCertificate,
+
       // Vendor Profile Details
       businessName,
       businessType,
@@ -828,41 +886,101 @@ exports.updateVendorProfile = async (req, res) => {
       });
     }
 
-    // 2. Core & Business Profile Details Update
-    if (businessName) vendor.businessName = businessName;
-    if (businessEmail) vendor.businessEmail = String(businessEmail).toLowerCase().trim();
+    // 2. Core & Business Profile Details Update (With UI Form Aliases)
+    vendor.businessName = storeName || businessName || vendor.businessName;
+    vendor.description =
+      businessDescription || description || vendor.description;
+    vendor.noOfBranches =
+      noOfBranches !== undefined ? noOfBranches : vendor.noOfBranches;
+
+    if (businessEmail)
+      vendor.businessEmail = String(businessEmail).toLowerCase().trim();
     if (businessPhone) vendor.businessPhone = String(businessPhone).trim();
 
     if (businessType) vendor.businessType = businessType;
     if (category) vendor.category = category;
-    if (description) vendor.description = description;
 
-    if (businessRegistrationNumber) vendor.businessRegistrationNumber = businessRegistrationNumber;
+    if (businessRegistrationNumber)
+      vendor.businessRegistrationNumber = businessRegistrationNumber;
     if (taxNumber) vendor.taxNumber = taxNumber;
     if (foodLicenseNumber) vendor.foodLicenseNumber = foodLicenseNumber;
 
-    // 3. Owner Information Update
+    // 3. Store Hours & Availability Settings Update
+    if (isStoreHoursActive !== undefined) {
+      vendor.isStoreHoursActive = Boolean(isStoreHoursActive);
+    }
+
+    if (storeHours) {
+      const parsedHours =
+        typeof storeHours === "string" ? JSON.parse(storeHours) : storeHours;
+      if (Array.isArray(parsedHours)) {
+        vendor.storeHours = parsedHours.map((schedule) => ({
+          day: schedule.day,
+          timeFrom: schedule.timeFrom,
+          timeTo: schedule.timeTo,
+          isOpen: schedule.isOpen !== undefined ? schedule.isOpen : true,
+        }));
+      }
+    }
+
+    // 4. Owner Information Update
     if (ownerName) vendor.ownerName = ownerName;
     if (ownerPhone) vendor.ownerPhone = ownerPhone;
     if (ownerEmail) vendor.ownerEmail = String(ownerEmail).toLowerCase().trim();
 
-    // 4. Process Images and Document Uploads (Supports File Objects & Direct URLs)
-    vendor.profilePicture = processMediaField(profilePicture, files.profilePicture?.[0], vendor.profilePicture);
-    vendor.logo = processMediaField(logo, files.logo?.[0], vendor.logo);
-    vendor.coverImage = processMediaField(coverImage, files.coverImage?.[0], vendor.coverImage);
+    // 5. Process Images and Document Uploads (Supports File Objects, Direct URLs & UI Screen Aliases)
+    vendor.profilePicture = processMediaField(
+      profilePicture,
+      files.profilePicture?.[0],
+      vendor.profilePicture,
+    );
+
+    vendor.logo = processMediaField(
+      logoImage || logo,
+      files.logoImage?.[0] || files.logo?.[0],
+      vendor.logo,
+    );
+
+    vendor.coverImage = processMediaField(
+      bannerImage || coverImage,
+      files.bannerImage?.[0] || files.coverImage?.[0],
+      vendor.coverImage,
+    );
 
     vendor.cnicNumber = cnicNumber || vendor.cnicNumber || "";
-    vendor.cnicFrontPicture = processMediaField(cnicFrontPicture, files.cnicFrontPicture?.[0], vendor.cnicFrontPicture);
-    vendor.cnicBackPicture = processMediaField(cnicBackPicture, files.cnicBackPicture?.[0], vendor.cnicBackPicture);
+    vendor.cnicFrontPicture = processMediaField(
+      cnicFrontPicture,
+      files.cnicFrontPicture?.[0],
+      vendor.cnicFrontPicture,
+    );
+    vendor.cnicBackPicture = processMediaField(
+      cnicBackPicture,
+      files.cnicBackPicture?.[0],
+      vendor.cnicBackPicture,
+    );
 
-    vendor.incorporationCertificate = processMediaField(incorporationCertificate, files.incorporationCertificate?.[0], vendor.incorporationCertificate);
-    vendor.foodSafetyLicense = processMediaField(foodSafetyLicense, files.foodSafetyLicense?.[0], vendor.foodSafetyLicense);
-    vendor.ntnCertificate = processMediaField(ntnCertificate, files.ntnCertificate?.[0], vendor.ntnCertificate);
+    vendor.incorporationCertificate = processMediaField(
+      incorporationCertificate,
+      files.incorporationCertificate?.[0],
+      vendor.incorporationCertificate,
+    );
+    vendor.foodSafetyLicense = processMediaField(
+      foodSafetyLicense,
+      files.foodSafetyLicense?.[0],
+      vendor.foodSafetyLicense,
+    );
+    vendor.ntnCertificate = processMediaField(
+      ntnCertificate,
+      files.ntnCertificate?.[0],
+      vendor.ntnCertificate,
+    );
 
-    // 5. Payout Details Update (Matching your Mongoose Schema)
+    // 6. Payout Details Update
     vendor.payout = {
-      accountHolderName: payoutAccountTitle || vendor.payout?.accountHolderName || "",
-      paymentMethod: payoutPaymentMethod || vendor.payout?.paymentMethod || "bank",
+      accountHolderName:
+        payoutAccountTitle || vendor.payout?.accountHolderName || "",
+      paymentMethod:
+        payoutPaymentMethod || vendor.payout?.paymentMethod || "bank",
       bankName: payoutBankName || vendor.payout?.bankName || "",
       accountNumber: payoutAccountNumber || vendor.payout?.accountNumber || "",
       iban: payoutIban || vendor.payout?.iban || "",
@@ -871,14 +989,15 @@ exports.updateVendorProfile = async (req, res) => {
     };
 
     // Status Update
-    vendor.verificationStatus = "pending_review"; // Matches enum: ["draft", "pending_review", "approved", "rejected", "suspended"]
-    
+    vendor.verificationStatus = "pending";
+
     await vendor.save();
 
-    // 6. Create or Update Branch (If Provided)
+    // 7. Create or Update Branch (If Provided)
     let defaultBranch = null;
     if (branchData) {
-      const parsedBranch = typeof branchData === "string" ? JSON.parse(branchData) : branchData;
+      const parsedBranch =
+        typeof branchData === "string" ? JSON.parse(branchData) : branchData;
       const {
         branchName,
         phone: branchPhone,
@@ -902,6 +1021,16 @@ exports.updateVendorProfile = async (req, res) => {
         },
         isActive: true,
         isOpen: true,
+      });
+    }
+
+    // 8. Socket IO Real-Time Broadcast
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`vendor:${vendor._id}`).emit("vendorProfileUpdated", {
+        vendorId: vendor._id,
+        vendor,
+        message: "Vendor profile and store timings updated successfully",
       });
     }
 
@@ -982,6 +1111,36 @@ exports.getVendorById = async (req, res) => {
   }
 };
 
+// =======================
+// Get Vendor Profile
+// =======================
+exports.getVendorProfile = async (req, res) => {
+  try {
+    const vendorId = req.params.vendorId || req.user?.id;
+
+    if (!vendorId) {
+      return res.status(400).json({
+        success: false,
+        message: "Vendor ID is required",
+      });
+    }
+
+    const vendor = await Vendor.findById(vendorId).select(
+      "businessName businessDescription logo coverImage",
+    );
+
+    res.json({
+      success: true,
+      vendor,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
 // ====================================
 // Get All Vendor Home Screen Details
 // =====================================
@@ -1036,16 +1195,25 @@ exports.getVendorById = async (req, res) => {
 //   }
 // };
 
-
 exports.getVendorDashboardOverview = async (req, res) => {
   try {
-    const vendorId = req.user.vendorId; // Extract from Auth middleware
-    const { timeframe = "weekly" } = req.query;
+    const vendorId = req.user?.id || req.user?._id;
+
+    if (!vendorId) {
+      return res.status(400).json({
+        success: false,
+        message: "Vendor authentication token missing",
+      });
+    }
+
+    // Convert string vendorId to Mongoose ObjectId for Aggregation queries
+    const vendorObjectId = new mongoose.Types.ObjectId(vendorId);
 
     // 1. Calculate Start & End Date based on timeframe filter
+    const { timeframe = "weekly" } = req.query;
     const now = new Date();
     let startDate = new Date();
-    
+
     if (timeframe === "daily") {
       startDate.setHours(0, 0, 0, 0);
     } else if (timeframe === "weekly") {
@@ -1056,18 +1224,40 @@ exports.getVendorDashboardOverview = async (req, res) => {
       startDate.setFullYear(now.getFullYear() - 1);
     }
 
-    // 2. Fetch Vendor Profile Info
+    // 2. Fetch Vendor Profile Info (Correct Schema Fields)
     const vendor = await Vendor.findById(vendorId).select(
-      "name logo openTime closeTime rushMode rating"
+      "businessName logo rating"
     );
 
-    // 3. Aggregate Orders & Revenue Metrics
+    if (!vendor) {
+      return res.status(404).json({
+        success: false,
+        message: "Vendor account not found",
+      });
+    }
+
+    // 3. Fetch Vendor Branch Info (for isRushMode and openingHours)
+    let vendorBranch = await VendorBranch.findOne({ vendorId: vendorId }).select(
+      "isRushMode openingHours"
+    );
+
+    // Fallback if Branch ID was passed directly
+    if (!vendorBranch) {
+      vendorBranch = await VendorBranch.findById(vendorId).select(
+        "isRushMode openingHours"
+      );
+    }
+
+    // Extract timings string (e.g., "10:00 - 23:00") from monday or default object
+    const openTime = vendorBranch?.openingHours?.monday?.open || "10:00";
+    const closeTime = vendorBranch?.openingHours?.monday?.close || "23:00";
+
+    // 4. Aggregate Orders & Revenue Metrics
     const matchStage = {
-      vendorId: vendor._id,
-      createdAt: { $gte: startDate, $lte: now }
+      vendorId: vendorObjectId,
+      createdAt: { $gte: startDate, $lte: now },
     };
 
-    // Orders Breakdown (Total, Completed, Cancelled)
     const orderStats = await Order.aggregate([
       { $match: matchStage },
       {
@@ -1075,90 +1265,566 @@ exports.getVendorDashboardOverview = async (req, res) => {
           _id: null,
           totalOrders: { $sum: 1 },
           completedOrders: {
-            $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] }
+            $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] },
           },
           cancelledOrders: {
-            $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0] }
+            $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0] },
           },
           totalRevenue: {
             $sum: {
-              $cond: [{ $eq: ["$status", "completed"] }, "$totalAmount", 0]
-            }
-          }
-        }
-      }
+              $cond: [{ $eq: ["$status", "completed"] }, "$totalAmount", 0],
+            },
+          },
+        },
+      },
     ]);
 
     const stats = orderStats[0] || {
       totalOrders: 0,
       completedOrders: 0,
       cancelledOrders: 0,
-      totalRevenue: 0
+      totalRevenue: 0,
     };
 
-    // 4. Aggregate Chart Data (Group by Day / Date)
+    // 5. Aggregate Chart Data (Group by Day / Date)
     const chartData = await Order.aggregate([
-      { 
-        $match: { 
-          vendorId: vendor._id, 
-          status: "completed", 
-          createdAt: { $gte: startDate, $lte: now } 
-        } 
+      {
+        $match: {
+          vendorId: vendorObjectId,
+          status: "completed",
+          createdAt: { $gte: startDate, $lte: now },
+        },
       },
       {
         $group: {
           _id: { $dayOfWeek: "$createdAt" }, // 1 = Sun, 2 = Mon, etc.
-          total: { $sum: "$totalAmount" }
-        }
+          total: { $sum: "$totalAmount" },
+        },
       },
-      { $sort: { "_id": 1 } }
+      { $sort: { _id: 1 } },
     ]);
 
-    // 5. Build Response
+    // 6. Build Clean & Synchronized Response
     return res.status(200).json({
       success: true,
       message: "Vendor overview retrieved successfully",
       data: {
         vendor: {
           id: vendor._id,
-          name: vendor.name,
-          logo: vendor.logo,
+          name: vendor.businessName || "",
+          logo: vendor.logo || "",
           timings: {
-            openTime: vendor.openTime,
-            closeTime: vendor.closeTime
+            openTime,
+            closeTime,
           },
-          rushMode: vendor.rushMode,
-          rating: vendor.rating || 0.0
+          isRushMode: vendorBranch ? Boolean(vendorBranch.isRushMode) : false,
+          rating: vendor.rating || 0.0,
         },
         filter: timeframe,
         revenue: {
           totalAmount: stats.totalRevenue,
           currency: "pkr",
           peakDay: {
-            day: "Saturday", // Dynamic calculate from peak day array
+            day: "Saturday",
             amount: 4086,
-            note: "up from 4,086 last week"
+            note: "up from 4,086 last week",
           },
           percentageChange: 20,
-          chartData: chartData // Format array according to chart library
+          chartData: chartData,
         },
         orders: {
           total: stats.totalOrders,
           completed: stats.completedOrders,
           cancelled: stats.cancelledOrders,
-          statusNote: stats.cancelledOrders === 0 
-            ? `No order is cancelled this ${timeframe === 'weekly' ? 'week' : 'period'}.` 
-            : `${stats.cancelledOrders} order(s) cancelled.`
-        }
-      }
+          statusNote:
+            stats.cancelledOrders === 0
+              ? `No order is cancelled this ${timeframe === "weekly" ? "week" : "period"}.`
+              : `${stats.cancelledOrders} order(s) cancelled.`,
+        },
+      },
     });
-
   } catch (error) {
     console.error("Dashboard Overview Error:", error);
     return res.status(500).json({
       success: false,
       message: "Server error fetching vendor overview",
-      error: error.message
+      error: error.message,
+    });
+  }
+};
+
+// ==========================================
+// Vendor Performance
+// ==========================================
+exports.getVendorPerformance = async (req, res) => {
+  try {
+    const vendorId = req.user?.id || req.user?._id;
+    const { timeframe = "weekly" } = req.query; // weekly, monthly, yearly
+
+    if (!vendorId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized access: Vendor ID missing",
+      });
+    }
+
+    const vendor = await Vendor.findById(vendorId);
+    if (!vendor) {
+      return res.status(404).json({
+        success: false,
+        message: "Vendor account not found",
+      });
+    }
+
+    // 1. Calculate Date Ranges (Current Period vs Previous Period for growth %)
+    const now = new Date();
+    let currentPeriodStart = new Date();
+    let previousPeriodStart = new Date();
+    let previousPeriodEnd = new Date();
+
+    if (timeframe === "weekly") {
+      currentPeriodStart.setDate(now.getDate() - 7);
+      previousPeriodEnd.setDate(now.getDate() - 7);
+      previousPeriodStart.setDate(now.getDate() - 14);
+    } else if (timeframe === "monthly") {
+      currentPeriodStart.setMonth(now.getMonth() - 1);
+      previousPeriodEnd.setMonth(now.getMonth() - 1);
+      previousPeriodStart.setMonth(now.getMonth() - 2);
+    } else if (timeframe === "yearly") {
+      currentPeriodStart.setFullYear(now.getFullYear() - 1);
+      previousPeriodEnd.setFullYear(now.getFullYear() - 1);
+      previousPeriodStart.setFullYear(now.getFullYear() - 2);
+    }
+
+    // Helper pipeline to filter vendor's items in orders
+    const getVendorMatchStage = (startDate, endDate) => ({
+      status: { $in: ["delivered", "completed"] },
+      "stops.vendorId": vendor._id,
+      createdAt: { $gte: startDate, $lte: endDate },
+    });
+
+    // 2. Fetch Current Period Metrics
+    const currentMetrics = await Order.aggregate([
+      { $match: getVendorMatchStage(currentPeriodStart, now) },
+      { $unwind: "$items" },
+      { $match: { "items.vendorId": vendor._id } },
+      {
+        $group: {
+          _id: null,
+          totalOrders: { $addToSet: "$_id" }, // Unique order IDs
+          totalRevenue: {
+            $sum: {
+              $ifNull: [
+                "$items.total",
+                { $multiply: ["$items.price", "$items.quantity"] },
+              ],
+            },
+          },
+        },
+      },
+      {
+        $project: {
+          totalOrdersCount: { $size: "$totalOrders" },
+          totalRevenue: 1,
+        },
+      },
+    ]);
+
+    // 3. Fetch Previous Period Metrics (For Growth Percentage)
+    const previousMetrics = await Order.aggregate([
+      { $match: getVendorMatchStage(previousPeriodStart, previousPeriodEnd) },
+      { $unwind: "$items" },
+      { $match: { "items.vendorId": vendor._id } },
+      {
+        $group: {
+          _id: null,
+          totalOrders: { $addToSet: "$_id" },
+          totalRevenue: {
+            $sum: {
+              $ifNull: [
+                "$items.total",
+                { $multiply: ["$items.price", "$items.quantity"] },
+              ],
+            },
+          },
+        },
+      },
+      {
+        $project: {
+          totalOrdersCount: { $size: "$totalOrders" },
+          totalRevenue: 1,
+        },
+      },
+    ]);
+
+    const curr = currentMetrics[0] || { totalOrdersCount: 0, totalRevenue: 0 };
+    const prev = previousMetrics[0] || { totalOrdersCount: 0, totalRevenue: 0 };
+
+    // 4. Calculate Percentage Growth Function
+    const calculateGrowth = (currentVal, previousVal) => {
+      if (previousVal === 0) return currentVal > 0 ? 100 : 0;
+      const growth = ((currentVal - previousVal) / previousVal) * 100;
+      return parseFloat(growth.toFixed(1));
+    };
+
+    const ordersGrowth = calculateGrowth(
+      curr.totalOrdersCount,
+      prev.totalOrdersCount,
+    );
+    const revenueGrowth = calculateGrowth(curr.totalRevenue, prev.totalRevenue);
+
+    // 5. Aggregate Sales Chart Points (Day-wise Breakdown)
+    const daysMap = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const rawChartData = await Order.aggregate([
+      { $match: getVendorMatchStage(currentPeriodStart, now) },
+      { $unwind: "$items" },
+      { $match: { "items.vendorId": vendor._id } },
+      {
+        $group: {
+          _id: { $dayOfWeek: "$createdAt" }, // 1 (Sun) to 7 (Sat)
+          totalSales: {
+            $sum: {
+              $ifNull: [
+                "$items.total",
+                { $multiply: ["$items.price", "$items.quantity"] },
+              ],
+            },
+          },
+        },
+      },
+    ]);
+
+    // Map database chart results to fixed days structure (Mon-Sun)
+    const daysOrder = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const chartDataFormatted = daysOrder.map((dayName) => {
+      const dbDayIndex = daysMap.indexOf(dayName) + 1; // MongoDB $dayOfWeek: 1=Sun, 2=Mon...
+      const found = rawChartData.find((item) => item._id === dbDayIndex);
+      return {
+        day: dayName,
+        sales: found ? found.totalSales : 0,
+      };
+    });
+
+    const totalSalesForPeriod = chartDataFormatted.reduce(
+      (sum, item) => sum + item.sales,
+      0,
+    );
+
+    // 6. Return Structured API Response
+    return res.status(200).json({
+      success: true,
+      message: "Performance data fetched successfully",
+      data: {
+        filter: timeframe,
+        totalOrders: {
+          count: curr.totalOrdersCount,
+          growthPercentage: Math.abs(ordersGrowth),
+          isPositive: ordersGrowth >= 0,
+          formattedGrowth: `${ordersGrowth >= 0 ? "+" : "-"}${Math.abs(ordersGrowth)}%`,
+        },
+        totalRevenue: {
+          amount: curr.totalRevenue,
+          formattedAmount: `$${curr.totalRevenue.toLocaleString()}`,
+          currency: "$",
+          growthPercentage: Math.abs(revenueGrowth),
+          isPositive: revenueGrowth >= 0,
+          formattedGrowth: `${revenueGrowth >= 0 ? "+" : "-"}${Math.abs(revenueGrowth)}%`,
+        },
+        salesPerformance: {
+          periodLabel:
+            timeframe === "weekly"
+              ? "This Week"
+              : timeframe === "monthly"
+                ? "This Month"
+                : "This Year",
+          totalPeriodSales: totalSalesForPeriod,
+          formattedTotalPeriodSales: `$${totalSalesForPeriod.toLocaleString()}`,
+          chartData: chartDataFormatted,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("GET VENDOR PERFORMANCE ERROR:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch performance data",
+      error: error.message,
+    });
+  }
+};
+
+exports.vendorMenu = async (req, res) => {
+  try {
+    const vendorId = req.user?.id || req.user?._id || req.params?.vendorId;
+
+    if (!vendorId || !mongoose.Types.ObjectId.isValid(vendorId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Vendor ID format",
+      });
+    }
+
+    const vendorObjectId = new mongoose.Types.ObjectId(vendorId);
+
+    // 1. Fetch Deals, Special Types, Vendor Schema, & Products Grouped by Category
+    const [dealsGrouped, productsByType, vendorDoc, productsByCategory] =
+      await Promise.all([
+        // Group Active Deals by dealType for this Vendor
+        Deal.aggregate([
+          { $match: { vendorId: vendorObjectId, isActive: true } },
+          { $sort: { isFeatured: -1, createdAt: -1 } },
+          {
+            $group: {
+              _id: "$dealType",
+              items: {
+                $push: {
+                  _id: "$_id",
+                  name: "$title",
+                  image: "$image",
+                  originalPrice: "$originalPrice",
+                  discountPrice: "$discountPrice",
+                  dealType: "$dealType",
+                },
+              },
+            },
+          },
+          { $project: { items: { $slice: ["$items", 10] } } },
+        ]),
+
+        // Group Special Product Types
+        Product.aggregate([
+          {
+            $match: {
+              vendorId: vendorObjectId,
+              type: { $in: ["special", "popular", "featured", "new"] },
+            },
+          },
+          {
+            $group: {
+              _id: "$type",
+              items: {
+                $push: {
+                  _id: "$_id",
+                  name: "$name",
+                  description: "$description",
+                  price: "$price",
+                  images: "$images",
+                  isFavourite: "$isFavourite",
+                  rating: "$rating",
+                },
+              },
+            },
+          },
+          { $project: { items: { $slice: ["$items", 10] } } },
+        ]),
+
+        // Fetch Vendor Document
+        Vendor.findById(vendorObjectId).select("categories").lean(),
+
+        // Fetch ALL Regular Products Grouped by Category in Database
+        Product.aggregate([
+          { $match: { vendorId: vendorObjectId } },
+          {
+            $group: {
+              _id: "$category",
+              products: {
+                $push: {
+                  _id: "$_id",
+                  name: "$name",
+                  description: "$description",
+                  price: "$price",
+                  images: "$images",
+                  isFavourite: "$isFavourite",
+                  rating: "$rating",
+                },
+              },
+            },
+          },
+        ]),
+      ]);
+
+    // 2. Maps for quick lookups
+    const dealMap = {};
+    dealsGrouped.forEach((d) => (dealMap[d._id] = d.items));
+
+    const productTypeMap = {};
+    productsByType.forEach((p) => (productTypeMap[p._id] = p.items));
+
+    const categoryProductMap = {};
+    productsByCategory.forEach((c) => {
+      if (c._id) categoryProductMap[c._id.toString()] = c.products;
+    });
+
+    const categoriesResponse = [];
+
+    // 3. Section 1: Deals
+    const dealTypes = [
+      { key: "Offer Deal", label: "Offer Deals" },
+      { key: "Bogo Deal", label: "Bogo Deals" },
+      { key: "Combo Deal", label: "Combo Deals" },
+      { key: "Flash Deal", label: "Flash Deals" },
+      { key: "Seasonal Deal", label: "Seasonal Deals" },
+      { key: "Free Delivery Deal", label: "Free Delivery Deals" },
+      { key: "Daily Deal", label: "Daily Deals" },
+    ];
+
+    dealTypes.forEach(({ key, label }) => {
+      if (dealMap[key] && dealMap[key].length > 0) {
+        categoriesResponse.push({
+          _id: new mongoose.Types.ObjectId(),
+          categoryName: label,
+          products: dealMap[key],
+        });
+      }
+    });
+
+    // 4. Section 2: Special Product Types
+    const productTypes = [
+      { key: "special", label: "Special Items" },
+      { key: "popular", label: "Popular Items" },
+      { key: "featured", label: "Featured Items" },
+      { key: "new", label: "New Items" },
+    ];
+
+    productTypes.forEach(({ key, label }) => {
+      if (productTypeMap[key] && productTypeMap[key].length > 0) {
+        categoriesResponse.push({
+          _id: new mongoose.Types.ObjectId(),
+          categoryName: label,
+          products: productTypeMap[key],
+        });
+      }
+    });
+
+    // 5. Section 3: Vendor Categories (With Dynamic Fallback)
+    const storeCategories = vendorDoc?.categories || [];
+    const addedCategories = new Set();
+
+    if (storeCategories.length > 0) {
+      storeCategories.forEach((cat) => {
+        const catName = typeof cat === "string" ? cat : cat.categoryName || cat.name;
+        if (catName) {
+          addedCategories.add(catName.toString());
+          categoriesResponse.push({
+            _id: cat._id || new mongoose.Types.ObjectId(),
+            categoryName: catName,
+            products: categoryProductMap[catName.toString()] || [],
+          });
+        }
+      });
+    }
+
+    // Auto-Fallback: Push remaining product categories directly from Product collection
+    Object.keys(categoryProductMap).forEach((catName) => {
+      if (!addedCategories.has(catName)) {
+        categoriesResponse.push({
+          _id: new mongoose.Types.ObjectId(),
+          categoryName: catName,
+          products: categoryProductMap[catName],
+        });
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      vendorId: vendorId.toString(),
+      categories: categoriesResponse,
+    });
+  } catch (err) {
+    console.error("GET VENDOR MENU ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+exports.toggleRushMode = async (req, res) => {
+  try {
+    const vendorId = req.user?.id || req.user?._id;
+
+    if (!vendorId) {
+      return res.status(400).json({
+        success: false,
+        message: "Vendor ID missing from authentication token",
+      });
+    }
+
+    // 1. Fetch main Vendor details for metadata
+    const vendor = await Vendor.findById(vendorId).select("businessName isActive");
+
+    if (!vendor) {
+      return res.status(404).json({
+        success: false,
+        message: "Vendor account not found",
+      });
+    }
+
+    // 2. Fetch current VendorBranch state (using vendorId ref or direct ID)
+    let branch = await VendorBranch.findOne({ vendorId: vendorId }).select("isRushMode");
+
+    // Fallback: If vendorId is itself the Branch ID
+    if (!branch) {
+      branch = await VendorBranch.findById(vendorId).select("isRushMode");
+    }
+
+    if (!branch) {
+      return res.status(404).json({
+        success: false,
+        message: "Vendor branch not found",
+      });
+    }
+
+    // 3. Determine target status
+    const currentRushState = Boolean(branch.isRushMode);
+
+    let targetRushState;
+    if (req.body && typeof req.body.isRushMode === "boolean") {
+      targetRushState = req.body.isRushMode;
+    } else if (req.body && typeof req.body.rushMode === "boolean") {
+      targetRushState = req.body.rushMode;
+    } else {
+      targetRushState = !currentRushState;
+    }
+
+    // 4. Update VendorBranch atomically
+    const updatedBranch = await VendorBranch.findByIdAndUpdate(
+      branch._id,
+      { $set: { isRushMode: targetRushState } },
+      { new: true, runValidators: true }
+    ).select("isRushMode");
+
+    // 5. Real-time updates via Socket IO
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`vendor:${vendorId}`).emit("rushModeToggled", {
+        vendorId,
+        isRushMode: updatedBranch.isRushMode,
+        message: `Rush mode is now ${updatedBranch.isRushMode ? "ENABLED" : "DISABLED"}`,
+      });
+
+      io.to(`vendorCatalog:${vendorId}`).emit("vendorRushModeUpdated", {
+        vendorId,
+        isRushMode: updatedBranch.isRushMode,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Rush mode successfully ${
+        updatedBranch.isRushMode ? "activated" : "deactivated"
+      }`,
+      vendor: {
+        businessName: vendor.businessName,
+        isRushMode: Boolean(updatedBranch.isRushMode),
+        isActive: vendor.isActive,
+      },
+    });
+  } catch (err) {
+    console.error("TOGGLE RUSH MODE ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
     });
   }
 };

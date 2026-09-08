@@ -14,7 +14,11 @@ const {
   verifyOTP,
   signup,
   updateVendorProfile,
+  vendorMenu,
+  getVendorPerformance,
   getVendorDashboardOverview,
+  getVendorProfile,
+  toggleRushMode,
 } = require("../controllers/vendorController");
 const { saveFcmToken } = require("../controllers/vendorController");
 const upload = require("../middleware/upload");
@@ -82,5 +86,18 @@ router.put(
 // Dashboard and Analytics Routes
 // ======================================================
 router.get("/dashboard/overview", auth, getVendorDashboardOverview);
+router.get("/vendor-performance", auth, getVendorPerformance);
+router.get("/vendor-menu", auth, vendorMenu);
+router.get("/vendor-profile", auth, getVendorProfile);
+router.put(
+  "/vendor-profile/update",
+  upload.fields([
+    { name: "logo", maxCount: 1 },
+    { name: "coverImage", maxCount: 1 },
+  ]),
+  auth,
+  updateVendorProfile,
+);
+router.patch("/toggle-rushmode", auth, toggleRushMode);
 
 module.exports = router;

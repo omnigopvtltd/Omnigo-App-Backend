@@ -400,15 +400,25 @@ exports.cancelRiderOrder = async (req, res) => {
 // =====================================
 exports.confirmOrder = async (req, res) => {
   try {
+    const vendorId = req.user?.id || req.user?._id;
+
+    if (!vendorId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized access: Vendor ID missing",
+      });
+    }
+
+    // 1. Find Order associated with this Vendor
     const order = await Order.findOne({
       _id: req.params.id,
-      userId: req.user.id,
+      "stops.vendorId": vendorId,
     });
 
     if (!order) {
       return res
         .status(404)
-        .json({ success: false, message: "Order not found" });
+        .json({ success: false, message: "Order not found for this vendor" });
     }
 
     if (order.status === "cancelled") {
@@ -418,46 +428,168 @@ exports.confirmOrder = async (req, res) => {
       });
     }
 
+    // 2. Update Vendor Specific Stop Status to 'assigned' or 'confirmed'
+    let vendorStopFound = false;
+    order.stops.forEach((stop) => {
+      if (stop.vendorId && stop.vendorId.toString() === vendorId.toString()) {
+        stop.status = "assigned"; // Vendor status updated
+        vendorStopFound = true;
+      }
+    });
+
+    if (!vendorStopFound) {
+      return res.status(400).json({
+        success: false,
+        message: "Vendor stop not matching order stops",
+      });
+    }
+
+    // 3. Update Overall Order Status to 'confirmed'
     order.status = "confirmed";
     await order.save();
 
-    // 2. Get Global Socket IO instance
+    // 4. Socket IO Real-time Updates
     const io = req.app.get("io");
 
-    // 3. Emit Sockets directly from Controller!
-    // Broadcast to all Riders
-    io.to("role:rider").emit("newRiderOrderAvailable", order);
+    if (io) {
+      // Broadcast to all active Riders
+      io.to("role:rider").emit("newRiderOrderAvailable", order);
 
-    // Broadcast to Specific User
-    io.to(`user:${order.userId}`).emit("orderStatusUpdated", {
-      orderId: order._id,
-      status: "confirmed",
-      message: "Your order has been confirmed by the vendor!",
-    });
+      // Broadcast to specific Customer
+      io.to(`user:${order.userId}`).emit("orderStatusUpdated", {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        status: "confirmed",
+        vendorStatus: "assigned",
+        message: "Your order has been confirmed by the vendor!",
+      });
+    }
 
-    // FCM Push Notification
+    // 5. Send FCM Push Notification to Customer
     const customer = await User.findById(order.userId);
     if (customer?.fcmToken) {
       await sendNotification(
         customer.fcmToken,
         "Order Confirmed",
-        `Your order has confirmed #${order.orderNumber}`,
-        // {
-        //   riderId: rider._id.toString(),
-        //   riderName: rider.name || "",
-        //   riderEmail: rider.email || "",
-        //   riderPhone: rider.phone || "",
-        // },
+        `Your order #${order.orderNumber} has been confirmed by the vendor.`
       );
     }
 
-    return res
-      .status(200)
-      .json({ success: true, message: "Order confirmed successfully", order });
+    return res.status(200).json({
+      success: true,
+      message: "Order confirmed successfully",
+      vendorStatus: "assigned",
+      orderStatus: order.status,
+      order,
+    });
   } catch (err) {
+    console.error("CONFIRM ORDER ERROR:", err);
     return res.status(500).json({ success: false, message: err.message });
   }
 };
+
+// =====================================
+// READY ORDER
+// =====================================
+exports.readyOrder = async (req, res) => {
+  try {
+    const vendorId = req.user?.id || req.user?._id;
+
+    if (!vendorId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized access: Vendor ID missing",
+      });
+    }
+
+    // 1. Find Order belonging to this Vendor
+    const order = await Order.findOne({
+      _id: req.params.id,
+      "stops.vendorId": vendorId,
+    });
+
+    if (!order) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found for this vendor" });
+    }
+
+    if (order.status === "cancelled") {
+      return res.status(400).json({
+        success: false,
+        message: "Cancelled order status cannot be changed to ready",
+      });
+    }
+
+    // 2. Update Vendor Specific Stop Status to 'ready'
+    let vendorStopFound = false;
+    order.stops.forEach((stop) => {
+      if (stop.vendorId && stop.vendorId.toString() === vendorId.toString()) {
+        stop.status = "ready"; // Vendor level status
+        vendorStopFound = true;
+      }
+    });
+
+    if (!vendorStopFound) {
+      return res.status(400).json({
+        success: false,
+        message: "Vendor stop not matching order stops",
+      });
+    }
+
+    // 3. Update Main Order Status to 'ready'
+    order.status = "ready";
+    await order.save();
+
+    // 4. Socket IO Real-Time Notifications
+    const io = req.app.get("io");
+
+    if (io) {
+      // Notify Assigned Rider (if rider is already assigned)
+      if (order.driverId || order.riderId) {
+        const assignedRiderId = order.driverId || order.riderId;
+        io.to(`rider:${assignedRiderId}`).emit("orderReadyForPickup", {
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          message: "Order is ready for pickup at the vendor!",
+        });
+      } else {
+        // Broadcast to available riders if no rider assigned yet
+        io.to("role:rider").emit("newRiderOrderAvailable", order);
+      }
+
+      // Notify Customer
+      io.to(`user:${order.userId}`).emit("orderStatusUpdated", {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        status: "ready",
+        vendorStatus: "ready",
+        message: "Your order is ready for pickup/delivery!",
+      });
+    }
+
+    // 5. Send FCM Push Notification to Customer
+    const customer = await User.findById(order.userId);
+    if (customer?.fcmToken) {
+      await sendNotification(
+        customer.fcmToken,
+        "Order Ready",
+        `Your order #${order.orderNumber} is prepared and ready!`
+      );
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Order marked as ready successfully",
+      vendorStatus: "ready",
+      orderStatus: order.status,
+      order,
+    });
+  } catch (err) {
+    console.error("READY ORDER ERROR:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};;
 
 // =====================================
 // GET ONGOING ORDERS

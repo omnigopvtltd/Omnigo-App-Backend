@@ -95,23 +95,122 @@ exports.acceptOrderWithWallet = async (req, res) => {
 // =====================================
 // RIDER: MARK DELIVERED (credits float + delivery fee — Option 1)
 // =====================================
+// exports.completeOrderDelivery = async (req, res) => {
+//   try {
+//     const order = await Order.findOne({
+//       _id: req.params.id,
+//       riderId: req.user.id,
+//       status: "on_the_way" || "ongoing" || "ready",
+//     });
+//     if (!order) {
+//       return res.status(404).json({ success: false, message: "Order not found" });
+//     }
+
+//     const rider = await User.findById(req.user.id);
+//     if (!rider) return res.status(404).json({ success: false, message: "Rider not found" });
+
+//     // Refund the float that was held, plus the rider's delivery-fee earning.
+//     // (Customer pays the order total in cash on delivery; this replaces the
+//     // float that was fronted and adds the rider's actual earning on top.)
+//     const payout = (order.riderFloatAmount || 0) + (order.deliveryFee || 0);
+//     const newBalance = (rider.wallet?.balance || 0) + payout;
+
+//     rider.wallet = { balance: newBalance };
+//     await rider.save();
+
+//     await WalletTransaction.create({
+//       userId: rider._id,
+//       type: "credit",
+//       amount: payout,
+//       reason: `Payment collected + delivery fee for ${order.orderNumber}`,
+//       balanceAfter: newBalance,
+//       source: "order_earning",
+//       orderId: order._id,
+//     });
+
+//     order.status = "delivered";
+//     order.riderFloatSettled = true;
+//     order.paymentStatus = "paid";
+//     await order.save();
+
+//     // Advance session progress if this delivery belongs to an active session (Option 2)
+//     let sessionResult = null;
+//     if (order.sessionParticipationId) {
+//       sessionResult = await advanceSessionProgress(order.sessionParticipationId, order._id);
+//     }
+
+//     // 2. Get Global Socket IO instance
+//     const io = req.app.get("io");
+
+//     // 3. Emit Sockets directly from Controller!
+//     // Broadcast to Specific User
+//     io.to(`user:${order.userId}`).emit("orderStatusUpdated", {
+//       orderId: order._id,
+//       status: "Delivered",
+//       message: "Your order has been delivered successfully"
+//     });
+
+//      // FCM Push Notification
+//     const customer = await User.findById(order.userId);
+//     if (customer?.fcmToken) {
+//       await sendNotification(
+//         customer.fcmToken,
+//         "Order Delivered",
+//         `Your order has delivered  #${order.orderNumber}`,
+//         {
+//           riderId: rider._id.toString(),
+//           riderName: rider.name || "",
+//           riderEmail: rider.email || "",
+//           riderPhone: rider.phone || "",
+//         },
+//       );
+//     }
+
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Order delivered — wallet credited",
+//       order,
+//       walletBalance: newBalance,
+//       session: sessionResult,
+//     });
+//   } catch (err) {
+//     console.log("COMPLETE ORDER DELIVERY ERROR:", err);
+//     return res.status(500).json({ success: false, message: err.message });
+//   }
+// };
 exports.completeOrderDelivery = async (req, res) => {
   try {
-    const order = await Order.findOne({
-      _id: req.params.id,
-      riderId: req.user.id,
-      status: "on_the_way" || "ongoing" || "ready",
-    });
-    if (!order) {
-      return res.status(404).json({ success: false, message: "Order not found" });
+    const riderId = req.user?.id || req.user?._id;
+
+    if (!riderId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized access: Rider ID missing",
+      });
     }
 
-    const rider = await User.findById(req.user.id);
-    if (!rider) return res.status(404).json({ success: false, message: "Rider not found" });
+    // 1. FIX: Use $in for Mongoose query status checks
+    const order = await Order.findOne({
+      _id: req.params.id,
+      $or: [{ riderId: riderId }, { driverId: riderId }],
+      status: { $in: ["on_the_way", "ongoing", "ready", "arrived_at_vendor"] },
+    });
 
-    // Refund the float that was held, plus the rider's delivery-fee earning.
-    // (Customer pays the order total in cash on delivery; this replaces the
-    // float that was fronted and adds the rider's actual earning on top.)
+    if (!order) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Active order not found for this rider" });
+    }
+
+    const rider = await User.findById(riderId);
+    if (!rider) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Rider not found" });
+    }
+
+    // 2. Wallet & Financial Calculations
     const payout = (order.riderFloatAmount || 0) + (order.deliveryFee || 0);
     const newBalance = (rider.wallet?.balance || 0) + payout;
 
@@ -128,54 +227,81 @@ exports.completeOrderDelivery = async (req, res) => {
       orderId: order._id,
     });
 
-    order.status = "delivered";
+    // 3. VENDOR STATUS UPDATE (Complete all vendor stops)
+    if (order.stops && order.stops.length > 0) {
+      order.stops.forEach((stop) => {
+        stop.status = "completed"; // Ya "delivered" according to your vendor schema
+      });
+    }
+
+    // 4. MAIN ORDER STATUS UPDATE
+    order.status = "delivered"; // Main system status
     order.riderFloatSettled = true;
     order.paymentStatus = "paid";
     await order.save();
 
-    // Advance session progress if this delivery belongs to an active session (Option 2)
+    // 5. Advance session progress if active session exists
     let sessionResult = null;
     if (order.sessionParticipationId) {
-      sessionResult = await advanceSessionProgress(order.sessionParticipationId, order._id);
+      sessionResult = await advanceSessionProgress(
+        order.sessionParticipationId,
+        order._id
+      );
     }
 
-    // 2. Get Global Socket IO instance
+    // 6. Socket IO Real-Time Notifications
     const io = req.app.get("io");
 
-    // 3. Emit Sockets directly from Controller!
-    // Broadcast to Specific User
-    io.to(`user:${order.userId}`).emit("orderStatusUpdated", {
-      orderId: order._id,
-      status: "Delivered",
-      message: "Your order has been delivered successfully"
-    });
+    if (io) {
+      // Notify Customer
+      io.to(`user:${order.userId}`).emit("orderStatusUpdated", {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        status: "delivered",
+        message: "Your order has been delivered successfully",
+      });
 
-     // FCM Push Notification
+      // Notify All Vendors associated with this order
+      if (order.stops && order.stops.length > 0) {
+        order.stops.forEach((stop) => {
+          if (stop.vendorId) {
+            io.to(`vendor:${stop.vendorId}`).emit("vendorOrderStatusUpdated", {
+              orderId: order._id,
+              orderNumber: order.orderNumber,
+              vendorStatus: "completed",
+              status: "delivered",
+              message: "Order delivered to customer successfully",
+            });
+          }
+        });
+      }
+    }
+
+    // 7. Send FCM Push Notification to Customer
     const customer = await User.findById(order.userId);
     if (customer?.fcmToken) {
       await sendNotification(
         customer.fcmToken,
         "Order Delivered",
-        `Your order has delivered  #${order.orderNumber}`,
+        `Your order #${order.orderNumber} has been delivered successfully.`,
         {
           riderId: rider._id.toString(),
           riderName: rider.name || "",
           riderEmail: rider.email || "",
           riderPhone: rider.phone || "",
-        },
+        }
       );
     }
 
-
     return res.status(200).json({
       success: true,
-      message: "Order delivered — wallet credited",
+      message: "Order delivered successfully — wallet credited & vendors updated",
       order,
       walletBalance: newBalance,
       session: sessionResult,
     });
   } catch (err) {
-    console.log("COMPLETE ORDER DELIVERY ERROR:", err);
+    console.error("COMPLETE ORDER DELIVERY ERROR:", err);
     return res.status(500).json({ success: false, message: err.message });
   }
 };

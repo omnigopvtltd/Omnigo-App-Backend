@@ -1,343 +1,139 @@
-// const Product = require("../models/Product");
-
-// // ================= IMAGE HELPER =================
-// const getImageUrl = (req) => {
-//   if (!req.file) return "";
-//   return `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
-// };
-
-// ================= GET ALL PRODUCTS =================
-// exports.getProducts = async (req, res) => {
-//   try {
-//     const { category, q } = req.query;
-
-//     let filter = {
-//       isActive: true,
-//     };
-
-//     if (category) {
-//       filter.category = category;
-//     }
-
-//     if (q) {
-//       filter.name = { $regex: q, $options: "i" };
-//     }
-
-//     const products = await Product.find(filter).sort({
-//       createdAt: -1,
-//     });
-
-//     const formattedProducts = products.map((item) => ({
-//       id: item._id,
-//       name: item.name,
-//       weight: item.weight,
-//       image: item.image,
-//       description: item.description,
-//       price: item.price,
-//       quantity: item.quantity,
-//       category: item.category,
-//       likes: item.likes.length,
-//       createdAt: item.createdAt,
-//     }));
-
-//     res.status(200).json(formattedProducts);
-//   } catch (error) {
-//     console.log("❌ GET PRODUCTS ERROR:", error);
-
-//     res.status(500).json({
-//       message: "Server Error",
-//       error: error.message,
-//     });
-//   }
-// };
-
-// // ================= GET SINGLE PRODUCT =================
-// exports.getProduct = async (req, res) => {
-//   try {
-//     const product = await Product.findById(req.params.id);
-
-//     if (!product) {
-//       return res.status(404).json({
-//         message: "Product not found",
-//       });
-//     }
-
-//     res.status(200).json({
-//       id: product._id,
-//       name: product.name,
-//       weight: product.weight,
-//       image: product.image,
-//       description: product.description,
-//       price: product.price,
-//       quantity: product.quantity,
-//       category: product.category,
-//       likes: product.likes.length,
-//       createdAt: product.createdAt,
-//     });
-//   } catch (error) {
-//     console.log("❌ GET PRODUCT ERROR:", error);
-
-//     res.status(500).json({
-//       message: "Server Error",
-//       error: error.message,
-//     });
-//   }
-// };
-
-// // ================= CREATE PRODUCT =================
-// exports.createProduct = async (req, res) => {
-//   try {
-//     console.log("🔥 BODY:", req.body);
-//     console.log("🔥 FILE:", req.file);
-
-//     const io = req.app.get("io");
-
-//     if (!req.body) {
-//       return res.status(400).json({
-//         message: "Request body missing",
-//       });
-//     }
-
-//     const {
-//       name,
-//       weight,
-//       price,
-//       category,
-//       description,
-//     } = req.body;
-
-//     if (!name || !price) {
-//       return res.status(400).json({
-//         message: "Name and price are required",
-//       });
-//     }
-
-//     const product = await Product.create({
-//       name,
-//       weight: weight || "",
-//       price: Number(price),
-//       quantity: 1,
-//       category: category || "",
-//       description: description || "",
-//       image: getImageUrl(req),
-//       likes: [],
-//     });
-
-//     if (io) {
-//       io.emit("product_created", product);
-//     }
-
-//     res.status(201).json({
-//       success: true,
-//       message: "Product created successfully",
-//       product,
-//     });
-//   } catch (error) {
-//     console.log("❌ CREATE PRODUCT ERROR:", error);
-
-//     res.status(500).json({
-//       message: "Server Error",
-//       error: error.message,
-//     });
-//   }
-// };
-
-// // ================= UPDATE PRODUCT =================
-// exports.updateProduct = async (req, res) => {
-//   try {
-//     const io = req.app.get("io");
-
-//     const product = await Product.findById(req.params.id);
-
-//     if (!product) {
-//       return res.status(404).json({
-//         message: "Product not found",
-//       });
-//     }
-
-//     const updatedData = {
-//       name: req.body.name,
-//       weight: req.body.weight,
-//       price: Number(req.body.price),
-//       quantity:
-//         req.body.quantity !== undefined
-//           ? Number(req.body.quantity)
-//           : product.quantity,
-//       category: req.body.category,
-//       description: req.body.description,
-//     };
-
-//     if (req.file) {
-//       updatedData.image = getImageUrl(req);
-//     }
-
-//     const updatedProduct = await Product.findByIdAndUpdate(
-//       req.params.id,
-//       updatedData,
-//       {
-//         new: true,
-//         runValidators: true,
-//       }
-//     );
-
-//     if (io) {
-//       io.emit("product_updated", updatedProduct);
-//     }
-
-//     res.status(200).json({
-//       success: true,
-//       message: "Product updated successfully",
-//       product: updatedProduct,
-//     });
-//   } catch (error) {
-//     console.log("❌ UPDATE PRODUCT ERROR:", error);
-
-//     res.status(500).json({
-//       message: "Server Error",
-//       error: error.message,
-//     });
-//   }
-// };
-
-// // ================= DELETE PRODUCT =================
-// exports.deleteProduct = async (req, res) => {
-//   try {
-//     const io = req.app.get("io");
-
-//     const product = await Product.findByIdAndDelete(req.params.id);
-
-//     if (!product) {
-//       return res.status(404).json({
-//         message: "Product not found",
-//       });
-//     }
-
-//     if (io) {
-//       io.emit("product_deleted", {
-//         id: product._id,
-//       });
-//     }
-
-//     res.status(200).json({
-//       success: true,
-//       message: "Product deleted successfully",
-//     });
-//   } catch (error) {
-//     console.log("❌ DELETE PRODUCT ERROR:", error);
-
-//     res.status(500).json({
-//       message: "Server Error",
-//       error: error.message,
-//     });
-//   }
-// };
-
-// // ================= LIKE PRODUCT =================
-// exports.likeProduct = async (req, res) => {
-//   try {
-//     const io = req.app.get("io");
-
-//     const product = await Product.findById(req.params.id);
-
-//     if (!product) {
-//       return res.status(404).json({
-//         message: "Product not found",
-//       });
-//     }
-
-//     product.likes.push(new Product.base.Types.ObjectId());
-
-//     await product.save();
-
-//     if (io) {
-//       io.emit("product_liked", {
-//         productId: product._id,
-//         likes: product.likes.length,
-//       });
-//     }
-
-//     res.status(200).json({
-//       success: true,
-//       message: "Liked",
-//       likes: product.likes.length,
-//     });
-//   } catch (error) {
-//     console.log("❌ LIKE PRODUCT ERROR:", error);
-
-//     res.status(500).json({
-//       message: "Server Error",
-//     });
-//   }
-// };
-
-// // ================= UNLIKE PRODUCT =================
-// exports.unlikeProduct = async (req, res) => {
-//   try {
-//     const io = req.app.get("io");
-
-//     const product = await Product.findById(req.params.id);
-
-//     if (!product) {
-//       return res.status(404).json({
-//         message: "Product not found",
-//       });
-//     }
-
-//     if (product.likes.length > 0) {
-//       product.likes.pop();
-//       await product.save();
-//     }
-
-//     if (io) {
-//       io.emit("product_unliked", {
-//         productId: product._id,
-//         likes: product.likes.length,
-//       });
-//     }
-
-//     res.status(200).json({
-//       success: true,
-//       message: "Unliked",
-//       likes: product.likes.length,
-//     });
-//   } catch (error) {
-//     console.log("❌ UNLIKE PRODUCT ERROR:", error);
-
-//     res.status(500).json({
-//       message: "Server Error",
-//     });
-//   }
-// };
-
-// // ================= GET ALL CATEGORIES =================
-// exports.getCategories = async (req, res) => {
-//   try {
-//     const categories = await Product.distinct("category", {
-//       isActive: true,
-//     });
-
-//     res.status(200).json(categories);
-//   } catch (error) {
-//     console.log("❌ GET CATEGORIES ERROR:", error);
-
-//     res.status(500).json({
-//       message: "Server Error",
-//       error: error.message,
-//     });
-//   }
-// };
-
-/////////////////////////////////////////////////////////////////////
 const Order = require("../models/Order");
 const Product = require("../models/Product");
 const Restaurant = require("../models/Restaurant");
 const FoodCategory = require("../models/FoodCategories");
 const HomeChef = require("../models/HomeChef");
 const { default: mongoose } = require("mongoose");
+const Vendor = require("../models/Vendor");
+const FoodCategories = require("../models/FoodCategories");
 
-// =====================================
-// CREATE PRODUCT
-// =====================================
+// exports.createProduct = async (req, res) => {
+//   try {
+//     const {
+//       name,
+//       description,
+//       images,
+//       weight,
+//       quantity,
+//       belongsTo,
+//       vendorId,
+//       category,
+//       subcategory,
+//       price,
+//       discountPrice,
+//       variations,
+//       serving,
+//       addOns,
+//       isVeg,
+//       tags,
+//       isAvailable,
+//       preparationTime,
+//       rating,
+//       isFavourite,
+//       likes,
+//       status,
+//       type,
+//     } = req.body;
+
+//     // 1. Mandatory Input Validations
+//     if (!name) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Product name is required",
+//       });
+//     }
+
+//     if (!vendorId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "vendorId is required",
+//       });
+//     }
+
+//     if (price === undefined || price === null) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Price is required",
+//       });
+//     }
+
+//     if (!category) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Category is required",
+//       });
+//     }
+
+//     // 2. Validate Vendor existence in DB
+//     const vendor = await Vendor.findById(vendorId);
+//     if (!vendor) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Vendor account not found",
+//       });
+//     }
+
+//     // 3. Create Product with all mapped fields
+//     const product = await Product.create({
+//       name,
+//       description,
+//       images: Array.isArray(images) ? images : [],
+//       weight,
+//       quantity,
+//       belongsTo,
+//       vendorId,
+//       category,
+//       subcategory,
+//       price,
+//       discountPrice: discountPrice || null,
+//       variations: Array.isArray(variations) ? variations : [],
+//       serving,
+//       addOns: Array.isArray(addOns) ? addOns : [],
+//       isVeg: isVeg ?? true,
+//       tags: Array.isArray(tags) ? tags : [],
+//       isAvailable: isAvailable ?? true,
+//       isFavourite: isFavourite ?? false,
+//       preparationTime,
+//       rating: rating || 0,
+//       status: status || "active",
+//       type,
+//       likes: Array.isArray(likes) ? likes : [],
+//     });
+
+//     // 4. Trigger Real-time Socket IO Notifications
+//     const io = req.app.get("io");
+
+//     if (io) {
+//       // Emit to the specific Vendor's active socket room
+//       io.to(`vendor:${vendorId}`).emit("vendorProductCreated", {
+//         vendorId,
+//         product,
+//         message: "New product successfully added to your catalog",
+//       });
+
+//       // Broadcast to Customers listening for live vendor menu updates
+//       io.to(`vendorCatalog:${vendorId}`).emit("menuCatalogUpdated", {
+//         vendorId,
+//         action: "ADD_PRODUCT",
+//         product,
+//       });
+//     }
+
+//     return res.status(201).json({
+//       success: true,
+//       message: "Product created successfully",
+//       product,
+//     });
+//   } catch (err) {
+//     console.error("CREATE PRODUCT ERROR:", err);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: err.message,
+//     });
+//   }
+// };
+
 exports.createProduct = async (req, res) => {
   try {
     const {
@@ -348,11 +144,12 @@ exports.createProduct = async (req, res) => {
       quantity,
       belongsTo,
       vendorId,
-      // homeChefId,
       category,
       subcategory,
       price,
       discountPrice,
+      variations,
+      serving,
       addOns,
       isVeg,
       tags,
@@ -365,6 +162,7 @@ exports.createProduct = async (req, res) => {
       type,
     } = req.body;
 
+    // 1. Mandatory Input Validations
     if (!name) {
       return res.status(400).json({
         success: false,
@@ -393,38 +191,117 @@ exports.createProduct = async (req, res) => {
       });
     }
 
-    // const restaurant = await Restaurant.findById(restaurantId);
+    // 2. Validate Vendor existence in DB
+    const vendor = await Vendor.findById(vendorId);
+    if (!vendor) {
+      return res.status(404).json({
+        success: false,
+        message: "Vendor account not found",
+      });
+    }
 
-    // if (!restaurant) {
-    //   return res.status(404).json({
-    //     success: false,
-    //     message: "Restaurant not found",
-    //   });
-    // }
+    // 3. Normalize Product Images (Supports Multer Single File, Multiple Files & JSON URLs)
+    let productImages = [];
 
+    if (req.files && Array.isArray(req.files) && req.files.length > 0) {
+      // Multiple files uploaded via multer (e.g. req.files)
+      productImages = req.files.map((file) => file.path || file.location || file.filename);
+    } else if (req.file) {
+      // Single file uploaded via multer (e.g. req.file)
+      productImages = [req.file.path || req.file.location || req.file.filename];
+    } else if (images) {
+      // JSON array or string URL passed in body
+      if (typeof images === "string") {
+        try {
+          productImages = JSON.parse(images);
+        } catch {
+          productImages = [images];
+        }
+      } else if (Array.isArray(images)) {
+        productImages = images;
+      }
+    }
+
+    // 4. Dynamic Subcategory Auto-Creation Logic
+    if (subcategory && subcategory.trim() !== "") {
+      const trimmedSubCategory = subcategory.trim();
+
+      const foodCategoryDoc = await FoodCategories.findOne({
+        $or: [
+          { categoryName: { $regex: new RegExp(`^${category.trim()}$`, "i") } },
+          { categorySlug: category.toLowerCase().trim() },
+        ],
+      });
+
+      if (foodCategoryDoc) {
+        // Check if subcategory already exists under this parent category
+        const subExists = foodCategoryDoc.subCategories.some(
+          (sub) => sub.name.toLowerCase() === trimmedSubCategory.toLowerCase()
+        );
+
+        // If subcategory does NOT exist, create it with product image
+        if (!subExists) {
+          // Select 1st uploaded image file or URL for subcategory image
+          const subCategoryImage =
+            productImages.length > 0
+              ? productImages[0]
+              : "https://example.com/default-subcategory.jpg";
+
+          foodCategoryDoc.subCategories.push({
+            name: trimmedSubCategory,
+            image: subCategoryImage,
+            status: "active",
+          });
+
+          // Triggers pre-save hook for slug auto-generation
+          await foodCategoryDoc.save();
+        }
+      }
+    }
+
+    // 5. Create Product in DB
     const product = await Product.create({
       name,
       description,
-      images: Array.isArray(images) ? images : [],
+      images: productImages,
       weight,
       quantity,
       belongsTo,
       vendorId,
-      // homeChefId,
       category,
       subcategory,
       price,
       discountPrice: discountPrice || null,
-      addOns: Array.isArray(addOns) ? addOns : [],
-      isVeg,
-      tags: Array.isArray(tags) ? tags : [],
-      isAvailable,
+      variations: typeof variations === "string" ? JSON.parse(variations) : (Array.isArray(variations) ? variations : []),
+      serving,
+      addOns: typeof addOns === "string" ? JSON.parse(addOns) : (Array.isArray(addOns) ? addOns : []),
+      isVeg: isVeg ?? true,
+      tags: typeof tags === "string" ? JSON.parse(tags) : (Array.isArray(tags) ? tags : []),
+      isAvailable: isAvailable ?? true,
+      isFavourite: isFavourite ?? false,
       preparationTime,
-      rating,
-      status,
+      rating: rating || 0,
+      status: status || "active",
       type,
       likes: Array.isArray(likes) ? likes : [],
     });
+
+    // 6. Trigger Real-time Socket IO Notifications
+    const io = req.app.get("io");
+
+    if (io) {
+      io.to(`vendor:${vendorId}`).emit("vendorProductCreated", {
+        vendorId,
+        product,
+        message: "New product successfully added to your catalog",
+      });
+
+      io.to(`vendorCatalog:${vendorId}`).emit("menuCatalogUpdated", {
+        vendorId,
+        action: "ADD_PRODUCT",
+        product,
+      });
+    }
 
     return res.status(201).json({
       success: true,
@@ -432,7 +309,7 @@ exports.createProduct = async (req, res) => {
       product,
     });
   } catch (err) {
-    console.log("CREATE PRODUCT ERROR:", err);
+    console.error("CREATE PRODUCT ERROR:", err);
 
     return res.status(500).json({
       success: false,
@@ -447,8 +324,9 @@ exports.createProduct = async (req, res) => {
 exports.getAllProducts = async (req, res) => {
   try {
     const {
-      restaurantId,
+      vendorId,
       category,
+      subcategory,
       status,
       type,
       isAvailable,
@@ -461,11 +339,18 @@ exports.getAllProducts = async (req, res) => {
 
     const query = {};
 
-    if (restaurantId) query.restaurantId = restaurantId;
+    // Vendor and category filtering
+    if (vendorId) query.vendorId = vendorId;
     if (category) query.category = category;
+    if (subcategory) query.subcategory = subcategory;
+    if (type) query.type = type;
     if (status && status !== "all") query.status = status;
-    if (isAvailable !== undefined) query.isAvailable = isAvailable === "true";
+    
+    if (isAvailable !== undefined) {
+      query.isAvailable = isAvailable === "true" || isAvailable === true;
+    }
 
+    // Search filter across name, category, and tags
     if (search) {
       const regex = new RegExp(search, "i");
       query.$or = [{ name: regex }, { category: regex }, { tags: regex }];
@@ -476,12 +361,14 @@ exports.getAllProducts = async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
     const sort = { [sortBy]: sortOrder === "asc" ? 1 : -1 };
 
+    // Execute query with Vendor population
     const [products, total] = await Promise.all([
       Product.find(query)
-        .populate("restaurantId", "name logo status type")
+        .populate("vendorId", "name logo status address phone storeType")
         .sort(sort)
         .skip(skip)
-        .limit(limitNum),
+        .limit(limitNum)
+        .lean(),
       Product.countDocuments(query),
     ]);
 
@@ -494,7 +381,7 @@ exports.getAllProducts = async (req, res) => {
       products,
     });
   } catch (err) {
-    console.log("GET PRODUCTS ERROR:", err);
+    console.error("GET PRODUCTS ERROR:", err);
 
     return res.status(500).json({
       success: false,
@@ -701,15 +588,15 @@ exports.getProductsByCategory = async (req, res) => {
 
     // 1. Query products matching category/subcategory
     const products = await Product.find(query).select(
-      "name images price tags discountPrice category subcategory rating isAvailable isFavourite restaurantId belongsTo chefId",
+      "name images price tags discountPrice category subcategory rating isAvailable isFavourite vendorId belongsTo chefId",
     );
 
     // 2. Extract restaurant IDs safely
-    const restaurantIds = products.map((p) => p.restaurantId).filter(Boolean);
+    const vendorIds = products.map((p) => p.vendorId).filter(Boolean);
 
     // 3. Query associated restaurants
     const restaurants = await Restaurant.find({
-      _id: { $in: restaurantIds },
+      _id: { $in: vendorIds },
     }).select("name logo");
 
     // 4. Map restaurant data into product objects
@@ -1123,7 +1010,7 @@ exports.getProductById = async (req, res) => {
 exports.getProductDetails = async (req, res) => {
   try {
     const product = await Product.findById(req.params.id).select(
-      "name image description rating price discountPrice addOns sizes isAvailable isFavourite",
+      "name image description rating price discountPrice addOns variations isAvailable isFavourite",
     );
 
     if (!product) {
@@ -1146,7 +1033,7 @@ exports.getProductDetails = async (req, res) => {
 };
 
 // =====================================
-// UPDATE PRODUCT
+// UPDATE PRODUCT (with Socket IO Notifications)
 // =====================================
 exports.updateProduct = async (req, res) => {
   try {
@@ -1159,37 +1046,44 @@ exports.updateProduct = async (req, res) => {
       });
     }
 
+    // Validate updated vendor existence if vendorId is being changed
     if (
-      req.body.restaurantId &&
-      req.body.restaurantId !== String(product.restaurantId)
+      req.body.vendorId &&
+      req.body.vendorId !== String(product.vendorId)
     ) {
-      const restaurant = await Restaurant.findById(req.body.restaurantId);
-      if (!restaurant) {
+      const vendor = await Vendor.findById(req.body.vendorId);
+      if (!vendor) {
         return res.status(404).json({
           success: false,
-          message: "Restaurant not found",
+          message: "Vendor not found",
         });
       }
     }
 
+    // Comprehensive list of updatable product fields
     const fields = [
       "name",
       "description",
       "weight",
       "quantity",
       "images",
-      "restaurantId",
+      "vendorId",
+      "belongsTo",
       "category",
       "subcategory",
       "price",
       "discountPrice",
+      "variations",
+      "serving",
       "addOns",
       "isVeg",
       "tags",
       "likes",
       "isAvailable",
       "preparationTime",
+      "rating",
       "status",
+      "type",
     ];
 
     fields.forEach((field) => {
@@ -1200,13 +1094,34 @@ exports.updateProduct = async (req, res) => {
 
     await product.save();
 
+    // Trigger Socket IO Real-time Events
+    const io = req.app.get("io");
+
+    if (io) {
+      const targetVendorId = product.vendorId;
+
+      // Notify Vendor Dashboard
+      io.to(`vendor:${targetVendorId}`).emit("vendorProductUpdated", {
+        vendorId: targetVendorId,
+        product,
+        message: "Product details updated successfully",
+      });
+
+      // Notify Active Customers viewing Vendor Menu Catalog
+      io.to(`vendorCatalog:${targetVendorId}`).emit("menuCatalogUpdated", {
+        vendorId: targetVendorId,
+        action: "UPDATE_PRODUCT",
+        product,
+      });
+    }
+
     return res.status(200).json({
       success: true,
       message: "Product updated successfully",
       product,
     });
   } catch (err) {
-    console.log("UPDATE PRODUCT ERROR:", err);
+    console.error("UPDATE PRODUCT ERROR:", err);
 
     return res.status(500).json({
       success: false,
