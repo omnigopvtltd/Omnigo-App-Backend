@@ -1,40 +1,40 @@
-const admin = require("firebase-admin");
-require("../config/firebase");
-// const { initializeApp, cert, getApps } = require("firebase-admin/app");
 const { getMessaging } = require("firebase-admin/messaging");
-const path = require("path");
 const Message = require("../models/Message");
 const Conversation = require("../models/Conversation");
 const CallLog = require("../models/callLog");
 const User = require("../models/User");
-const onlineUsers  = require("../socket");
-// const serviceAccountPath = path.join(__dirname, "serviceAccountKey.json");
 
+// Dynamic FCM Push Notification Helper
 async function handleOfflineNotification(
   receiverId,
   messageText,
   senderId,
-  messageType,
+  attachments = []
 ) {
   try {
-    // 1. Find token of Receiver
-    const user = await User.findById(receiverId);
-    const fcmToken =
-      "cb3sjZ5J9QIxGNWRk4lMFE:APA91bGHjkGgfP3D4Y8IvP6KeGwI636astufuR44zxZ0JMXkEPb6bo_gdxfn_Nbq6UVgaw0jEfS92_SXwm97DxYw9LZLqstqTliNLgys0gw2mgEqvV-e0E4"; // Hardcoded for testing purposes
+    const user = await User.findById(receiverId).select("fcmToken fcmTokens");
+    if (!user) return;
 
-    if (!fcmToken) {
-      console.log(
-        `[FCM Notification Skip]: No token found for User ID: ${receiverId}`,
-      );
+    // Collect all valid FCM tokens for multi-device support
+    const tokens = [];
+    if (user.fcmToken) tokens.push(user.fcmToken);
+    if (Array.isArray(user.fcmTokens)) {
+      user.fcmTokens.forEach((t) => {
+        if (t && !tokens.includes(t)) tokens.push(t);
+      });
+    }
+
+    if (tokens.length === 0) {
+      console.log(`[FCM Skip]: No active tokens found for User ID: ${receiverId}`);
       return;
     }
 
-    // 2. Construct Notification Data Payload
+    const bodyText = messageText || (attachments.length > 0 ? "Sent an attachment" : "New message");
+
     const payload = {
-      token: fcmToken,
       notification: {
         title: "New Message Received",
-        body: messageType === "text" ? messageText : "Sent an attachment",
+        body: bodyText,
       },
       data: {
         click_action: "FLUTTER_NOTIFICATION_CLICK",
@@ -43,15 +43,17 @@ async function handleOfflineNotification(
       },
     };
 
-    // 3. Send out message using Firebase Messaging engine
-    const response = await getMessaging().send(payload);
-    console.log("Firebase Push Notification sent successfully:", response);
+    if (tokens.length === 1) {
+      await getMessaging().send({ ...payload, token: tokens[0] });
+    } else {
+      await getMessaging().sendMulticast({ ...payload, tokens });
+    }
+    console.log(`FCM Push Notification sent successfully to User ID: ${receiverId}`);
   } catch (error) {
     console.error("Firebase Messaging System Error:", error.message);
   }
 }
 
-// const onlineUsers = new Map();
 const activeCallSessions = new Map();
 
 const chatSocket = (io, onlineUsers) => {
@@ -59,88 +61,96 @@ const chatSocket = (io, onlineUsers) => {
     console.log(`>>> Chat Connected Subsystem: ${socket.id}`);
 
     socket.on("join", (userId) => {
-      socket.join(userId);
-      onlineUsers.set(userId, socket.id);
-      socket.userId = userId;
+      if (!userId) return;
+      socket.join(userId.toString());
+      onlineUsers.set(userId.toString(), socket.id);
+      socket.userId = userId.toString();
       io.emit("onlineUsers", [...onlineUsers.keys()]);
     });
 
     socket.on("joinConversation", (conversationId) => {
-      socket.join(conversationId);
+      if (conversationId) {
+        socket.join(conversationId.toString());
+      }
     });
 
     // ================= SAFE SEND MESSAGE PIPELINE =================
     socket.on("sendMessage", async (data) => {
       const {
         conversationId,
-        sender,
-        receiver,
-        message,
-        messageType = "text",
+        senderId,
+        senderRole,
+        receiverId,
+        text = "",
+        attachments = [],
       } = data;
+
       try {
+        if (!conversationId || !senderId || !senderRole || !receiverId) {
+          return socket.emit("messageError", {
+            status: "FAILED",
+            reason: "Missing required payload parameters (conversationId, senderId, senderRole, receiverId)",
+          });
+        }
+
+        // 1. Create message document
         const newMessage = await Message.create({
           conversationId,
-          sender,
-          receiver,
-          message,
-          messageType,
+          senderId,
+          senderRole,
+          text,
+          attachments,
         });
 
+        // 2. Identify target unread counter role based on receiver role
+        // Supported roles: user, rider, vendor, admin
+        let targetRoleKey = "user";
+        if (["rider", "vendor", "admin"].includes(data.receiverRole)) {
+          targetRoleKey = data.receiverRole;
+        }
+
+        // 3. Update Conversation lastMessage object and increment unread count
         await Conversation.findByIdAndUpdate(conversationId, {
-          lastMessage: message,
-          lastMessageAt: new Date(),
+          lastMessage: {
+            text,
+            senderId,
+            senderRole,
+            sentAt: newMessage.createdAt,
+          },
+          $inc: { [`unreadCount.${targetRoleKey}`]: 1 },
         });
 
-        // 2. Check if Receiver is active in the chat room?
-        const roomClients = io.sockets.adapter.rooms.get(data.conversationId);
-
-        // Dynamic Room Checking System logic adjustment
+        // 4. Room Active Receiver Verification
+        const roomClients = io.sockets.adapter.rooms.get(conversationId.toString());
         let isReceiverInRoom = false;
+
         if (roomClients && onlineUsers) {
-          // Check if receiver's socket ID is linked and present in room array
-          const targetSocketId = onlineUsers.get(data.receiver);
+          const targetSocketId = onlineUsers.get(receiverId.toString());
           if (targetSocketId && roomClients.has(targetSocketId)) {
             isReceiverInRoom = true;
           }
         }
 
-        if (isReceiverInRoom) {
-          // if active so send message through socket
-          io.to(data.conversationId).emit("receiveMessage", newMessage);
-        } else {
-          // if not active so send message through socket + background push notification
-          io.to(data.conversationId).emit("receiveMessage", newMessage);
+        // 5. Emit message events
+        io.to(conversationId.toString()).emit("receiveMessage", newMessage);
+        socket.emit("messageSent", newMessage);
 
-          // Trigger Firebase push notification flawlessly now
-          await handleOfflineNotification(
-            data.receiver,
-            data.message,
-            data.sender,
-            data.messageType,
-          );
+        // 6. Push notification if receiver is not actively inside the room
+        if (!isReceiverInRoom) {
+          await handleOfflineNotification(receiverId, text, senderId, attachments);
         }
-
-        io.to(sender).emit("messageSent", newMessage);
       } catch (err) {
-        console.error("⚠️ DATABASE ERROR CATCH:", err.message);
+        console.error("⚠️ SOCKET SEND MESSAGE ERROR:", err.message);
         socket.emit("messageError", {
           status: "FAILED",
-          reason: "Database Sync Error. Record skipped.",
+          reason: err.message || "Database execution failed.",
         });
       }
     });
 
-    // ================= MONGO INTEGRATED CALL SIGNALING =================
+    // ================= CALL SIGNALING =================
     socket.on("initiateCall", async (data) => {
-      const {
-        conversationId,
-        callerId,
-        receiverId,
-        signalData,
-        callType = "audio",
-      } = data;
-
+      const { conversationId, callerId, receiverId, signalData, callType = "audio" } = data;
       try {
         const newCallRecord = await CallLog.create({
           conversationId,
@@ -150,12 +160,12 @@ const chatSocket = (io, onlineUsers) => {
           status: "missed",
         });
 
-        activeCallSessions.set(conversationId, {
+        activeCallSessions.set(conversationId.toString(), {
           dbRecordId: newCallRecord._id,
           startedTime: new Date(),
         });
 
-        io.to(receiverId).emit("incomingCall", {
+        io.to(receiverId.toString()).emit("incomingCall", {
           conversationId,
           callerId,
           signalData,
@@ -163,26 +173,21 @@ const chatSocket = (io, onlineUsers) => {
           callLogId: newCallRecord._id,
         });
       } catch (error) {
-        console.error(
-          "Failed to write initial call tracking state:",
-          error.message,
-        );
+        console.error("Failed to write initial call state:", error.message);
       }
     });
 
     socket.on("answerCall", async (data) => {
       const { conversationId, receiverId, callerId, signalData } = data;
-
       try {
-        const session = activeCallSessions.get(conversationId);
+        const session = activeCallSessions.get(conversationId.toString());
         if (session) {
           await CallLog.findByIdAndUpdate(session.dbRecordId, {
             status: "connected",
             startedAt: new Date(),
           });
         }
-
-        io.to(callerId).emit("callAccepted", { receiverId, signalData });
+        io.to(callerId.toString()).emit("callAccepted", { receiverId, signalData });
       } catch (error) {
         console.error("Answer state sync crash:", error.message);
       }
@@ -190,9 +195,8 @@ const chatSocket = (io, onlineUsers) => {
 
     socket.on("endCall", async (data) => {
       const { conversationId, targetId, reason } = data;
-
       try {
-        const session = activeCallSessions.get(conversationId);
+        const session = activeCallSessions.get(conversationId.toString());
         if (session) {
           const endTime = new Date();
           const record = await CallLog.findById(session.dbRecordId);
@@ -203,9 +207,7 @@ const chatSocket = (io, onlineUsers) => {
           if (reason === "rejected") {
             finalStatus = "rejected";
           } else if (record && record.status === "connected") {
-            totalDuration = Math.round(
-              (endTime - new Date(session.startedTime)) / 1000,
-            );
+            totalDuration = Math.round((endTime - new Date(session.startedTime)) / 1000);
             finalStatus = "ended";
           }
 
@@ -215,17 +217,20 @@ const chatSocket = (io, onlineUsers) => {
             durationInSeconds: totalDuration,
           });
 
-          activeCallSessions.delete(conversationId);
+          activeCallSessions.delete(conversationId.toString());
         }
 
-        io.to(targetId).emit("callEnded", { reason });
+        io.to(targetId.toString()).emit("callEnded", { reason });
       } catch (error) {
-        console.error("Failed terminating db state engine:", error.message);
+        console.error("Failed terminating call state:", error.message);
       }
     });
 
     socket.on("disconnect", () => {
-      if (socket.userId) onlineUsers.delete(socket.userId);
+      if (socket.userId) {
+        onlineUsers.delete(socket.userId);
+        io.emit("onlineUsers", [...onlineUsers.keys()]);
+      }
     });
   });
 };

@@ -520,29 +520,30 @@
 //   }
 // };
 
-// controllers/chatController.js
-const User = require("../models/User.js");
-const Conversation = require("../models/Conversation.js");
-const Message = require("../models/Message.js");
+const mongoose = require("mongoose");
+const User = require("../models/User");
+const Conversation = require("../models/Conversation");
+const Message = require("../models/Message");
 
 /**
  * GET /api/chat/contacts
- * Search users across name, email, or phone
  */
 exports.getContactsController = async (req, res) => {
   try {
-    const { search = "" } = req.query;
+    const { search = "", role } = req.query;
 
-    const searchFilter = search
-      ? {
-          $or: [
-            { name: { $regex: search, $options: "i" } },
-            { fullName: { $regex: search, $options: "i" } },
-            { email: { $regex: search, $options: "i" } },
-            { phone: { $regex: search, $options: "i" } },
-          ],
-        }
-      : {};
+    const searchFilter = {};
+    if (search) {
+      searchFilter.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { fullName: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { phone: { $regex: search, $options: "i" } },
+      ];
+    }
+    if (role) {
+      searchFilter.role = role === "customer" ? "user" : role;
+    }
 
     const users = await User.find(searchFilter)
       .select("_id name fullName email phone role")
@@ -554,76 +555,150 @@ exports.getContactsController = async (req, res) => {
       name: u.name || u.fullName || "User",
       email: u.email || "",
       phone: u.phone || "",
-      role: u.role || "customer",
+      role: u.role === "customer" ? "user" : u.role || "user",
     }));
 
-    return res.status(200).json({ contacts: formattedContacts });
+    return res.status(200).json({ success: true, contacts: formattedContacts });
   } catch (error) {
     console.error("GET CONTACTS ERROR:", error);
-    return res.status(500).json({ error: "Failed to fetch user directory" });
+    return res.status(500).json({ success: false, error: "Failed to fetch user directory" });
   }
 };
 
 /**
- * POST /api/chat/conversations/:id/messages
+ * POST /api/chat/conversations
  */
-// exports.sendMessage = async (req, res) => {
-//   try {
-//     const { id: conversationId } = req.params;
-//     const { text, attachments = [], senderRole, senderId } = req.body;
+exports.getOrCreateConversation = async (req, res) => {
+  try {
+    const { type, userId, riderId, vendorId, adminId, orderId } = req.body;
 
-//     if (!text || !text.trim()) {
-//       return res.status(400).json({ error: "Message text is required" });
-//     }
+    if (!type) {
+      return res.status(400).json({ success: false, message: "Type parameter is required" });
+    }
 
-//     const conversation = await Conversation.findById(conversationId);
-//     if (!conversation) {
-//       return res.status(404).json({ error: "Conversation not found" });
-//     }
+    // Build unique query payload dynamically
+    const query = { type };
+    if (userId) query.userId = userId;
+    if (riderId) query.riderId = riderId;
+    if (vendorId) query.vendorId = vendorId;
+    if (adminId) query.adminId = adminId;
+    if (orderId) query.orderId = orderId;
 
-//     const messagePayload = {
-//       conversationId: conversation._id,
-//       text,
-//       attachments,
-//       senderRole,
-//       ...(senderId && { senderId }),
-//     };
+    let conversation = await Conversation.findOne(query)
+      .populate("userId", "name fullName email phone")
+      .populate("riderId", "name fullName email phone")
+      .populate("vendorId", "name fullName email phone")
+      .populate("adminId", "name fullName email phone");
 
-//     const newMessage = await Message.create(messagePayload);
+    if (!conversation) {
+      conversation = await Conversation.create({
+        type,
+        userId: userId || null,
+        riderId: riderId || null,
+        vendorId: vendorId || null,
+        adminId: adminId || null,
+        orderId: orderId || null,
+        lastMessage: {
+          text: "",
+          senderId: null,
+          senderRole: null,
+          sentAt: new Date(),
+        },
+      });
 
-//     conversation.lastMessage = newMessage._id;
-//     conversation.updatedAt = new Date();
-//     await conversation.save({ validateModifiedOnly: true });
+      conversation = await Conversation.findById(conversation._id)
+        .populate("userId", "name fullName email phone")
+        .populate("riderId", "name fullName email phone")
+        .populate("vendorId", "name fullName email phone")
+        .populate("adminId", "name fullName email phone");
+    }
 
-//     return res.status(201).json({ message: newMessage });
-//   } catch (error) {
-//     console.error("SEND MESSAGE ERROR:", error);
-//     return res.status(500).json({ error: error.message || "Failed to send message" });
-//   }
-// };
+    return res.status(200).json({ success: true, conversation });
+  } catch (error) {
+    console.error("GET OR CREATE CONVO ERROR:", error);
+    return res.status(500).json({ success: false, error: "Failed to find or create conversation" });
+  }
+};
 
-const mongoose = require("mongoose");
+/**
+ * GET /api/chat/conversations
+ */
+exports.getConversations = async (req, res) => {
+  try {
+    const currentUserId = req.user?._id || req.user?.id || req.query.userId;
+    const currentUserRole = req.user?.role || req.query.role || "user";
 
+    let filter = {};
+    if (currentUserId && currentUserRole !== "admin") {
+      filter.$or = [
+        { userId: currentUserId },
+        { riderId: currentUserId },
+        { vendorId: currentUserId },
+        { adminId: currentUserId },
+      ];
+    }
+
+    // DO NOT populate lastMessage since it is an embedded schema object
+    const conversations = await Conversation.find(filter)
+      .populate("userId", "name fullName email phone")
+      .populate("riderId", "name fullName email phone")
+      .populate("vendorId", "name fullName email phone")
+      .populate("adminId", "name fullName email phone")
+      .sort({ "lastMessage.sentAt": -1, updatedAt: -1 });
+
+    return res.status(200).json({ success: true, conversations });
+  } catch (error) {
+    console.error("GET CONVERSATIONS ERROR:", error);
+    return res.status(500).json({ success: false, error: "Failed to fetch conversations" });
+  }
+};
+
+/**
+ * GET /api/chat/conversations/:id/messages
+ */
+exports.getMessages = async (req, res) => {
+  try {
+    const { id: conversationId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+      return res.status(400).json({ success: false, message: "Invalid Conversation ID" });
+    }
+
+    const messages = await Message.find({ conversationId }).sort({ createdAt: 1 });
+    return res.status(200).json({ success: true, messages });
+  } catch (error) {
+    console.error("GET MESSAGES ERROR:", error);
+    return res.status(500).json({ success: false, error: "Failed to fetch messages" });
+  }
+};
+
+/**
+ * POST /api/chat/conversations/:conversationId/messages
+ */
 exports.sendMessage = async (req, res) => {
   try {
     const { conversationId } = req.params;
-    const { text, attachments, senderRole, senderId } = req.body;
+    let { text = "", attachments = [], senderRole, senderId, receiverRole = "user" } = req.body;
 
-    // Validate ObjectIds
+    // Standardize role nomenclature
+    if (senderRole === "customer") senderRole = "user";
+    if (receiverRole === "customer") receiverRole = "user";
+
+    // Validate Authorization if req.user is set via auth middleware
+    if (req.user && req.user._id.toString() !== senderId.toString()) {
+      return res.status(403).json({ success: false, message: "Unauthorized sender identity" });
+    }
+
     const conversation = await Conversation.findById(conversationId);
     if (!conversation) {
       return res.status(404).json({ success: false, message: "Conversation not found" });
     }
 
-  const user = await User.findById(senderId);
-    if (!user) {
+    const sender = await User.findById(senderId);
+    if (!sender) {
       return res.status(404).json({ success: false, message: "Sender not found" });
     }
-    // if (!mongoose.Types.ObjectId.isValid(senderId)) {
-    //   return res.status(400).json({ success: false, message: "Invalid Sender ID" });
-    // }
 
-    // Create Message Document
     const newMessage = await Message.create({
       conversationId,
       senderId,
@@ -632,16 +707,24 @@ exports.sendMessage = async (req, res) => {
       attachments,
     });
 
-    // Update conversation's lastMessage reference
+    let targetRoleKey = ["user", "rider", "vendor", "admin"].includes(receiverRole)
+      ? receiverRole
+      : "user";
+
     await Conversation.findByIdAndUpdate(conversationId, {
-      lastMessage: newMessage._id,
+      lastMessage: {
+        text,
+        senderId,
+        senderRole,
+        sentAt: newMessage.createdAt,
+      },
+      $inc: { [`unreadCount.${targetRoleKey}`]: 1 },
       updatedAt: new Date(),
     });
 
-    // Real-time socket emit (if active)
     const io = req.app.get("socketio");
     if (io) {
-      io.to(conversationId).emit("new_message", newMessage);
+      io.to(conversationId.toString()).emit("receiveMessage", newMessage);
     }
 
     return res.status(201).json({
@@ -652,7 +735,7 @@ exports.sendMessage = async (req, res) => {
     console.error("SEND MESSAGE BACKEND ERROR:", error);
     return res.status(500).json({
       success: false,
-      message: error.message,
+      message: error.message || "Failed to send message",
     });
   }
 };
@@ -663,88 +746,20 @@ exports.sendMessage = async (req, res) => {
 exports.markConversationRead = async (req, res) => {
   try {
     const { id: conversationId } = req.params;
+    let role = req.body.role || req.user?.role || "user";
+    if (role === "customer") role = "user";
 
-    await Conversation.findByIdAndUpdate(
-      conversationId,
-      { $set: { unreadCount: 0 } },
-      { runValidators: false }
-    );
-
-    return res.status(200).json({ success: true, message: "Marked as read" });
-  } catch (error) {
-    console.error("MARK READ ERROR:", error);
-    return res.status(500).json({ error: "Failed to mark conversation read" });
-  }
-};
-
-/**
- * GET /api/chat/conversations
- */
-exports.getConversations = async (req, res) => {
-  try {
-    const conversations = await Conversation.find()
-      .populate("lastMessage")
-      .populate("customerId", "name fullName email phone")
-      .populate("riderId", "name fullName email phone")
-      // .populate("restaurantId", "name title email phone")
-      .sort({ updatedAt: -1 });
-
-    return res.status(200).json({ conversations });
-  } catch (error) {
-    console.error("GET CONVERSATIONS ERROR:", error);
-    return res.status(500).json({ error: "Failed to fetch conversations" });
-  }
-};
-
-/**
- * GET /api/chat/conversations/:id/messages
- */
-exports.getMessages = async (req, res) => {
-  try {
-    const { id: conversationId } = req.params;
-    const messages = await Message.find({ conversationId }).sort({ createdAt: 1 });
-    return res.status(200).json({ messages });
-  } catch (error) {
-    console.error("GET MESSAGES ERROR:", error);
-    return res.status(500).json({ error: "Failed to fetch messages" });
-  }
-};
-
-/**
- * POST /api/chat/conversations
- */
-exports.getOrCreateConversation = async (req, res) => {
-  try {
-    const { type, customerId, riderId, text, senderId, senderRole } = req.body;
-
-    const query = { type };
-    if (customerId) query.customerId = customerId;
-    if (riderId) query.riderId = riderId;
-    // if (restaurantId) query.restaurantId = restaurantId;
-
-    let conversation = await Conversation.findOne(query);
-
-    if (!conversation) {
-      conversation = await Conversation.create({
-        type,
-        customerId: senderRole !== "user" ? null : senderId,
-        riderId : senderRole !== "rider" ? null : senderId,
-        adminId: senderRole !== "admin" ? null : senderId,
-        // restaurantId,
-        lastMessage: [
-          {
-            text,
-            senderId,
-            senderRole,
-            sendAt: new Date(),
-          }
-        ]
-      });
+    if (!["user", "rider", "vendor", "admin"].includes(role)) {
+      return res.status(400).json({ success: false, message: "Invalid role specified" });
     }
 
-    return res.status(200).json({ conversation });
+    await Conversation.findByIdAndUpdate(conversationId, {
+      $set: { [`unreadCount.${role}`]: 0 },
+    });
+
+    return res.status(200).json({ success: true, message: `Unread count cleared for role: ${role}` });
   } catch (error) {
-    console.error("GET OR CREATE CONVO ERROR:", error);
-    return res.status(500).json({ error: "Failed to find or create conversation" });
+    console.error("MARK READ ERROR:", error);
+    return res.status(500).json({ success: false, error: "Failed to mark conversation read" });
   }
 };

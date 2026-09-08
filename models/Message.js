@@ -60,36 +60,16 @@ const messageSchema = new mongoose.Schema(
     },
     senderRole: {
       type: String,
-      enum: ["customer", "rider", "admin", "ai"],
+      enum: ["user", "rider", "vendor", "admin", "ai"],
       required: true,
     },
 
     text: { type: String, default: "" },
-    attachments: [{ type: String }], // image/file URLs
-    // message: [
-    //   {
-    //     message: {
-    //       type: String,
-    //       required: true,
-    //     },
-    //     timestamp: {
-    //       type: Date,
-    //       default: Date.now,
-    //     },
-    //     isRead: {
-    //       type: Boolean,
-    //       default: false,
-    //     },
-    //   },
-    // ],
-
+    attachments: [{ type: String }], // Array of image/file URLs
     readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
-
-    // Soft-deleted messages stay in the DB for moderation/audit but are
-    // hidden from the thread.
     isDeleted: { type: Boolean, default: false },
   },
-  { timestamps: true },
+  { timestamps: true }
 );
 
 messageSchema.index({ conversationId: 1, createdAt: 1 });
