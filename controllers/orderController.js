@@ -1383,10 +1383,28 @@ exports.trackOrder = async (req, res) => {
         orderNumber: order.orderNumber,
         status: order.status, // Main order status
         address: order.address,
-        stops: order.stops, // <-- Contains the updated stop statuses (e.g. picked_up)
-        rider: order.riderId,
-        user: order.userId,
-        userName: order.userId?.name || null,
+        stops: order.stops, // <-- Contains vendor details & updated stop statuses
+
+        // Clean User Details Object
+        user: order.userId
+          ? {
+              id: order.userId._id,
+              name: order.userId.name || "N/A",
+              phone: order.userId.phone || "N/A",
+              email: order.userId.email || "N/A",
+            }
+          : null,
+
+        // Rider Details Object
+        rider: order.riderId
+          ? {
+              id: order.riderId._id,
+              name: order.riderId.name || "N/A",
+              phone: order.riderId.phone || "N/A",
+              location: order.riderId.location || null,
+            }
+          : null,
+
         routingMetrics: order.routingMetrics,
         timeline: {
           orderPlaced: order.createdAt,
@@ -1396,6 +1414,7 @@ exports.trackOrder = async (req, res) => {
       },
     });
   } catch (err) {
+    console.error("TRACK ORDER ERROR:", err);
     return res.status(500).json({ success: false, message: err.message });
   }
 };
