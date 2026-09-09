@@ -242,7 +242,7 @@ require("../config/firebase");
 const { getMessaging } = require("firebase-admin/messaging");
 const Message = require("../models/Message");
 const Conversation = require("../models/Conversation");
-const CallLog = require("../models/CallLog");
+const CallLog = require("../models/callLog");
 const User = require("../models/User");
 
 /**

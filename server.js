@@ -92,7 +92,7 @@ app.use("/api/campaigns", campaignRoutes);
 app.use("/api/settings", AdminSettings);
 
 app.use("/api/chat", require("./routes/chatRoutes"));
-// app.use("/api/calls", require("./routes/callRoutes"));
+app.use("/api/calls", require("./routes/callRoutes"));
 app.use("/api/search", require("./routes/searchRoutes"));
 app.use("/api/notifications", require("./routes/notificationRoutes"));
 app.use("/api/cms", require("./routes/cmsRoutes"));
