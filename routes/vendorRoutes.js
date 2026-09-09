@@ -19,6 +19,7 @@ const {
   getVendorDashboardOverview,
   getVendorProfile,
   toggleRushMode,
+  getAllVendorBrands,
 } = require("../controllers/vendorController");
 const { saveFcmToken } = require("../controllers/vendorController");
 const upload = require("../middleware/upload");
@@ -99,5 +100,6 @@ router.put(
   updateVendorProfile,
 );
 router.patch("/toggle-rushmode", auth, toggleRushMode);
+router.get("/brands", auth, getAllVendorBrands);
 
 module.exports = router;

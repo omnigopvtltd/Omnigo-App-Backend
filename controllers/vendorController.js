@@ -1828,3 +1828,26 @@ exports.toggleRushMode = async (req, res) => {
     });
   }
 };
+
+
+// =====================================
+// GET ALL RESTAURANT BRANDS (filter, search, paginate)
+// =====================================
+exports.getAllVendorBrands = async (req, res) => {
+  try {
+    const vendors = await Vendor.find().select("businessName logo _id");
+
+    return res.status(200).json({
+      success: true,
+      count: vendors.length,
+      vendors,
+    });
+  } catch (err) {
+    console.log("GET VendorS ERROR:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
