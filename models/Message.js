@@ -66,7 +66,8 @@ const messageSchema = new mongoose.Schema(
 
     text: { type: String, default: "" },
     attachments: [{ type: String }], // Array of image/file URLs
-    readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    // readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    isRead: { type: Boolean, default: false },
     isDeleted: { type: Boolean, default: false },
   },
   { timestamps: true }
