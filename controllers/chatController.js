@@ -746,18 +746,22 @@ exports.sendMessage = async (req, res) => {
 exports.markConversationRead = async (req, res) => {
   try {
     const { id: conversationId } = req.params;
-    let role = req.body.role || req.user?.role || "user";
-    if (role === "customer") role = "user";
+    // let role = req.body.role || req.user?.role || "user";
+    // if (role === "customer") role = "user";
 
-    if (!["user", "rider", "vendor", "admin"].includes(role)) {
-      return res.status(400).json({ success: false, message: "Invalid role specified" });
-    }
+    // if (!["user", "rider", "vendor", "admin"].includes(role)) {
+    //   return res.status(400).json({ success: false, message: "Invalid role specified" });
+    // }
 
-    await Conversation.findByIdAndUpdate(conversationId, {
-      $set: { [`unreadCount.${role}`]: 0 },
-    });
+    const updatedMessages = await Message.updateMany(
+      { conversationId, isRead: false },
+      { $set: { isRead: true } }
+    );
+    // await Conversation.findByIdAndUpdate(conversationId, {
+    //   $set: { [`unreadCount.${role}`]: 0 },
+    // });
 
-    return res.status(200).json({ success: true, message: `Unread count cleared for role: ${role}` });
+    return res.status(200).json({ success: true, message: `Message marked as read` });
   } catch (error) {
     console.error("MARK READ ERROR:", error);
     return res.status(500).json({ success: false, error: "Failed to mark conversation read" });
