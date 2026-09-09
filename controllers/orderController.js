@@ -410,15 +410,23 @@ exports.confirmOrder = async (req, res) => {
     }
 
     // 1. Find Order associated with this Vendor
+    const vendor = await Vendor.findOne({
+      _id: vendorId,
+      // status: "pending"
+      // "stops.vendorId": vendorId,
+    });
+
+    // 1. Find Order associated with this Vendor
     const order = await Order.findOne({
       _id: req.params.id,
-      "stops.vendorId": vendorId,
+      status: "pending",
+      // "stops.vendorId": vendorId,
     });
 
     if (!order) {
       return res
         .status(404)
-        .json({ success: false, message: "Order not found for this vendor" });
+        .json({ success: false, message: "Order not found" });
     }
 
     if (order.status === "cancelled") {
@@ -428,25 +436,34 @@ exports.confirmOrder = async (req, res) => {
       });
     }
 
-    // 2. Update Vendor Specific Stop Status to 'assigned' or 'confirmed'
-    let vendorStopFound = false;
-    order.stops.forEach((stop) => {
-      if (stop.vendorId && stop.vendorId.toString() === vendorId.toString()) {
-        stop.status = "assigned"; // Vendor status updated
-        vendorStopFound = true;
-      }
-    });
-
-    if (!vendorStopFound) {
+    if (order.status !== "pending") {
       return res.status(400).json({
         success: false,
-        message: "Vendor stop not matching order stops",
+        message: "Only pending orders can be confirmed",
       });
     }
+
+    // 2. Update Vendor Specific Stop Status to 'assigned' or 'confirmed'
+    // let vendorStopFound = false;
+    // order.stops.forEach((stop) => {
+    //   if (stop.vendorId && stop.vendorId.toString() === vendorId.toString()) {
+    //     stop.status = "assigned"; // Vendor status updated
+    //     vendorStopFound = true;
+    //   }
+    // });
+
+    // if (!vendorStopFound) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Vendor stop not matching order stops",
+    //   });
+    // }
 
     // 3. Update Overall Order Status to 'confirmed'
     order.status = "confirmed";
     await order.save();
+    vendor.status = "assigned";
+    await vendor.save();
 
     // 4. Socket IO Real-time Updates
     const io = req.app.get("io");
@@ -471,7 +488,7 @@ exports.confirmOrder = async (req, res) => {
       await sendNotification(
         customer.fcmToken,
         "Order Confirmed",
-        `Your order #${order.orderNumber} has been confirmed by the vendor.`
+        `Your order #${order.orderNumber} has been confirmed by the vendor.`,
       );
     }
 
@@ -501,11 +518,17 @@ exports.readyOrder = async (req, res) => {
         message: "Unauthorized access: Vendor ID missing",
       });
     }
+    // 1. Find Order associated with this Vendor
+    const vendor = await Vendor.findOne({
+      _id: vendorId,
+      // status: "pending"
+      // "stops.vendorId": vendorId,
+    });
 
     // 1. Find Order belonging to this Vendor
     const order = await Order.findOne({
       _id: req.params.id,
-      "stops.vendorId": vendorId,
+      // "stops.vendorId": vendorId,
     });
 
     if (!order) {
@@ -521,33 +544,35 @@ exports.readyOrder = async (req, res) => {
       });
     }
 
-    // 2. Update Vendor Specific Stop Status to 'ready'
-    let vendorStopFound = false;
-    order.stops.forEach((stop) => {
-      if (stop.vendorId && stop.vendorId.toString() === vendorId.toString()) {
-        stop.status = "ready"; // Vendor level status
-        vendorStopFound = true;
-      }
-    });
+    // // 2. Update Vendor Specific Stop Status to 'ready'
+    // let vendorStopFound = false;
+    // order.stops.forEach((stop) => {
+    //   if (stop.vendorId && stop.vendorId.toString() === vendorId.toString()) {
+    //     stop.status = "ready"; // Vendor level status
+    //     vendorStopFound = true;
+    //   }
+    // });
 
-    if (!vendorStopFound) {
-      return res.status(400).json({
-        success: false,
-        message: "Vendor stop not matching order stops",
-      });
-    }
+    // if (!vendorStopFound) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Vendor stop not matching order stops",
+    //   });
+    // }
 
     // 3. Update Main Order Status to 'ready'
     order.status = "ready";
     await order.save();
+    vendor.status = "ready";
+    await vendor.save();
 
     // 4. Socket IO Real-Time Notifications
     const io = req.app.get("io");
 
     if (io) {
       // Notify Assigned Rider (if rider is already assigned)
-      if (order.driverId || order.riderId) {
-        const assignedRiderId = order.driverId || order.riderId;
+      if (order.riderId || order.riderId) {
+        const assignedRiderId = order.riderId || order.riderId;
         io.to(`rider:${assignedRiderId}`).emit("orderReadyForPickup", {
           orderId: order._id,
           orderNumber: order.orderNumber,
@@ -574,7 +599,7 @@ exports.readyOrder = async (req, res) => {
       await sendNotification(
         customer.fcmToken,
         "Order Ready",
-        `Your order #${order.orderNumber} is prepared and ready!`
+        `Your order #${order.orderNumber} is prepared and ready!`,
       );
     }
 
@@ -589,7 +614,7 @@ exports.readyOrder = async (req, res) => {
     console.error("READY ORDER ERROR:", err);
     return res.status(500).json({ success: false, message: err.message });
   }
-};;
+};
 
 // =====================================
 // GET ONGOING ORDERS
@@ -1603,7 +1628,7 @@ exports.trackOrder = async (req, res) => {
 exports.getVendorOrders = async (req, res) => {
   try {
     const vendorId = req.user?.id || req.user?._id;
-    const { status = "pending" } = req.query; // Tabs: pending | confirmed | ready | complete | cancelled | order_issues
+    const { status = "pending" } = req.query;
 
     if (!vendorId) {
       return res.status(401).json({
@@ -1612,15 +1637,10 @@ exports.getVendorOrders = async (req, res) => {
       });
     }
 
-    const vendor = await Vendor.findById(vendorId);
-    if (!vendor) {
-      return res.status(404).json({
-        success: false,
-        message: "Vendor account not found",
-      });
-    }
+    const mongoose = require("mongoose");
+    const targetVendorObjectId = new mongoose.Types.ObjectId(vendorId);
 
-    // 1. Define Status Mapping for Each UI Tab
+    // Tab Status Mapping
     const tabStatusMap = {
       pending: ["pending"],
       preparing: ["confirmed", "preparing"],
@@ -1632,9 +1652,104 @@ exports.getVendorOrders = async (req, res) => {
 
     const targetStatuses = tabStatusMap[status] || tabStatusMap.pending;
 
-    // 2. Aggregate Counts for Top Navigation Badges [e.g., pending (2), Preparing (1)]
-    const badgeCountsAggregation = await Order.aggregate([
-      { $match: { "stops.vendorId": vendor._id } },
+    // 1. Aggregation Pipeline: Filter Orders & Items strictly by Product's Vendor ID
+    const activeOrders = await Order.aggregate([
+      // Stage A: Basic Status Filter
+      { $match: { status: { $in: targetStatuses } } },
+
+      // Stage B: Unwind items array to lookup each product individually
+      { $unwind: "$items" },
+
+      // Stage C: Join with 'products' collection using productId
+      {
+        $lookup: {
+          from: "products", // Ensure this matches your Product collection name in MongoDB
+          localField: "items.productId",
+          foreignField: "_id",
+          as: "productDetails",
+        },
+      },
+
+      // Stage D: Flatten product details
+      {
+        $unwind: {
+          path: "$productDetails",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      // Stage E: Match ONLY items where Product's vendorId matches Current Vendor ID
+      {
+        $match: {
+          $or: [
+            { "productDetails.vendorId": targetVendorObjectId },
+            { "items.vendorId": targetVendorObjectId },
+            { "stops.vendorId": targetVendorObjectId },
+          ],
+        },
+      },
+
+      // Stage F: Group back into Orders with ONLY matched items
+      {
+        $group: {
+          _id: "$_id",
+          orderNumber: { $first: "$orderNumber" },
+          createdAt: { $first: "$createdAt" },
+          deliveryFee: { $first: "$deliveryFee" },
+          paymentStatus: { $first: "$paymentStatus" },
+          allergyWarning: { $first: "$allergyWarning" },
+          instructions: { $first: "$instructions" },
+          status: { $first: "$status" },
+          riderId: { $first: "$riderId" },
+          userId: { $first: "$userId" },
+          cancellationReason: { $first: "$cancellationReason" },
+          issueDetails: { $first: "$issueDetails" },
+          items: { $push: "$items" },
+        },
+      },
+
+      // Stage G: Sort by Latest Orders
+      { $sort: { createdAt: -1 } },
+    ]);
+
+    // Populate user and driver manually after aggregation
+    await Order.populate(activeOrders, [
+      { path: "riderId", select: "fullName name phone avatar rating" },
+      { path: "userId", select: "fullName name" },
+    ]);
+
+    // 2. Aggregate Counts for Tabs (Strict Matching)
+    const countPipeline = await Order.aggregate([
+      { $unwind: "$items" },
+      {
+        $lookup: {
+          from: "products",
+          localField: "items.productId",
+          foreignField: "_id",
+          as: "productDetails",
+        },
+      },
+      {
+        $unwind: {
+          path: "$productDetails",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $match: {
+          $or: [
+            { "productDetails.vendorId": targetVendorObjectId },
+            { "items.vendorId": targetVendorObjectId },
+            { "stops.vendorId": targetVendorObjectId },
+          ],
+        },
+      },
+      {
+        $group: {
+          _id: "$_id",
+          status: { $first: "$status" },
+        },
+      },
       {
         $group: {
           _id: "$status",
@@ -1643,7 +1758,6 @@ exports.getVendorOrders = async (req, res) => {
       },
     ]);
 
-    // Format badge counts object
     const counts = {
       pending: 0,
       preparing: 0,
@@ -1653,7 +1767,7 @@ exports.getVendorOrders = async (req, res) => {
       order_issues: 0,
     };
 
-    badgeCountsAggregation.forEach((item) => {
+    countPipeline.forEach((item) => {
       for (const [tabKey, statuses] of Object.entries(tabStatusMap)) {
         if (statuses.includes(item._id)) {
           counts[tabKey] += item.count;
@@ -1661,23 +1775,9 @@ exports.getVendorOrders = async (req, res) => {
       }
     });
 
-    // 3. Query Active Orders for Selected Tab
-    const activeOrders = await Order.find({
-      "stops.vendorId": vendorId,
-      status: { $in: targetStatuses },
-    })
-      .populate("driverId", "fullName name phone avatar rating") // Rider details for "Ready" tab
-      .populate("userId", "fullName name") // Customer name for "Order Issues" tab
-      .select(
-        "orderNumber createdAt instructions items subtotal deliveryFee tax totalAmount status stops address paymentMethod allergyWarning cancellationReason issueDetails paymentStatus"
-      )
-      .sort({ createdAt: -1 });
-
-    // 4. Format Orders according to UI Screens
+    // 3. Format Response JSON
     const formattedOrders = activeOrders.map((order) => {
       const dateObj = new Date(order.createdAt);
-      
-      // Formatting Date (e.g. Today, 12/7/26 or 08/09/26 at 7:45 pm)
       const formattedDate =
         dateObj.toLocaleDateString("en-GB", {
           day: "2-digit",
@@ -1693,33 +1793,22 @@ exports.getVendorOrders = async (req, res) => {
           })
           .toLowerCase();
 
-      // Filter only current vendor's items
-      const vendorItems = order.items.filter(
-        (item) => item.vendorId?.toString() === vendorId.toString()
-      );
-
-      // Re-calculate Vendor Subtotal
-      const vendorSubtotal = vendorItems.reduce((acc, item) => {
+      const vendorSubtotal = order.items.reduce((acc, item) => {
         return acc + (item.total || item.price * item.quantity);
       }, 0);
 
       return {
         _id: order._id,
-        orderNumber: order.orderNumber, // e.g. "Order #1052"
+        orderNumber: order.orderNumber,
         placedAt: formattedDate,
         deliveryType:
           order.deliveryFee === 0 ? "Free" : `${order.deliveryFee} PKR`,
         isFreeDelivery: order.deliveryFee === 0,
         paymentStatus: order.paymentStatus || "Paid",
-
-        // Red Allergy Box
         allergyAlert: order.allergyWarning || null,
-
-        // Customer Note Box
         customerNote: order.instructions || "",
 
-        // Items Array
-        items: vendorItems.map((item) => ({
+        items: order.items.map((item) => ({
           itemId: item.productId,
           quantity: item.quantity,
           name: item.name,
@@ -1728,33 +1817,29 @@ exports.getVendorOrders = async (req, res) => {
           formattedPrice: `${item.total || item.price * item.quantity} PKR`,
         })),
 
-        // Financial Totals
         subtotal: vendorSubtotal,
         deliveryFee: order.deliveryFee,
         totalAmount: vendorSubtotal,
         formattedTotal: `${vendorSubtotal.toLocaleString()} PKR`,
 
-        // Tab Specific Fields (UI UI Cards)
         status: order.status,
-        
-        // Assigned Rider Info (Shown in "Ready" screen)
-        rider: order.driverId
+
+        rider: order.riderId
           ? {
-              id: order.driverId._id,
-              name: order.driverId.fullName || order.driverId.name,
-              rating: order.driverId.rating || 4.8,
-              phone: order.driverId.phone,
+              id: order.riderId._id,
+              name: order.riderId.fullName || order.riderId.name,
+              rating: order.riderId.rating || 4.8,
+              phone: order.riderId.phone,
             }
           : null,
 
-        // Cancellation Reason (Shown in "Cancelled" red screen card)
-        cancellationReason:
-          order.cancellationReason || "Item wasn't available",
+        cancellationReason: order.cancellationReason || "Item wasn't available",
 
-        // Issue/Refund Details (Shown in "Order Issues" yellow screen card)
         issue: {
-          customerName: order.userId?.fullName || order.userId?.name || "Customer",
-          complainText: order.issueDetails?.reason || "Your food wasn't delivered to me...",
+          customerName:
+            order.userId?.fullName || order.userId?.name || "Customer",
+          complainText:
+            order.issueDetails?.reason || "Your food wasn't delivered to me...",
           refundStatus: order.issueDetails?.status || "Refund customer",
         },
       };
@@ -1763,7 +1848,7 @@ exports.getVendorOrders = async (req, res) => {
     return res.status(200).json({
       success: true,
       activeTab: status,
-      counts, // Returns badge numbers for tabs: { pending: 2, preparing: 1, ready: 3, complete: 1, cancelled: 1, order_issues: 1 }
+      counts,
       orders: formattedOrders,
     });
   } catch (err) {

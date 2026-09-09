@@ -1110,17 +1110,17 @@ exports.deleteRider = async (req, res) => {
 // ======================================================
 exports.forgotPassword = async (req, res) => {
   try {
-    const { email, phone } = req.body;
+    const { phone } = req.body;
 
-    if (!email && !phone) {
+    if (!phone) {
       return res.status(400).json({
         success: false,
-        message: "Email or phone is required",
+        message: "Phone is required",
       });
     }
 
     const user = await User.findOne({
-      $or: [...(email ? [{ email }] : []), ...(phone ? [{ phone }] : [])],
+      $or: [...(phone ? [{ phone }] : [])],
     });
 
     if (!user) {
@@ -1141,9 +1141,9 @@ exports.forgotPassword = async (req, res) => {
         },
         {
           userId: user._id,
-          email: user.email,
+          // email: user.email,
           otp,
-          type: "email",
+          type: "phone",
           purpose: "forgot-password",
           verified: false,
           isUsed: false,
