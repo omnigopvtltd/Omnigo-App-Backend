@@ -617,6 +617,215 @@ exports.readyOrder = async (req, res) => {
 };
 
 // =====================================
+// CANCEL ORDER BY VENDOR
+// =====================================
+exports.cancelOrderByVendor = async (req, res) => {
+  try {
+    const vendorId = req.user?.id || req.user?._id;
+    const cancellationReason = req.body?.reason
+
+    if (!vendorId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized access: Vendor ID missing",
+      });
+    }
+    // 1. Find Order associated with this Vendor
+    const vendor = await Vendor.findOne({
+      _id: vendorId,
+      // status: "pending"
+      // "stops.vendorId": vendorId,
+    });
+
+    // 1. Find Order belonging to this Vendor
+    const order = await Order.findOne({
+      _id: req.params.id,
+      // "stops.vendorId": vendorId,
+    });
+
+    if (!order) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    }
+
+    // Check if order is already completed or cancelled
+    if (["delivered", "completed", "cancelled"].includes(order.status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Order cannot be cancelled as it is already ${order.status}`,
+      });
+    }
+
+    // Update Vendor Stops Status if present
+    // if (Array.isArray(order.stops) && order.stops.length > 0) {
+    //   order.stops.forEach((stop) => {
+    //     if (stop.vendorId && stop.vendorId.toString() === vendorId.toString()) {
+    //       stop.status = "rejected_by_vendor";
+    //     }
+    //   });
+    // }
+
+    // // 2. Update Vendor Specific Stop Status to 'ready'
+    // let vendorStopFound = false;
+    // order.stops.forEach((stop) => {
+    //   if (stop.vendorId && stop.vendorId.toString() === vendorId.toString()) {
+    //     stop.status = "ready"; // Vendor level status
+    //     vendorStopFound = true;
+    //   }
+    // });
+
+    // if (!vendorStopFound) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Vendor stop not matching order stops",
+    //   });
+    // }
+
+    // Update Overall Order Status & Reason
+    order.status = "cancelled";
+    order.cancellationReason = cancellationReason || "Rejected by vendor";
+    await order.save();
+    vendor.status = "cancelled";
+    await vendor.save();
+
+    // Socket.IO Real-time Updates
+    const io = req.app.get("io");
+    if (io) {
+      // Notify Customer
+      io.to(`user:${order.userId}`).emit("orderStatusUpdated", {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        status: "cancelled",
+        cancellationReason: order.cancellationReason,
+        message: "Your order has been cancelled by the vendor.",
+      });
+
+      // Notify Rider if assigned
+      const assignedRiderId = order.driverId || order.riderId;
+      if (assignedRiderId) {
+        io.to(`rider:${assignedRiderId}`).emit("orderCancelledByVendor", {
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          message: "Order assigned to you has been cancelled by vendor.",
+        });
+      }
+    }
+
+    // Send FCM Push Notification to Customer
+    const customer = await User.findById(order.userId);
+    if (customer?.fcmToken) {
+      await sendNotification(
+        customer.fcmToken,
+        "Order Cancelled",
+        `Your order #${order.orderNumber} was cancelled by vendor: ${order.cancellationReason}`
+      );
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Order cancelled successfully",
+      status: order.status,
+      cancellationReason: order.cancellationReason,
+      order,
+    });
+  } catch (err) {
+    console.error("VENDOR CANCEL ORDER ERROR:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// =====================================
+// RAISE ORDER ISSUE BY USER
+// =====================================
+exports.raiseOrderIssueByUser = async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+    const { orderId } = req.params;
+    const { reason, details, requestedAction } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized access: User ID missing",
+      });
+    }
+
+    if (!reason) {
+      return res.status(400).json({
+        success: false,
+        message: "Issue reason is required",
+      });
+    }
+
+    // Find Order belonging strictly to this User
+    const order = await Order.findOne({ _id: orderId, userId: userId });
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found or does not belong to user",
+      });
+    }
+
+    // Update Issue Details & Change Status
+    order.status = "refund_requested"; // Shifts order to order_issues tab for vendor
+    order.issueDetails = {
+      reason: reason,
+      description: details || "",
+      requestedAction: requestedAction || "Refund customer",
+      status: "pending",
+      createdAt: new Date(),
+    };
+
+    await order.save();
+
+    // Find vendor(s) associated with order items to emit Socket event
+    const productIds = order.items?.map((item) => item.productId).filter(Boolean);
+    const products = await Product.find({ _id: { $in: productIds } }).select("vendorId");
+    const vendorIds = [
+      ...new Set([
+        ...order.stops.map((s) => s.vendorId?.toString()),
+        ...order.items.map((i) => i.vendorId?.toString()),
+        ...products.map((p) => p.vendorId?.toString()),
+      ].filter(Boolean)),
+    ];
+
+    // Socket.IO Real-time Updates
+    const io = req.app.get("io");
+    if (io) {
+      // Notify Vendor Portal
+      vendorIds.forEach((vId) => {
+        io.to(`vendor:${vId}`).emit("orderIssueRaised", {
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          issueDetails: order.issueDetails,
+          message: "Customer raised an issue for this order.",
+        });
+      });
+
+      // Notify Admin Panel
+      io.to("role:admin").emit("newOrderIssueAdmin", {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        userId: userId,
+        issueDetails: order.issueDetails,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Order issue reported successfully",
+      status: order.status,
+      issueDetails: order.issueDetails,
+      order,
+    });
+  } catch (err) {
+    console.error("RAISE ORDER ISSUE ERROR:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// =====================================
 // GET ONGOING ORDERS
 // =====================================
 exports.getOngoingOrders = async (req, res) => {
@@ -676,8 +885,9 @@ exports.acceptOrder = async (req, res) => {
   try {
     const order = await Order.findOne({
       _id: req.params.id,
-      status: "confirmed",
+      // status: "confirmed",
       isAssigned: false,
+      riderId: null,
     });
 
     if (!order) {
@@ -1859,3 +2069,5 @@ exports.getVendorOrders = async (req, res) => {
     });
   }
 };
+
+
