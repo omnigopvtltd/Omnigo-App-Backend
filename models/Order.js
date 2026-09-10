@@ -304,6 +304,11 @@ const orderSchema = new mongoose.Schema(
       default: "pending",
     },
 
+    cancellationReason: {
+      type: String,
+      default: "",
+    },
+    
     // Float & Session Tracking
     riderFloatAmount: {
       type: Number,

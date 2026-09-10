@@ -25,6 +25,8 @@ const {
   getVendorIncomingOrders,
   getVendorOrders,
   readyOrder,
+  cancelOrderByVendor,
+  raiseOrderIssueByUser,
 } = require("../controllers/orderController");
 
 const {completeOrderDelivery} = require("../controllers/riderOrderFlowController");
@@ -54,6 +56,18 @@ router.put("/cancel/:id", auth, cancelOrder);
 // CONFIRM ORDER
 router.put("/confirm/:id", auth, confirmOrder);
 router.put("/ready/:id", auth, readyOrder);
+router.put(
+  "/vendor/cancel/:id",
+  auth,
+  cancelOrderByVendor
+);
+
+// Customer/User Route: Raise Issue or Request Refund
+router.post(
+  "/user/:orderId/raise-issue",
+  auth,
+  raiseOrderIssueByUser
+);
 
 router.get("/rider/available", auth, getAvailableOrders);
 router.patch("/rider/auto-accept", auth, toggleAutoAccept);

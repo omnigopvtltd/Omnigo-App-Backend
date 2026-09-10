@@ -158,7 +158,8 @@ const vendorSchema = new mongoose.Schema(
           "assigned",
           "preparing",
           "ready",
-          "completed"
+          "completed",
+          "cancelled",
         ],
         default: "pending",
       },
