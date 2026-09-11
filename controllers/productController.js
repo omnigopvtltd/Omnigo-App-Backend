@@ -618,7 +618,7 @@ exports.getProductsByCategory = async (req, res) => {
     // 3. Query associated restaurants
     const vendors = await Vendor.find({
       _id: { $in: vendorIds },
-    }).select("name logo");
+    }).select("_id businessName logo");
 
     // 4. Map restaurant data into product objects
     const vendorMap = new Map(vendors.map((r) => [r._id.toString(), r]));
@@ -631,7 +631,7 @@ exports.getProductsByCategory = async (req, res) => {
 
       return {
         ...product,
-        restaurant: vendor || null,
+        vendor: vendors || null,
       };
     });
 

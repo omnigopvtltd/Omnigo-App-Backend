@@ -6,9 +6,9 @@ const dealSchema = new mongoose.Schema(
     description: { type: String },
     image: { type: String, required: true },
     bannerImage: { type: String, required: true },
-    restaurantId: {
+    vendorId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Restaurant",
+      ref: "Vendor",
       required: true,
     },
     items: [
