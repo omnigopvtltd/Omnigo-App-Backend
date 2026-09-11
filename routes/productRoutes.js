@@ -12,11 +12,11 @@ const {
   getProductsByCategory,
   getProductsByType,
   getPreviouslyOrderedItems,
-  getProductsByRestaurantCategories,
-  getProductsByRestaurantTypes,
+  getProductsByVendorCategories,
+  getProductsByVendorTypes,
   getPreviouslyOrderedItemsByCategory,
-  getProductsByRestaurantSubcategories,
-  getProductsByRestaurant,
+  getProductsByVendorSubcategories,
+  getProductsByVendor,
   getProductsByHomeChef,
   getProductsByHomeChefTypes,
   getProductDetails,
@@ -32,11 +32,11 @@ router.get("/product-by-type", auth, getProductsByType);
 // Endpoint for "Craving It Again?" section
 router.get("/previously-ordered", auth, getPreviouslyOrderedItems);
 router.get("/previously-ordered/:category", auth,  getPreviouslyOrderedItemsByCategory);
-router.get("/product-by-restaurant-categories/:restaurantId", auth, getProductsByRestaurantCategories);
-router.get("/product-by-restaurant-subcategories/:restaurantId", auth, getProductsByRestaurantSubcategories);
-router.get("/product-by-restaurant-types/:restaurantId", auth, getProductsByRestaurantTypes);
+router.get("/product-by-vendor-categories/:vendorId", auth, getProductsByVendorCategories);
+router.get("/product-by-vendor-subcategories/:vendorId", auth, getProductsByVendorSubcategories);
+router.get("/product-by-vendor-types/:vendorId", auth, getProductsByVendorTypes);
 router.get("/product-by-home-chef-types/:homeChefId", auth, getProductsByHomeChefTypes);
-router.get("/product-by-restaurant/:restaurantId", auth, getProductsByRestaurant);
+router.get("/product-by-vendor/:vendorId", auth, getProductsByVendor);
 router.get("/product-by-home-chef/:homeChefId", auth, getProductsByHomeChef);
 
 router.post("/create", auth, createProduct);

@@ -20,6 +20,10 @@ const {
   getVendorProfile,
   toggleRushMode,
   getAllVendorBrands,
+  getAllHomeChefs,
+  getHomeChefById,
+  getVendorById,
+  getVendorCategories,
 } = require("../controllers/vendorController");
 const { saveFcmToken } = require("../controllers/vendorController");
 const upload = require("../middleware/upload");
@@ -101,5 +105,9 @@ router.put(
 );
 router.patch("/toggle-rushmode", auth, toggleRushMode);
 router.get("/brands", auth, getAllVendorBrands);
+router.get("/home-chefs", auth, getAllHomeChefs);
+router.get("/categories", auth, getVendorCategories);
+router.get("/home-chef/:id", auth, getHomeChefById);
+router.get("/:id", auth, getVendorById);
 
 module.exports = router;
