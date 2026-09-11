@@ -1111,6 +1111,45 @@ exports.getVendorById = async (req, res) => {
   }
 };
 
+// =====================================
+// Get Vendor Branches By Vendor ID
+// =====================================
+exports.getVendorBranchById = async (req, res) => {
+  try {
+    const vendorId = req.params.vendorId || req.user?._id || req.user?.id;
+
+    if (!vendorId) {
+      return res.status(400).json({
+        success: false,
+        message: "Vendor ID is required",
+      });
+    }
+
+    // Query VendorBranch by foreign key reference 'vendorId'
+    const vendorBranches = await VendorBranch.find({ vendorId }).lean();
+
+    if (!vendorBranches || vendorBranches.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No branches found for this vendor",
+        vendorBranches: [],
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      count: vendorBranches.length,
+      vendorBranches,
+    });
+  } catch (err) {
+    console.error("GET VENDOR BRANCHES ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
 // =======================
 // Get Vendor Profile
 // =======================

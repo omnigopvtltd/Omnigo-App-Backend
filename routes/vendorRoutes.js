@@ -24,6 +24,7 @@ const {
   getHomeChefById,
   getVendorById,
   getVendorCategories,
+  getVendorBranchById,
 } = require("../controllers/vendorController");
 const { saveFcmToken } = require("../controllers/vendorController");
 const upload = require("../middleware/upload");
@@ -103,6 +104,8 @@ router.put(
   auth,
   updateVendorProfile,
 );
+router.get("/vendor-branches/:vendorId", auth, getVendorBranchById);
+
 router.patch("/toggle-rushmode", auth, toggleRushMode);
 router.get("/brands", auth, getAllVendorBrands);
 router.get("/home-chefs", auth, getAllHomeChefs);
