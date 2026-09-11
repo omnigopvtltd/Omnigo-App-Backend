@@ -21,15 +21,15 @@ const productSchema = new mongoose.Schema(
       required: true,
     },
 
-    restaurantId: {
+    vendorId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Restaurant",
+      ref: "Vendor",
     },
 
-    homeChefId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "HomeChef",
-    },
+    // homeChefId: {
+    //   type: mongoose.Schema.Types.ObjectId,
+    //   ref: "HomeChef",
+    // },
 
     category: { type: String, required: true, trim: true }, // e.g. "Pizza", "Beverages"
     subcategory: { type: String, default: "" }, // e.g. "Thin Crust"

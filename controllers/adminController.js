@@ -70,6 +70,7 @@ exports.createAndSendNotification = async (app, {
         unreadCountIncrement: 1,
       });
     }
+console.log(newNotification);
 
     return newNotification;
   } catch (error) {
@@ -77,6 +78,7 @@ exports.createAndSendNotification = async (app, {
     return null;
   }
 };
+
 
 // How to use this in your Controllers:
 // Order Confirm (Notify Customer):

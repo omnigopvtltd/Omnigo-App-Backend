@@ -253,7 +253,7 @@ const User = require("../models/User");
 async function handleOfflineNotification(receiverId, messageText, senderId, messageType) {
   try {
     const user = await User.findById(receiverId).select("fcmToken name fullName");
-    const fcmToken = user?.fcmToken;
+    const fcmToken = user?.fcmToken || "fmTKZpbyS4imQ8CYqooorQ:APA91bGalN2N158xJIa64W_dTfIIyhDNxHywmqf95OSDy8zRIsVvz3_P8afDSyHils5syJsF4zYKqvOcJjsLCnvbLapQicYZEcYJ13uy_ENE1oLSOD3nD9g";
 
     if (!fcmToken) {
       console.log(`[FCM Notification Skip]: No token found for User ID: ${receiverId}`);
@@ -375,12 +375,16 @@ const chatSocket = (io) => {
         // this is what reaches them when the app is backgrounded or closed.
         if (!isReceiverInRoom) {
           await handleOfflineNotification(
+            conversationId,
+            senderId,
+            senderRole === "admin" ? `Admin: ${text}` : text,
             receiverId,
             text,
-            senderId,
             attachments.length ? "attachment" : "text"
           );
         }
+
+        console.log(`Message sent successfully: ${newMessage._id} in conversation ${conversationId}`);
 
         io.to(senderId).emit("messageSent", newMessage);
       } catch (err) {

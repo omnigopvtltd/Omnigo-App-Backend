@@ -9,6 +9,7 @@ const { processRiderBikeInstallment } = require("../helpers/bikeInstallment");
 const Cart = require("../models/Cart");
 const WalletTransaction = require("../models/WalletTransaction");
 const Vendor = require("../models/Vendor");
+const { createAndSendNotification } = require("./adminController");
 
 exports.createOrder = async (req, res) => {
   try {
@@ -67,6 +68,24 @@ exports.createOrder = async (req, res) => {
       };
     });
 
+    // Step 1: Order items me se saare Product IDs collect karein
+    const productIds = cart.items.map((item) => item.productId).filter(Boolean);
+console.log("Product IDs in this order:", productIds);
+
+    // Step 2: In Products ke Database records se direct Vendor IDs query karein
+    const products = await Product.find({ _id: { $in: productIds } }).select(
+      "vendorId",
+    );
+    console.log("Products fetched for this order:", products);
+
+    // Step 3: Extract unique Vendor IDs (Duplicates remove ho jayenge)
+    const vendorIds = [
+      ...new Set(
+        products.map((product) => product.vendorId?.toString()).filter(Boolean),
+      ),
+    ];
+    console.log("Unique Vendor IDs for this order:", vendorIds);
+
     const savedAddresses = user.addresses.filter(
       (addr) => addr.isSave === true,
     );
@@ -116,6 +135,30 @@ exports.createOrder = async (req, res) => {
     if (io) {
       io.to(`user:${req.user.id}`).emit("cart_updated", cart);
       io.to("role:admin").emit("adminNewOrder", order);
+    }
+
+    // Step 4: Database Notification Save + Socket IO Emit for ALL Vendors
+    if (vendorIds.length > 0) {
+      const vendorNotifications = vendorIds.map((vId) =>
+        createAndSendNotification(req.app, {
+          recipientId: vId,
+          recipientModel: "Vendor",
+          title: "New Order Received!",
+          message: `You have received a new order #${order.orderNumber}.`,
+          type: "new_order",
+          data: {
+            orderId: order._id,
+            orderNumber: order.orderNumber,
+            totalAmount: order.totalAmount || order.grandTotal,
+            itemCount: order.items?.length || 0,
+            screenToOpen: "VendorOrderDetails",
+          },
+          link: `/vendor/orders/${order._id}`,
+        }),
+      );
+console.log(vendorNotifications, "vendorNotifications");
+      // Parallel Execution: Tamam vendors ko ek sath save aur emit karega
+      await Promise.all(vendorNotifications);
     }
 
     return res.status(201).json({
@@ -622,7 +665,7 @@ exports.readyOrder = async (req, res) => {
 exports.cancelOrderByVendor = async (req, res) => {
   try {
     const vendorId = req.user?.id || req.user?._id;
-    const cancellationReason = req.body?.reason
+    const cancellationReason = req.body?.reason;
 
     if (!vendorId) {
       return res.status(401).json({
@@ -718,7 +761,7 @@ exports.cancelOrderByVendor = async (req, res) => {
       await sendNotification(
         customer.fcmToken,
         "Order Cancelled",
-        `Your order #${order.orderNumber} was cancelled by vendor: ${order.cancellationReason}`
+        `Your order #${order.orderNumber} was cancelled by vendor: ${order.cancellationReason}`,
       );
     }
 
@@ -780,14 +823,20 @@ exports.raiseOrderIssueByUser = async (req, res) => {
     await order.save();
 
     // Find vendor(s) associated with order items to emit Socket event
-    const productIds = order.items?.map((item) => item.productId).filter(Boolean);
-    const products = await Product.find({ _id: { $in: productIds } }).select("vendorId");
+    const productIds = order.items
+      ?.map((item) => item.productId)
+      .filter(Boolean);
+    const products = await Product.find({ _id: { $in: productIds } }).select(
+      "vendorId",
+    );
     const vendorIds = [
-      ...new Set([
-        ...order.stops.map((s) => s.vendorId?.toString()),
-        ...order.items.map((i) => i.vendorId?.toString()),
-        ...products.map((p) => p.vendorId?.toString()),
-      ].filter(Boolean)),
+      ...new Set(
+        [
+          ...order.stops.map((s) => s.vendorId?.toString()),
+          ...order.items.map((i) => i.vendorId?.toString()),
+          ...products.map((p) => p.vendorId?.toString()),
+        ].filter(Boolean),
+      ),
     ];
 
     // Socket.IO Real-time Updates
@@ -2069,5 +2118,3 @@ exports.getVendorOrders = async (req, res) => {
     });
   }
 };
-
-

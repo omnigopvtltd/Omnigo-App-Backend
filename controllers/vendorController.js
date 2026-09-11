@@ -1851,3 +1851,214 @@ exports.getAllVendorBrands = async (req, res) => {
     });
   }
 };
+
+// =====================================
+// GET ALL HOME CHEFS 
+// =====================================
+exports.getAllHomeChefs = async (req, res) => {
+  try {
+    const { search, isOpen, status } = req.query;
+
+    // Filter by approved status by default (or query param if provided)
+    const query = { 
+       businessType: "homeChef",
+       isBlecked: false };
+
+    // Check availability (isOpen field in schema)
+    // if (isActive !== undefined) {
+    //   query.isActive = isActive === "true";
+    // }
+
+    // Search by name or cuisines
+    if (search) {
+      query.$or = [
+        { businessName: { $regex: search, $options: "i" } },
+        { cuisines: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    const vendors = await Vendor.find(query).select("businessName businessDescription logo coverImage deliveryFee deliveryTime rating").sort({
+      "rating.average": -1,
+      createdAt: -1,
+    });
+
+    return res.status(200).json({
+      success: true,
+      count: vendors.length,
+      vendors,
+    });
+  } catch (err) {
+    console.log("GET VendorS ERROR:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// ========================================================
+// 3. GET SINGLE CHEF DETAILS WITH PRODUCTS & DEALS
+// ========================================================
+exports.getHomeChefById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const chef = await Vendor.findById(id);
+    if (!chef) {
+      return res.status(404).json({
+        success: false,
+        message: "Home Chef not found",
+      });
+    }
+
+    // Fetch associated Products and Deals using your existing models
+    const products = await Product.find({ vendorId: id, isAvailable: true });
+    const deals = await Deal.find({ vendorId: id, isActive: true });
+
+    return res.status(200).json({
+      success: true,
+      chef,
+      deals,
+      products,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// // =====================================
+// // GET Vendors BY FAST DELIVERY TIME (for "Fast Delivery" section)
+// // =====================================
+// exports.getVendorByFastDeliveryTime = async (req, res) => {
+//   try {
+//     // 1. Fetch Restaurants (assumes deliveryTime is a Number or object)
+//     const restaurant = await Restaurant.find({
+//       $or: [
+//         { "deliveryTime.max": { $lte: 20 } },
+//         { "deliveryTime.min": { $lte: 20 } },
+//       ],
+//     }).select("name logo _id coverImage deliveryTime rating");
+
+//     // 2. Fetch HomeChefs querying the nested object field (deliveryTime.max)
+//     const homeChef = await HomeChef.find({
+//       $or: [
+//         { "deliveryTime.max": { $lte: 20 } },
+//         { "deliveryTime.min": { $lte: 20 } },
+//       ],
+//     }).select("name logo _id coverImage deliveryTime rating");
+
+//     const offer = {
+//       type: "offer",
+//       title: "Fast Delivery",
+//       icon: "⚡",
+//     };
+
+//     // 3. Merge arrays
+//     // const fastDeliveryRestaurants = [...restaurant, ...homeChef, offer ];
+//     const fastDeliveryRestaurants = [
+//       ...restaurant.map((item) => ({
+//         ...item.toObject(),
+//         offer: {
+//           title: "Fast Delivery",
+//           icon: "⚡",
+//         },
+//       })),
+
+//       ...homeChef.map((item) => ({
+//         ...item.toObject(),
+//         offer: {
+//           title: "Fast Delivery",
+//           icon: "⚡",
+//         },
+//       })),
+//     ];
+
+//     // 4. Check if merged array is empty
+//     if (fastDeliveryRestaurants.length === 0) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "No fast delivery options found",
+//       });
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       count: fastDeliveryRestaurants.length,
+//       fastDeliveryRestaurants,
+//     });
+//   } catch (err) {
+//     console.error("FAST DELIVERY ERROR:", err);
+//     return res.status(500).json({
+//       success: false,
+//       message: err.message,
+//     });
+//   }
+// };
+
+// =====================================
+// GET SINGLE VENDOR
+// =====================================
+exports.getVendorById = async (req, res) => {
+  try {
+    const vendor = await Vendor.findById(req.params.id)
+    .select("businessName logo businessDescription coverImage rating isActive deliveryFee deliveryTime isFreeDelivery openingHours")
+    // .populate(
+    //   "ownerId",
+    //   "name email phone",
+    // );
+
+    if (!vendor) {
+      return res.status(404).json({
+        success: false,
+        message: "Vendor not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      vendor,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// =====================================
+// GET VENDOR CATEGORIES
+// =====================================
+exports.getVendorCategories = async (req, res) => {
+  try {
+    const vendor = await Vendor.findById(req.params.id).select(
+      "categories",
+    );
+
+    if (!vendor) {
+      return res.status(404).json({
+        success: false,
+        message: "Vendor not found",
+      });
+    }
+
+    const categories = vendor.categories.map((category) => ({
+      _id: category._id,
+      categoryName: category.categoryName,
+    }));
+
+    return res.status(200).json({
+      success: true,
+      count: categories.length,
+      categories,
+    });
+  } catch (err) {
+    console.log("GET RESTAURANT CATEGORIES ERROR:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};

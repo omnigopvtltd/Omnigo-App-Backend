@@ -205,7 +205,9 @@ exports.createProduct = async (req, res) => {
 
     if (req.files && Array.isArray(req.files) && req.files.length > 0) {
       // Multiple files uploaded via multer (e.g. req.files)
-      productImages = req.files.map((file) => file.path || file.location || file.filename);
+      productImages = req.files.map(
+        (file) => file.path || file.location || file.filename,
+      );
     } else if (req.file) {
       // Single file uploaded via multer (e.g. req.file)
       productImages = [req.file.path || req.file.location || req.file.filename];
@@ -236,7 +238,7 @@ exports.createProduct = async (req, res) => {
       if (foodCategoryDoc) {
         // Check if subcategory already exists under this parent category
         const subExists = foodCategoryDoc.subCategories.some(
-          (sub) => sub.name.toLowerCase() === trimmedSubCategory.toLowerCase()
+          (sub) => sub.name.toLowerCase() === trimmedSubCategory.toLowerCase(),
         );
 
         // If subcategory does NOT exist, create it with product image
@@ -272,11 +274,26 @@ exports.createProduct = async (req, res) => {
       subcategory,
       price,
       discountPrice: discountPrice || null,
-      variations: typeof variations === "string" ? JSON.parse(variations) : (Array.isArray(variations) ? variations : []),
+      variations:
+        typeof variations === "string"
+          ? JSON.parse(variations)
+          : Array.isArray(variations)
+            ? variations
+            : [],
       serving,
-      addOns: typeof addOns === "string" ? JSON.parse(addOns) : (Array.isArray(addOns) ? addOns : []),
+      addOns:
+        typeof addOns === "string"
+          ? JSON.parse(addOns)
+          : Array.isArray(addOns)
+            ? addOns
+            : [],
       isVeg: isVeg ?? true,
-      tags: typeof tags === "string" ? JSON.parse(tags) : (Array.isArray(tags) ? tags : []),
+      tags:
+        typeof tags === "string"
+          ? JSON.parse(tags)
+          : Array.isArray(tags)
+            ? tags
+            : [],
       isAvailable: isAvailable ?? true,
       isFavourite: isFavourite ?? false,
       preparationTime,
@@ -345,7 +362,7 @@ exports.getAllProducts = async (req, res) => {
     if (subcategory) query.subcategory = subcategory;
     if (type) query.type = type;
     if (status && status !== "all") query.status = status;
-    
+
     if (isAvailable !== undefined) {
       query.isAvailable = isAvailable === "true" || isAvailable === true;
     }
@@ -560,7 +577,11 @@ exports.getProductsByCategory = async (req, res) => {
   try {
     const { category, subcategory, search } = req.query;
 
-    const query = {};
+    // const query = {};
+
+   const query = {
+      vendorId: { $exists: true, $ne: null },
+    };
 
     // Helper to build a case-insensitive regex pattern handling spaces/dashes (e.g. "fast food" or "fast-food")
     const createFlexibleRegex = (input) => {
@@ -595,19 +616,17 @@ exports.getProductsByCategory = async (req, res) => {
     const vendorIds = products.map((p) => p.vendorId).filter(Boolean);
 
     // 3. Query associated restaurants
-    const restaurants = await Restaurant.find({
+    const vendors = await Vendor.find({
       _id: { $in: vendorIds },
     }).select("name logo");
 
     // 4. Map restaurant data into product objects
-    const restaurantMap = new Map(
-      restaurants.map((r) => [r._id.toString(), r]),
-    );
+    const vendorMap = new Map(vendors.map((r) => [r._id.toString(), r]));
 
     const productsWithVendor = products.map((productDoc) => {
       const product = productDoc.toObject();
-      const vendor = product.restaurantId
-        ? restaurantMap.get(product.restaurantId.toString())
+      const vendor = product.vendorId
+        ? vendorMap.get(product.vendorId.toString())
         : null;
 
       return {
@@ -638,38 +657,45 @@ exports.getProductsByType = async (req, res) => {
   try {
     const { type } = req.query;
 
-    const query = {};
-    if (type.toLowerCase()) query.type = type.toLowerCase();
+    // 1. Strict Query: Sirf wohi products layen jin me vendorId present aur non-null ho
+    const query = {
+      vendorId: { $exists: true, $ne: null },
+    };
 
-    // 1. Fetch products and populate restaurant/chef details directly
+    if (type) query.type = type.toLowerCase();
+
+    // 2. Fetch products & populate vendorId
     const products = await Product.find(query)
-      .populate("restaurantId", "name logo deliveryTime")
-      .populate("homeChefId", "name logo deliveryTime")
+      .populate("vendorId", "businessName logo deliveryTime")
       .select(
-        "name images price discountPrice rating restaurantId homeChefId belongsTo isFavourite",
+        "name images price discountPrice rating vendorId homeChefId belongsTo type isFavourite",
       );
 
-    // 2. Map through products to format output key cleanly as "restaurant" or "chef"
-    const formattedProducts = products.map((product) => {
-      const seller = product.restaurantId || product.homeChefId;
+    // 3. Map through products and filter out invalid/deleted sellers
+    const formattedProducts = products
+      .map((product) => {
+        const seller = product.vendorId || product.homeChefId;
 
-      return {
-        _id: product._id,
-        name: product.name,
-        images: product.images,
-        price: product.price,
-        discountPrice: product.discountPrice,
-        rating: product.rating,
-        restaurant: seller
-          ? {
-              _id: seller._id,
-              name: seller.name,
-              logo: seller.logo,
-              deliveryTime: seller.deliveryTime,
-            }
-          : null,
-      };
-    });
+        // Agar DB me vendorId id attach thi par vendor document delete ho chuka ho
+        if (!seller || !seller._id) return null;
+
+        return {
+          _id: product._id,
+          name: product.name,
+          images: product.images,
+          price: product.price,
+          discountPrice: product.discountPrice,
+          rating: product.rating,
+          type: product.type,
+          vendor: {
+            _id: seller._id,
+            name: seller.businessName,
+            logo: seller.logo,
+            deliveryTime: seller.deliveryTime,
+          },
+        };
+      })
+      .filter(Boolean); // Null items ko array se drop kar dega
 
     return res.status(200).json({
       success: true,
@@ -687,29 +713,29 @@ exports.getProductsByType = async (req, res) => {
 };
 
 // =====================================
-// GET PRODUCTS BY RESTAURANT
+// GET PRODUCTS BY VENDOR
 // =====================================
-exports.getProductsByRestaurant = async (req, res) => {
+exports.getProductsByVendor = async (req, res) => {
   try {
-    const { restaurantId } = req.params;
+    const { vendorId } = req.params;
 
-    if (!restaurantId) {
+    if (!vendorId) {
       return res.status(400).json({
         success: false,
-        message: "restaurantId is required",
+        message: "vendorId is required",
       });
     }
 
-    const restaurant = await Restaurant.findById(restaurantId);
+    const vendor = await Vendor.findById({ _id: vendorId });
 
-    if (!restaurant) {
+    if (!vendor) {
       return res.status(404).json({
         success: false,
-        message: "Restaurant not found",
+        message: "Vendor not found",
       });
     }
 
-    const products = await Product.find({ restaurantId });
+    const products = await Product.find({ vendorId });
 
     return res.status(200).json({
       success: true,
@@ -727,7 +753,7 @@ exports.getProductsByRestaurant = async (req, res) => {
 };
 
 // =====================================
-// GET PRODUCTS BY Home Chef
+// GET PRODUCTS BY VENDOR
 // =====================================
 exports.getProductsByHomeChef = async (req, res) => {
   try {
@@ -740,7 +766,7 @@ exports.getProductsByHomeChef = async (req, res) => {
       });
     }
 
-    const homeChef = await HomeChef.findById(homeChefId);
+    const homeChef = await Vendor.findById({ _id: homeChefId });
 
     if (!homeChef) {
       return res.status(404).json({
@@ -749,7 +775,7 @@ exports.getProductsByHomeChef = async (req, res) => {
       });
     }
 
-    const products = await Product.find({ homeChefId });
+    const products = await Product.find({ vendorId: homeChefId });
 
     return res.status(200).json({
       success: true,
@@ -767,29 +793,29 @@ exports.getProductsByHomeChef = async (req, res) => {
 };
 
 // =====================================
-// GET PRODUCTS BY RESTAURANT'S CATEGORIES
+// GET PRODUCTS BY VENDOR'S CATEGORIES
 // =====================================
-exports.getProductsByRestaurantCategories = async (req, res) => {
+exports.getProductsByVendorCategories = async (req, res) => {
   try {
     const { categoryName } = req.query;
-    const { restaurantId } = req.params;
+    const { vendorId } = req.params;
 
-    if (!restaurantId || !mongoose.Types.ObjectId.isValid(restaurantId)) {
+    if (!vendorId || !mongoose.Types.ObjectId.isValid(vendorId)) {
       return res.status(400).json({
         success: false,
-        message: "Valid restaurantId is required",
+        message: "Valid vendorId is required",
       });
     }
 
-    const restaurant = await Restaurant.findById(restaurantId).lean();
-    if (!restaurant) {
+    const vendor = await Vendor.findById({ _id: vendorId }).lean();
+    if (!vendor) {
       return res.status(404).json({
         success: false,
-        message: "Restaurant not found",
+        message: "Vendor not found",
       });
     }
 
-    const query = { restaurantId };
+    const query = { vendorId };
 
     if (categoryName && categoryName.trim() !== "") {
       // Convert query string into target slug format: "fries-and-pasta"
@@ -822,33 +848,33 @@ exports.getProductsByRestaurantCategories = async (req, res) => {
 };
 
 // =====================================
-// GET PRODUCTS BY RESTAURANT'S SUBCATEGORIES
+// GET PRODUCTS BY VENDOR'S SUBCATEGORIES
 // =====================================
-exports.getProductsByRestaurantSubcategories = async (req, res) => {
+exports.getProductsByVendorSubcategories = async (req, res) => {
   try {
     const { subcategoryName, categoryName } = req.query;
-    const { restaurantId } = req.params;
+    const { vendorId } = req.params;
 
-    if (!restaurantId) {
+    if (!vendorId || !mongoose.Types.ObjectId.isValid(vendorId)) {
       return res.status(400).json({
         success: false,
-        message: "restaurantId is required",
+        message: "Valid vendorId is required",
       });
     }
 
-    const restaurant = await Restaurant.findById(restaurantId);
+    const vendor = await Vendor.findById({ _id: vendorId });
 
-    if (!restaurant) {
+    if (!vendor) {
       return res.status(404).json({
         success: false,
-        message: "Restaurant not found",
+        message: "Vendor not found",
       });
     }
 
-    // Match either restaurantId or chefId for flexibility
-    const query = {
-      $or: [{ restaurantId }, { chefId: restaurantId }],
-    };
+    // // Match either vendorId or chefId for flexibility
+    // const query = {
+    //   $or: [{ vendorId }, { chefId: vendorId }],
+    // };
 
     // Partial & case-insensitive matching for subcategory
     if (subcategoryName) {
@@ -863,7 +889,7 @@ exports.getProductsByRestaurantSubcategories = async (req, res) => {
     }
 
     const products = await Product.find(query).select(
-      "name images price discountPrice description rating isAvailable subcategory category restaurantId chefId",
+      "name images price discountPrice description rating isAvailable subcategory category vendorId chefId",
     );
 
     return res.status(200).json({
@@ -882,26 +908,26 @@ exports.getProductsByRestaurantSubcategories = async (req, res) => {
 };
 
 // =====================================
-// GET PRODUCTS BY RESTAURANT'S Type (special, popular, featured, new)
+// GET PRODUCTS BY VENDOR'S Type (special, popular, featured, new)
 // =====================================
-exports.getProductsByRestaurantTypes = async (req, res) => {
+exports.getProductsByVendorTypes = async (req, res) => {
   try {
     const { type } = req.query;
-    const { restaurantId } = req.params;
+    const { vendorId } = req.params;
 
-    if (!restaurantId) {
+    if (!vendorId || !mongoose.Types.ObjectId.isValid(vendorId)) {
       return res.status(400).json({
         success: false,
-        message: "restaurantId is required",
+        message: "Valid vendorId is required",
       });
     }
 
-    const restaurant = await Restaurant.findById(restaurantId);
+    const vendor = await Vendor.findById({ _id: vendorId });
 
-    if (!restaurant) {
+    if (!vendor) {
       return res.status(404).json({
         success: false,
-        message: "Restaurant not found",
+        message: "Vendor not found",
       });
     }
 
@@ -909,7 +935,7 @@ exports.getProductsByRestaurantTypes = async (req, res) => {
 
     if (type.toLowerCase()) query.type = type.toLowerCase();
 
-    const products = await Product.find({ restaurantId, ...query }).select(
+    const products = await Product.find({ vendorId, ...query }).select(
       "name images price description",
     );
 
@@ -981,8 +1007,8 @@ exports.getProductsByHomeChefTypes = async (req, res) => {
 exports.getProductById = async (req, res) => {
   try {
     const product = await Product.findById(req.params.id).populate(
-      "restaurantId",
-      "name logo status commissionRate",
+      "vendorId",
+      "businessName logo status commissionRate",
     );
 
     if (!product) {
@@ -1047,10 +1073,7 @@ exports.updateProduct = async (req, res) => {
     }
 
     // Validate updated vendor existence if vendorId is being changed
-    if (
-      req.body.vendorId &&
-      req.body.vendorId !== String(product.vendorId)
-    ) {
+    if (req.body.vendorId && req.body.vendorId !== String(product.vendorId)) {
       const vendor = await Vendor.findById(req.body.vendorId);
       if (!vendor) {
         return res.status(404).json({
@@ -1226,34 +1249,40 @@ exports.getPreviouslyOrderedItems = async (req, res) => {
 
     const uniqueProductIds = Array.from(productIdsSet);
 
-    // 3. Fetch product details and populate seller info (Restaurant / HomeChef)
+    // 3. Fetch product details with strict vendorId existence check
     const items = await Product.find({
       _id: { $in: uniqueProductIds },
       isAvailable: true,
+      vendorId: { $exists: true, $ne: null }, // 💡 Only fetch items with valid vendorId
     })
-      .populate("restaurantId", "name logo rating")
-      .populate("chefId", "name logo rating rating.average")
-      .select("name image price rating chefId restaurantId");
+      .populate("vendorId", "businessName logo rating offer")
+      .select("name image images price rating isFavourite vendorId"); // 💡 Included 'images' and 'isFavourite'
 
-    // 4. Format the response specifically for the card UI layout
-    const formattedItems = items.map((product) => {
-      const restaurant = product.chefId || product.restaurantId;
-      return {
-        _id: product._id,
-        productName: product.name,
-        productImage: product.image,
-        price: product.price,
-        isFavourite: product.isFavourite,
-        rating: product.rating?.average || 0,
-        restaurant: {
-          _id: restaurant?._id || null,
-          name: restaurant?.name || "Unknown Kitchen",
-          logo: restaurant?.logo || "",
-          offer: restaurant?.offer || "",
-          rating: restaurant?.rating?.average || restaurant?.rating || 5.0,
-        },
-      };
-    });
+    // 4. Format and filter items to ensure valid vendor object
+    const formattedItems = items
+      .map((product) => {
+        const vendor = product.vendorId;
+
+        // Skip product if vendor was deleted or unpopulated
+        if (!vendor || !vendor._id) return null;
+
+        return {
+          _id: product._id,
+          productName: product.name,
+          productImage: product.images?.[0] || product.image || "",
+          price: product.price,
+          isFavourite: Boolean(product.isFavourite),
+          rating: product.rating?.average || product.rating || 0,
+          vendor: {
+            _id: vendor._id,
+            businessName: vendor.businessName || "Unknown Kitchen",
+            logo: vendor.logo || "",
+            offer: vendor.offer || "",
+            rating: vendor.rating?.average || vendor.rating || 5.0,
+          },
+        };
+      })
+      .filter(Boolean); // Drop null entries
 
     return res.status(200).json({
       success: true,
@@ -1332,15 +1361,15 @@ exports.getPreviouslyOrderedItemsByCategory = async (req, res) => {
         { category: categoryDoc._id },
       ],
     })
-      .populate("restaurantId", "name logo rating offer")
-      .populate("chefId", "name logo rating offer")
+      .populate("vendorId", "businessName logo rating offer")
+      // .populate("chefId", "name logo rating offer")
       .select(
-        "name images image price discountPrice rating isFavourite chefId restaurantId",
+        "name images image price discountPrice rating isFavourite chefId vendorId",
       );
 
     // 5. Format response to match product card structure
     const formattedItems = items.map((product) => {
-      const seller = product.restaurantId || product.chefId;
+      const seller = product.vendorId || product.chefId;
 
       return {
         _id: product._id,
@@ -1353,10 +1382,10 @@ exports.getPreviouslyOrderedItemsByCategory = async (req, res) => {
         discountPrice: product.discountPrice || null,
         isFavourite: product.isFavourite || false,
         rating: product.rating || { average: 0, count: 0 },
-        restaurant: seller
+        vendor: seller
           ? {
               _id: seller._id,
-              name: seller.name,
+              businessName: seller.businessName || "",
               logo: seller.logo || "",
               offer: seller.offer || "",
               rating: seller.rating?.average || seller.rating || 0,
