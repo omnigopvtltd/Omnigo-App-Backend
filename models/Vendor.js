@@ -118,14 +118,15 @@ const vendorSchema = new mongoose.Schema(
 
       businessType: {
         type: String,
-        enum: [
-          "restaurant",
-          "bakery",
-          "home_chef",
-          "grocery",
-          "pharmacy",
-          "other",
-        ],
+        // enum: [
+        //   "restaurant",
+        //   "bakery",
+        //   "home_chef",
+        //   "grocery",
+        //   "pharmacy",
+        //   "cafe",
+        //   "other",
+        // ],
         default: "restaurant",
       },
 
