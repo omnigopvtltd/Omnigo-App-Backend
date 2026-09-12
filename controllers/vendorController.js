@@ -1069,7 +1069,7 @@ exports.updateVendorProfile = async (req, res) => {
     const vendorId = req.user.id || req.user._id;
 
     const {
-      // Basic Info & UI Fields (From App Screen)
+      // Basic Info & UI Fields
       storeName,
       businessDescription,
       logoImage,
@@ -1117,12 +1117,10 @@ exports.updateVendorProfile = async (req, res) => {
       branchData,
     } = req.body;
 
-    // Files Object from Multer Middleware
     const files = req.files || {};
 
     // 1. Fetch Vendor
     const vendor = await Vendor.findById(vendorId);
-
     if (!vendor) {
       return res.status(404).json({
         success: false,
@@ -1130,40 +1128,38 @@ exports.updateVendorProfile = async (req, res) => {
       });
     }
 
-    // 2. Core & Business Profile Details Update (With UI Form Aliases)
+    // 2. Core & Business Profile Details Update
     vendor.businessName = storeName || businessName || vendor.businessName;
-    vendor.description =
-      businessDescription || description || vendor.description;
-    vendor.noOfBranches =
-      noOfBranches !== undefined ? noOfBranches : vendor.noOfBranches;
+    vendor.description = businessDescription || description || vendor.description;
+    vendor.noOfBranches = noOfBranches !== undefined ? noOfBranches : vendor.noOfBranches;
 
-    if (businessEmail)
-      vendor.businessEmail = String(businessEmail).toLowerCase().trim();
+    if (businessEmail) vendor.businessEmail = String(businessEmail).toLowerCase().trim();
     if (businessPhone) vendor.businessPhone = String(businessPhone).trim();
 
     if (businessType) vendor.businessType = businessType;
     if (category) vendor.category = category;
 
-    if (businessRegistrationNumber)
-      vendor.businessRegistrationNumber = businessRegistrationNumber;
+    if (businessRegistrationNumber) vendor.businessRegistrationNumber = businessRegistrationNumber;
     if (taxNumber) vendor.taxNumber = taxNumber;
     if (foodLicenseNumber) vendor.foodLicenseNumber = foodLicenseNumber;
 
-    // 3. Store Hours & Availability Settings Update
+    // 3. Store Hours Update (Flexible for open/close & timeFrom/timeTo formats)
+    let formattedStoreHours = vendor.storeHours || [];
+
     if (isStoreHoursActive !== undefined) {
       vendor.isStoreHoursActive = Boolean(isStoreHoursActive);
     }
 
     if (storeHours) {
-      const parsedHours =
-        typeof storeHours === "string" ? JSON.parse(storeHours) : storeHours;
+      const parsedHours = typeof storeHours === "string" ? JSON.parse(storeHours) : storeHours;
       if (Array.isArray(parsedHours)) {
-        vendor.storeHours = parsedHours.map((schedule) => ({
+        formattedStoreHours = parsedHours.map((schedule) => ({
           day: schedule.day,
-          timeFrom: schedule.timeFrom,
-          timeTo: schedule.timeTo,
+          timeFrom: schedule.timeFrom || schedule.open || "",
+          timeTo: schedule.timeTo || schedule.close || "",
           isOpen: schedule.isOpen !== undefined ? schedule.isOpen : true,
         }));
+        vendor.storeHours = formattedStoreHours;
       }
     }
 
@@ -1172,59 +1168,23 @@ exports.updateVendorProfile = async (req, res) => {
     if (ownerPhone) vendor.ownerPhone = ownerPhone;
     if (ownerEmail) vendor.ownerEmail = String(ownerEmail).toLowerCase().trim();
 
-    // 5. Process Images and Document Uploads (Supports File Objects, Direct URLs & UI Screen Aliases)
-    vendor.profilePicture = processMediaField(
-      profilePicture,
-      files.profilePicture?.[0],
-      vendor.profilePicture,
-    );
-
-    vendor.logo = processMediaField(
-      logoImage || logo,
-      files.logoImage?.[0] || files.logo?.[0],
-      vendor.logo,
-    );
-
-    vendor.coverImage = processMediaField(
-      bannerImage || coverImage,
-      files.bannerImage?.[0] || files.coverImage?.[0],
-      vendor.coverImage,
-    );
+    // 5. Documents & Media Processing
+    vendor.profilePicture = processMediaField(profilePicture, files.profilePicture?.[0], vendor.profilePicture);
+    vendor.logo = processMediaField(logoImage || logo, files.logoImage?.[0] || files.logo?.[0], vendor.logo);
+    vendor.coverImage = processMediaField(bannerImage || coverImage, files.bannerImage?.[0] || files.coverImage?.[0], vendor.coverImage);
 
     vendor.cnicNumber = cnicNumber || vendor.cnicNumber || "";
-    vendor.cnicFrontPicture = processMediaField(
-      cnicFrontPicture,
-      files.cnicFrontPicture?.[0],
-      vendor.cnicFrontPicture,
-    );
-    vendor.cnicBackPicture = processMediaField(
-      cnicBackPicture,
-      files.cnicBackPicture?.[0],
-      vendor.cnicBackPicture,
-    );
+    vendor.cnicFrontPicture = processMediaField(cnicFrontPicture, files.cnicFrontPicture?.[0], vendor.cnicFrontPicture);
+    vendor.cnicBackPicture = processMediaField(cnicBackPicture, files.cnicBackPicture?.[0], vendor.cnicBackPicture);
 
-    vendor.incorporationCertificate = processMediaField(
-      incorporationCertificate,
-      files.incorporationCertificate?.[0],
-      vendor.incorporationCertificate,
-    );
-    vendor.foodSafetyLicense = processMediaField(
-      foodSafetyLicense,
-      files.foodSafetyLicense?.[0],
-      vendor.foodSafetyLicense,
-    );
-    vendor.ntnCertificate = processMediaField(
-      ntnCertificate,
-      files.ntnCertificate?.[0],
-      vendor.ntnCertificate,
-    );
+    vendor.incorporationCertificate = processMediaField(incorporationCertificate, files.incorporationCertificate?.[0], vendor.incorporationCertificate);
+    vendor.foodSafetyLicense = processMediaField(foodSafetyLicense, files.foodSafetyLicense?.[0], vendor.foodSafetyLicense);
+    vendor.ntnCertificate = processMediaField(ntnCertificate, files.ntnCertificate?.[0], vendor.ntnCertificate);
 
     // 6. Payout Details Update
     vendor.payout = {
-      accountHolderName:
-        payoutAccountTitle || vendor.payout?.accountHolderName || "",
-      paymentMethod:
-        payoutPaymentMethod || vendor.payout?.paymentMethod || "bank",
+      accountHolderName: payoutAccountTitle || vendor.payout?.accountHolderName || "",
+      paymentMethod: payoutPaymentMethod || vendor.payout?.paymentMethod || "bank",
       bankName: payoutBankName || vendor.payout?.bankName || "",
       accountNumber: payoutAccountNumber || vendor.payout?.accountNumber || "",
       iban: payoutIban || vendor.payout?.iban || "",
@@ -1232,41 +1192,49 @@ exports.updateVendorProfile = async (req, res) => {
       isVerified: vendor.payout?.isVerified || false,
     };
 
-    // Status Update
     vendor.verificationStatus = "pending";
-
     await vendor.save();
 
-    // 7. Create or Update Branch (If Provided)
-    let defaultBranch = null;
+    // 7. ALWAYS Create or Update Branch (Even if branchData is missing)
+    let parsedBranch = {};
     if (branchData) {
-      const parsedBranch =
-        typeof branchData === "string" ? JSON.parse(branchData) : branchData;
-      const {
-        branchName,
-        phone: branchPhone,
-        address,
-        area,
-        city,
-        longitude,
-        latitude,
-      } = parsedBranch;
-
-      defaultBranch = await VendorBranch.create({
-        vendorId: vendor._id,
-        branchName: branchName || `${vendor.businessName} Main Branch`,
-        phone: branchPhone || vendor.businessPhone,
-        address: address || "",
-        area: area || "",
-        city: city || "",
-        location: {
-          type: "Point",
-          coordinates: [Number(longitude) || 0, Number(latitude) || 0],
-        },
-        isActive: true,
-        isOpen: true,
-      });
+      parsedBranch = typeof branchData === "string" ? JSON.parse(branchData) : branchData;
     }
+
+    const targetBranchName = parsedBranch.branchName || `${vendor.businessName} Main Branch`;
+    const targetBranchPhone = parsedBranch.phone || vendor.businessPhone;
+    const targetIsStoreHoursActive = parsedBranch.isStoreHoursActive !== undefined 
+      ? parsedBranch.isStoreHoursActive 
+      : vendor.isStoreHoursActive;
+    
+    const targetStoreHours = (parsedBranch.storeHours && parsedBranch.storeHours.length > 0)
+      ? parsedBranch.storeHours
+      : formattedStoreHours;
+
+    const defaultBranch = await VendorBranch.findOneAndUpdate(
+      { vendorId: vendor._id }, // Vendor ki primary branch query karein
+      {
+        $set: {
+          vendorId: vendor._id,
+          branchName: targetBranchName,
+          phone: targetBranchPhone,
+          address: parsedBranch.address || "",
+          area: parsedBranch.area || "",
+          city: parsedBranch.city || "",
+          ...(parsedBranch.longitude !== undefined && parsedBranch.latitude !== undefined && {
+            location: {
+              type: "Point",
+              coordinates: [Number(parsedBranch.longitude) || 0, Number(parsedBranch.latitude) || 0],
+            },
+          }),
+          isActive: true,
+          isOpen: true,
+          isStoreHoursActive: targetIsStoreHoursActive || false,
+          storeHours: targetStoreHours,
+        },
+      },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
 
     // 8. Socket IO Real-Time Broadcast
     const io = req.app.get("io");
@@ -1274,11 +1242,11 @@ exports.updateVendorProfile = async (req, res) => {
       io.to(`vendor:${vendor._id}`).emit("vendorProfileUpdated", {
         vendorId: vendor._id,
         vendor,
+        branch: defaultBranch,
         message: "Vendor profile and store timings updated successfully",
       });
     }
 
-    // Prepare Clean Response
     const vendorResponse = vendor.toObject();
     delete vendorResponse.password;
 
