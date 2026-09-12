@@ -127,6 +127,7 @@ const vendorSchema = new mongoose.Schema(
         //   "cafe",
         //   "other",
         // ],
+        required: true,
         default: "restaurant",
       },
 
