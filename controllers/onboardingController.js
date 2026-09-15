@@ -8,9 +8,11 @@ exports.createOnboarding = async (req, res) => {
       title,
       description,
       order,
+      image_url,
     } = req.body;
 
-    if (!req.file) {
+   
+    if (!req.file && !req.body.image_url) {
       return res.status(400).json({
         success: false,
         message: "Image is required",
@@ -22,7 +24,7 @@ exports.createOnboarding = async (req, res) => {
         title,
         description,
         order,
-        image_url: `/uploads/${req.file.filename}`,
+        image_url: image_url || `/uploads/${req.file.filename}`,
       });
 
     res.status(201).json({
