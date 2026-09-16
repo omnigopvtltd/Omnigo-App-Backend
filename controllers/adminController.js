@@ -40,6 +40,45 @@ exports.globalSearch = async (req, res) => {
 /**
  * Send and Save Real Notification for User, Vendor, Rider, or Admin
  */
+// exports.createAndSendNotification = async (app, {
+//   recipientId,
+//   recipientModel = "User", // "User", "Vendor", "Rider", "Admin"
+//   title,
+//   message,
+//   type = "system",
+//   data = {},
+//   link = "",
+// }) => {
+//   try {
+//     // 1. Save Real Notification in Database
+//     const newNotification = await Notification.create({
+//       recipient: recipientId,
+//       recipientModel,
+//       title,
+//       message,
+//       type,
+//       data,
+//       link,
+//     });
+
+//     // 2. Emit Socket IO Real-Time Event to specific target room
+//     const io = app.get("io");
+//     if (io) {
+//       const roomName = `${recipientModel.toLowerCase()}:${recipientId}`;
+//       io.to(roomName).emit("newNotification", {
+//         notification: newNotification,
+//         unreadCountIncrement: 1,
+//       });
+//     }
+// console.log(newNotification);
+
+//     return newNotification;
+//   } catch (error) {
+//     console.error("CREATE REAL NOTIFICATION ERROR:", error);
+//     return null;
+//   }
+// };
+
 exports.createAndSendNotification = async (app, {
   recipientId,
   recipientModel = "User", // "User", "Vendor", "Rider", "Admin"
@@ -50,19 +89,28 @@ exports.createAndSendNotification = async (app, {
   link = "",
 }) => {
   try {
-    // 1. Save Real Notification in Database
+    // 1. Validation check for required fields
+    if (!recipientId || !title || !message) {
+      console.error("NOTIFICATION FAILED: Missing recipientId, title, or message");
+      return null;
+    }
+
+    // 2. Express res.type method collision guard
+    const safeType = typeof type === "string" ? type : "system";
+
+    // 3. Save Real Notification in Database
     const newNotification = await Notification.create({
       recipient: recipientId,
       recipientModel,
       title,
       message,
-      type,
+      type: safeType,
       data,
       link,
     });
 
-    // 2. Emit Socket IO Real-Time Event to specific target room
-    const io = app.get("io");
+    // 4. Emit Socket IO Real-Time Event
+    const io = app?.get ? app.get("io") : null;
     if (io) {
       const roomName = `${recipientModel.toLowerCase()}:${recipientId}`;
       io.to(roomName).emit("newNotification", {
@@ -70,15 +118,14 @@ exports.createAndSendNotification = async (app, {
         unreadCountIncrement: 1,
       });
     }
-console.log(newNotification);
 
+    console.log("Notification Sent Successfully:", newNotification._id);
     return newNotification;
   } catch (error) {
     console.error("CREATE REAL NOTIFICATION ERROR:", error);
     return null;
   }
 };
-
 
 // How to use this in your Controllers:
 // Order Confirm (Notify Customer):

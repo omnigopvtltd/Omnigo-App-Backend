@@ -56,7 +56,7 @@ const campaignSchema = new mongoose.Schema(
         enum: ["percentage", "fixed_amount"],
       },
       discountValue: { type: Number, default: 0 },
-      
+
       // BOGO Specific
       buyQuantity: { type: Number, default: 1 },
       getQuantity: { type: Number, default: 1 },
@@ -80,7 +80,14 @@ const campaignSchema = new mongoose.Schema(
       // Payment / Card Deal Specific
       paymentMethod: {
         type: String,
-        enum: ["easypaisa", "jazzcash", "bank_card", "credit_card", "debit_card", "custom"],
+        enum: [
+          "easypaisa",
+          "jazzcash",
+          "bank_card",
+          "credit_card",
+          "debit_card",
+          "custom",
+        ],
       },
       maxDeliveryDiscount: { type: Number, default: 0 },
     },
@@ -124,8 +131,15 @@ const campaignSchema = new mongoose.Schema(
     // Asset & Status
     campaignBanner: { type: String, default: "" },
     isActive: { type: Boolean, default: true },
+    isFavourite: { type: Boolean, default: true },
+    likes: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 // Mongoose validation for dates

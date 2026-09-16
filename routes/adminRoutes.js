@@ -13,7 +13,7 @@ const {
 } = require("../controllers/adminController");
 
 router.get("/search", auth, role("admin"), globalSearch);
-router.post("/send-notifications", auth, createAndSendNotification);
+router.post("/send-notifications", createAndSendNotification);
 router.get("/notifications", auth, getNotifications);
 router.patch("/update/notifications/read/:id", auth, markNotificationsRead);
 router.patch("/update/notifications/read-all", auth, markAllNotificationsRead);
