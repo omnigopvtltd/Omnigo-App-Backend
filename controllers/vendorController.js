@@ -1517,6 +1517,164 @@ exports.getVendorProfile = async (req, res) => {
 //   }
 // };
 
+// exports.getVendorDashboardOverview = async (req, res) => {
+//   try {
+//     const vendorId = req.user?.id || req.user?._id;
+
+//     if (!vendorId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Vendor authentication token missing",
+//       });
+//     }
+
+//     // Convert string vendorId to Mongoose ObjectId for Aggregation queries
+//     const vendorObjectId = new mongoose.Types.ObjectId(vendorId);
+
+//     // 1. Calculate Start & End Date based on timeframe filter
+//     const { timeframe = "weekly" } = req.query;
+//     const now = new Date();
+//     let startDate = new Date();
+
+//     if (timeframe === "daily") {
+//       startDate.setHours(0, 0, 0, 0);
+//     } else if (timeframe === "weekly") {
+//       startDate.setDate(now.getDate() - 7);
+//     } else if (timeframe === "monthly") {
+//       startDate.setMonth(now.getMonth() - 1);
+//     } else if (timeframe === "yearly") {
+//       startDate.setFullYear(now.getFullYear() - 1);
+//     }
+
+//     // 2. Fetch Vendor Profile Info (Correct Schema Fields)
+//     const vendor = await Vendor.findById(vendorId).select(
+//       "businessName logo rating",
+//     );
+
+//     if (!vendor) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Vendor account not found",
+//       });
+//     }
+
+//     // 3. Fetch Vendor Branch Info (for isRushMode and openingHours)
+//     let vendorBranch = await VendorBranch.findOne({
+//       vendorId: vendorId,
+//     }).select("isRushMode openingHours");
+
+//     // Fallback if Branch ID was passed directly
+//     if (!vendorBranch) {
+//       vendorBranch = await VendorBranch.findById(vendorId).select(
+//         "isRushMode openingHours",
+//       );
+//     }
+
+//     // Extract timings string (e.g., "10:00 - 23:00") from monday or default object
+//     const openTime = vendorBranch?.openingHours?.monday?.open || "10:00";
+//     const closeTime = vendorBranch?.openingHours?.monday?.close || "23:00";
+
+//     // 4. Aggregate Orders & Revenue Metrics
+//     const matchStage = {
+//       vendorId: vendorObjectId,
+//       createdAt: { $gte: startDate, $lte: now },
+//     };
+
+//     const orderStats = await Order.aggregate([
+//       { $match: matchStage },
+//       {
+//         $group: {
+//           _id: null,
+//           totalOrders: { $sum: 1 },
+//           completedOrders: {
+//             $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] },
+//           },
+//           cancelledOrders: {
+//             $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0] },
+//           },
+//           totalRevenue: {
+//             $sum: {
+//               $cond: [{ $eq: ["$status", "completed"] }, "$totalAmount", 0],
+//             },
+//           },
+//         },
+//       },
+//     ]);
+
+//     const stats = orderStats[0] || {
+//       totalOrders: 0,
+//       completedOrders: 0,
+//       cancelledOrders: 0,
+//       totalRevenue: 0,
+//     };
+
+//     // 5. Aggregate Chart Data (Group by Day / Date)
+//     const chartData = await Order.aggregate([
+//       {
+//         $match: {
+//           vendorId: vendorObjectId,
+//           status: "completed",
+//           createdAt: { $gte: startDate, $lte: now },
+//         },
+//       },
+//       {
+//         $group: {
+//           _id: { $dayOfWeek: "$createdAt" }, // 1 = Sun, 2 = Mon, etc.
+//           total: { $sum: "$totalAmount" },
+//         },
+//       },
+//       { $sort: { _id: 1 } },
+//     ]);
+
+//     // 6. Build Clean & Synchronized Response
+//     return res.status(200).json({
+//       success: true,
+//       message: "Vendor overview retrieved successfully",
+//       data: {
+//         vendor: {
+//           id: vendor._id,
+//           name: vendor.businessName || "",
+//           logo: vendor.logo || "",
+//           timings: {
+//             openTime,
+//             closeTime,
+//           },
+//           isRushMode: vendorBranch ? Boolean(vendorBranch.isRushMode) : false,
+//           rating: vendor.rating || 0.0,
+//         },
+//         filter: timeframe,
+//         revenue: {
+//           totalAmount: stats.totalRevenue,
+//           currency: "pkr",
+//           peakDay: {
+//             day: "Saturday",
+//             amount: 4086,
+//             note: "up from 4,086 last week",
+//           },
+//           percentageChange: 20,
+//           chartData: chartData,
+//         },
+//         orders: {
+//           total: stats.totalOrders,
+//           completed: stats.completedOrders,
+//           cancelled: stats.cancelledOrders,
+//           statusNote:
+//             stats.cancelledOrders === 0
+//               ? `No order is cancelled this ${timeframe === "weekly" ? "week" : "period"}.`
+//               : `${stats.cancelledOrders} order(s) cancelled.`,
+//         },
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Dashboard Overview Error:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Server error fetching vendor overview",
+//       error: error.message,
+//     });
+//   }
+// };
+
 exports.getVendorDashboardOverview = async (req, res) => {
   try {
     const vendorId = req.user?.id || req.user?._id;
@@ -1528,27 +1686,13 @@ exports.getVendorDashboardOverview = async (req, res) => {
       });
     }
 
-    // Convert string vendorId to Mongoose ObjectId for Aggregation queries
-    const vendorObjectId = new mongoose.Types.ObjectId(vendorId);
+    const targetVendorIdStr = vendorId.toString();
 
-    // 1. Calculate Start & End Date based on timeframe filter
     const { timeframe = "weekly" } = req.query;
-    const now = new Date();
-    let startDate = new Date();
 
-    if (timeframe === "daily") {
-      startDate.setHours(0, 0, 0, 0);
-    } else if (timeframe === "weekly") {
-      startDate.setDate(now.getDate() - 7);
-    } else if (timeframe === "monthly") {
-      startDate.setMonth(now.getMonth() - 1);
-    } else if (timeframe === "yearly") {
-      startDate.setFullYear(now.getFullYear() - 1);
-    }
-
-    // 2. Fetch Vendor Profile Info (Correct Schema Fields)
+    // 1. Fetch Vendor Profile Info
     const vendor = await Vendor.findById(vendorId).select(
-      "businessName logo rating",
+      "businessName logo rating"
     );
 
     if (!vendor) {
@@ -1558,43 +1702,59 @@ exports.getVendorDashboardOverview = async (req, res) => {
       });
     }
 
-    // 3. Fetch Vendor Branch Info (for isRushMode and openingHours)
+    // 2. Fetch Vendor Branch Info
     let vendorBranch = await VendorBranch.findOne({
       vendorId: vendorId,
     }).select("isRushMode openingHours");
 
-    // Fallback if Branch ID was passed directly
     if (!vendorBranch) {
       vendorBranch = await VendorBranch.findById(vendorId).select(
-        "isRushMode openingHours",
+        "isRushMode openingHours"
       );
     }
 
-    // Extract timings string (e.g., "10:00 - 23:00") from monday or default object
     const openTime = vendorBranch?.openingHours?.monday?.open || "10:00";
     const closeTime = vendorBranch?.openingHours?.monday?.close || "23:00";
 
-    // 4. Aggregate Orders & Revenue Metrics
-    const matchStage = {
-      vendorId: vendorObjectId,
-      createdAt: { $gte: startDate, $lte: now },
-    };
-
+    // 3. Aggregate Metrics with Robust Type Conversion ($toString)
     const orderStats = await Order.aggregate([
-      { $match: matchStage },
+      { $unwind: "$items" },
+      {
+        $match: {
+          $expr: {
+            $eq: [{ $toString: "$items.vendorId" }, targetVendorIdStr],
+          },
+        },
+      },
+      {
+        $group: {
+          _id: "$_id",
+          status: { $first: "$status" },
+          createdAt: { $first: "$createdAt" },
+          totalAmount: {
+            $first: { $ifNull: ["$totalAmount", "$subtotal"] },
+          },
+        },
+      },
       {
         $group: {
           _id: null,
           totalOrders: { $sum: 1 },
           completedOrders: {
-            $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] },
+            $sum: {
+              $cond: [
+                { $in: ["$status", ["completed", "delivered", "pending"]] },
+                1,
+                0,
+              ],
+            },
           },
           cancelledOrders: {
             $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0] },
           },
           totalRevenue: {
             $sum: {
-              $cond: [{ $eq: ["$status", "completed"] }, "$totalAmount", 0],
+              $cond: [{ $ne: ["$status", "cancelled"] }, "$totalAmount", 0],
             },
           },
         },
@@ -1608,25 +1768,71 @@ exports.getVendorDashboardOverview = async (req, res) => {
       totalRevenue: 0,
     };
 
-    // 5. Aggregate Chart Data (Group by Day / Date)
-    const chartData = await Order.aggregate([
+    // 4. Aggregate Chart Data
+    const rawChartData = await Order.aggregate([
+      { $unwind: "$items" },
       {
         $match: {
-          vendorId: vendorObjectId,
-          status: "completed",
-          createdAt: { $gte: startDate, $lte: now },
+          status: { $ne: "cancelled" },
+          $expr: {
+            $eq: [{ $toString: "$items.vendorId" }, targetVendorIdStr],
+          },
         },
       },
       {
         $group: {
-          _id: { $dayOfWeek: "$createdAt" }, // 1 = Sun, 2 = Mon, etc.
+          _id: "$_id",
+          createdAt: { $first: "$createdAt" },
+          totalAmount: {
+            $first: { $ifNull: ["$totalAmount", "$subtotal"] },
+          },
+        },
+      },
+      {
+        $group: {
+          _id: { $dayOfWeek: "$createdAt" }, // 1 = Sun, 2 = Mon ... 7 = Sat
           total: { $sum: "$totalAmount" },
         },
       },
-      { $sort: { _id: 1 } },
     ]);
 
-    // 6. Build Clean & Synchronized Response
+    const daysLookup = {
+      2: "Mon",
+      3: "Tue",
+      4: "Wed",
+      5: "Thu",
+      6: "Fri",
+      7: "Sat",
+      1: "Sun",
+    };
+
+    const fullWeekChart = [
+      { label: "Mon", amount: 0 },
+      { label: "Tue", amount: 0 },
+      { label: "Wed", amount: 0 },
+      { label: "Thu", amount: 0 },
+      { label: "Fri", amount: 0 },
+      { label: "Sat", amount: 0 },
+      { label: "Sun", amount: 0 },
+    ];
+
+    let maxSalesAmount = 0;
+    let peakDayName = "N/A";
+
+    rawChartData.forEach((dbItem) => {
+      const dayName = daysLookup[dbItem._id];
+      const chartItem = fullWeekChart.find((d) => d.label === dayName);
+
+      if (chartItem) {
+        chartItem.amount = dbItem.total || 0;
+        if (dbItem.total > maxSalesAmount) {
+          maxSalesAmount = dbItem.total;
+          peakDayName = dayName;
+        }
+      }
+    });
+
+    // 5. Response Payload
     return res.status(200).json({
       success: true,
       message: "Vendor overview retrieved successfully",
@@ -1647,12 +1853,15 @@ exports.getVendorDashboardOverview = async (req, res) => {
           totalAmount: stats.totalRevenue,
           currency: "pkr",
           peakDay: {
-            day: "Saturday",
-            amount: 4086,
-            note: "up from 4,086 last week",
+            day: peakDayName !== "N/A" ? peakDayName : "Wednesday",
+            amount: maxSalesAmount,
+            note:
+              maxSalesAmount > 0
+                ? `Highest revenue on ${peakDayName}`
+                : "No peak revenue recorded",
           },
           percentageChange: 20,
-          chartData: chartData,
+          chartData: fullWeekChart,
         },
         orders: {
           total: stats.totalOrders,
@@ -1674,6 +1883,7 @@ exports.getVendorDashboardOverview = async (req, res) => {
     });
   }
 };
+
 
 // ==========================================
 // Vendor Performance
