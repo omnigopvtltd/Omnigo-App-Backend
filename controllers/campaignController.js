@@ -137,7 +137,8 @@ exports.createCampaign = async (req, res) => {
     if (!campaignName || !campaignType || !startDate || !endDate) {
       return res.status(400).json({
         success: false,
-        message: "campaignName, campaignType, startDate, and endDate are required fields.",
+        message:
+          "campaignName, campaignType, startDate, and endDate are required fields.",
       });
     }
 
@@ -196,7 +197,8 @@ exports.getAllCampaigns = async (req, res) => {
     }
 
     if (isActive !== undefined) query.isActive = isActive === "true";
-    if (campaignType && campaignType !== "all") query.campaignType = campaignType;
+    if (campaignType && campaignType !== "all")
+      query.campaignType = campaignType;
     if (branchId) query.branchId = branchId;
 
     const pageNum = Math.max(parseInt(page, 10) || 1, 1);
@@ -206,7 +208,10 @@ exports.getAllCampaigns = async (req, res) => {
     const [campaigns, total] = await Promise.all([
       Campaign.find(query)
         .populate("vendorId", "businessName logo rating")
-        .populate("branchId", "branchName address area city phone isOpen isActive") // <--- Properly populate Branch details here
+        .populate(
+          "branchId",
+          "branchName address area city phone isOpen isActive",
+        ) // <--- Properly populate Branch details here
         .populate("offerDetails.freeItemId", "name price image")
         .populate("offerDetails.comboItems", "name price image")
         .populate("applicableCategories", "name")
@@ -219,8 +224,14 @@ exports.getAllCampaigns = async (req, res) => {
     ]);
 
     // OPTIONAL: Fetch all branches for the unique vendors present in these campaigns
-    const vendorIds = [...new Set(campaigns.map((c) => c.vendorId?._id || c.vendorId).filter(Boolean))];
-    const vendorBranches = await VendorBranch.find({ vendorId: { $in: vendorIds } }).lean();
+    const vendorIds = [
+      ...new Set(
+        campaigns.map((c) => c.vendorId?._id || c.vendorId).filter(Boolean),
+      ),
+    ];
+    const vendorBranches = await VendorBranch.find({
+      vendorId: { $in: vendorIds },
+    }).lean();
 
     return res.status(200).json({
       success: true,
@@ -241,14 +252,17 @@ exports.getAllCampaigns = async (req, res) => {
 exports.getCampaignById = async (req, res) => {
   try {
     const campaign = await Campaign.findById(req.params.id)
-      .populate("branchId")
+      .populate("vendorId", "businessName logo rating")
+      .populate("branchId", "branchName address area city phone isOpen isActive")
       .populate("offerDetails.freeItemId")
       .populate("offerDetails.comboItems")
       .populate("applicableCategories")
       .populate("applicableProducts");
 
     if (!campaign) {
-      return res.status(404).json({ success: false, message: "Campaign not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Campaign not found" });
     }
 
     return res.status(200).json({ success: true, campaign });
@@ -262,7 +276,9 @@ exports.updateCampaign = async (req, res) => {
   try {
     const campaign = await Campaign.findById(req.params.id);
     if (!campaign) {
-      return res.status(404).json({ success: false, message: "Campaign not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Campaign not found" });
     }
 
     const updateFields = [
@@ -311,10 +327,14 @@ exports.deleteCampaign = async (req, res) => {
   try {
     const campaign = await Campaign.findByIdAndDelete(req.params.id);
     if (!campaign) {
-      return res.status(404).json({ success: false, message: "Campaign not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Campaign not found" });
     }
 
-    return res.status(200).json({ success: true, message: "Campaign deleted successfully" });
+    return res
+      .status(200)
+      .json({ success: true, message: "Campaign deleted successfully" });
   } catch (err) {
     console.error("DELETE CAMPAIGN ERROR:", err);
     return res.status(500).json({ success: false, message: err.message });
@@ -358,7 +378,8 @@ exports.getCampaignFormConfig = async (req, res) => {
               type: "textarea",
               required: false,
               placeholder: "Describe your offer...",
-              defaultValue: "Get huge discounts on your favorite meals for a limited time!",
+              defaultValue:
+                "Get huge discounts on your favorite meals for a limited time!",
             },
           ],
         },
@@ -614,7 +635,10 @@ exports.getCampaignFormConfig = async (req, res) => {
               { label: "Buy X Get Y", value: "buy_x_get_y" },
               { label: "Free Item", value: "free_item" },
               { label: "Free Delivery", value: "free_delivery" },
-              { label: "Payment Method Discount", value: "payment_method_discount" },
+              {
+                label: "Payment Method Discount",
+                value: "payment_method_discount",
+              },
               { label: "Other", value: "other" },
             ],
             defaultValue: "percentage_discount",
@@ -672,19 +696,51 @@ exports.getCampaignFormConfig = async (req, res) => {
         sectionId: "schedule",
         sectionTitle: "4. Campaign Schedule",
         fields: [
-          { name: "startDate", label: "Start Date", type: "date", required: true, defaultValue: new Date().toISOString().split("T")[0] },
-          { name: "endDate", label: "End Date", type: "date", required: true, defaultValue: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0] },
-          { name: "startTime", label: "Start Time", type: "time", required: false, defaultValue: "10:00" },
-          { name: "endTime", label: "End Time", type: "time", required: false, defaultValue: "23:59" },
+          {
+            name: "startDate",
+            label: "Start Date",
+            type: "date",
+            required: true,
+            defaultValue: new Date().toISOString().split("T")[0],
+          },
+          {
+            name: "endDate",
+            label: "End Date",
+            type: "date",
+            required: true,
+            defaultValue: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+              .toISOString()
+              .split("T")[0],
+          },
+          {
+            name: "startTime",
+            label: "Start Time",
+            type: "time",
+            required: false,
+            defaultValue: "10:00",
+          },
+          {
+            name: "endTime",
+            label: "End Time",
+            type: "time",
+            required: false,
+            defaultValue: "23:59",
+          },
         ],
       },
       {
         sectionId: "banner",
         sectionTitle: "5. Campaign Banner",
         fields: [
-          { name: "campaignBanner", label: "Campaign Banner Image", type: "file", required: false, recommendedSize: "1200 x 400 px" },
+          {
+            name: "campaignBanner",
+            label: "Campaign Banner Image",
+            type: "file",
+            required: false,
+            recommendedSize: "1200 x 400 px",
+          },
         ],
-      }
+      },
     );
 
     return res.status(200).json({
@@ -701,7 +757,9 @@ exports.toggleCampaignAvailability = async (req, res) => {
   try {
     const campaign = await Campaign.findById(req.params.id);
     if (!campaign) {
-      return res.status(404).json({ success: false, message: "Campaign not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Campaign not found" });
     }
 
     campaign.isActive = !campaign.isActive;
