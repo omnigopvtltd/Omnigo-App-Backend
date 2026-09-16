@@ -113,9 +113,10 @@ router.get("/brands", auth, getAllVendorBrands);
 router.get("/home-chefs", auth, getAllHomeChefs);
 router.get("/categories", auth, getVendorCategories);
 router.get("/home-chef/:id", auth, getHomeChefById);
-router.get("/:id", auth, getVendorById);
 router.get("/vendor-menu/:vendorId", auth, vendorMenu);
 router.get("/vendor-menu-products/:vendorId", auth, vendorMenuProducts);
 router.get("/vendor-branches/:vendorId", auth, getVendorBranchById);
+
+router.get("/:id", auth, getVendorById);
 
 module.exports = router;

@@ -796,58 +796,6 @@ exports.getProductsByHomeChef = async (req, res) => {
 // =====================================
 // GET PRODUCTS BY VENDOR'S CATEGORIES
 // =====================================
-// exports.getProductsByVendorCategories = async (req, res) => {
-//   try {
-//     const { categoryName } = req.query;
-//     const { vendorId } = req.params;
-
-//     if (!vendorId || !mongoose.Types.ObjectId.isValid(vendorId)) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Valid vendorId is required",
-//       });
-//     }
-
-//     const vendor = await Vendor.findById({ _id: vendorId }).lean();
-//     if (!vendor) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Vendor not found",
-//       });
-//     }
-
-//     const query = { vendorId };
-
-//     if (categoryName && categoryName.trim() !== "") {
-//       // Convert query string into target slug format: "fries-and-pasta"
-//       const slugifiedCategory = categoryName
-//         .trim()
-//         .toLowerCase()
-//         .replace(/&/g, "and") // Convert "&" to "and"
-//         .replace(/[\s_]+/g, "-") // Convert spaces and underscores to hyphens
-//         .replace(/-+/g, "-"); // Normalize multiple hyphens to a single hyphen
-
-//       query.category = slugifiedCategory;
-//     }
-
-//     const products = await Product.find(query)
-//       .select("name images price description category")
-//       .lean();
-
-//     return res.status(200).json({
-//       success: true,
-//       count: products.length,
-//       products,
-//     });
-//   } catch (err) {
-//     console.error("GET PRODUCTS ERROR:", err);
-//     return res.status(500).json({
-//       success: false,
-//       message: err.message,
-//     });
-//   }
-// };
-
 exports.getProductsByVendorCategories = async (req, res) => {
   try {
     const { categoryName } = req.query;
@@ -860,99 +808,151 @@ exports.getProductsByVendorCategories = async (req, res) => {
       });
     }
 
-    const vendorObjectId = new mongoose.Types.ObjectId(vendorId);
-    let responseData = [];
+    const vendor = await Vendor.findById({ _id: vendorId }).lean();
+    if (!vendor) {
+      return res.status(404).json({
+        success: false,
+        message: "Vendor not found",
+      });
+    }
+
+    const query = { vendorId };
 
     if (categoryName && categoryName.trim() !== "") {
-      const formattedCategory = categoryName.trim().toLowerCase();
+      // Convert query string into target slug format: "fries-and-pasta"
+      const slugifiedCategory = categoryName
+        .trim()
+        .toLowerCase()
+        .replace(/&/g, "and") // Convert "&" to "and"
+        .replace(/[\s_]+/g, "-") // Convert spaces and underscores to hyphens
+        .replace(/-+/g, "-"); // Normalize multiple hyphens to a single hyphen
 
-      // 1. Special Types (popular, featured, new)
-      if (["popular items", "popular", "featured items", "featured", "new items", "new"].includes(formattedCategory)) {
-        let typeValue = "popular";
-        if (formattedCategory.includes("featured")) typeValue = "featured";
-        if (formattedCategory.includes("new")) typeValue = "new";
-
-        responseData = await Product.find({
-          vendorId: vendorObjectId,
-          type: typeValue,
-        })
-          .select("name images price description category type isFavourite isAvailable rating")
-          .lean();
-      } 
-      
-      // 2. Deals / Combos Fetching
-      else if (["deals", "combos", "deal", "combo"].includes(formattedCategory)) {
-        const deals = await Deal.find({
-          vendorId: vendorObjectId,
-          isActive: true,
-        }).lean();
-
-        // Standardize output for Deals
-        responseData = deals.map((d) => ({
-          _id: d._id,
-          name: d.title,
-          image: d.image,
-          originalPrice: d.originalPrice,
-          price: d.discountPrice,
-          dealType: d.dealType,
-          isDeal: true,
-        }));
-      } 
-
-      // 3. Campaigns / Offers Fetching
-      else if (["campaigns", "offers", "campaign", "offer"].includes(formattedCategory)) {
-        const campaigns = await Campaign.find({
-          vendorId: vendorObjectId,
-          isActive: true,
-        }).lean();
-
-        // Standardize output for Campaigns
-        responseData = campaigns.map((c) => ({
-          _id: c._id,
-          name: c.campaignName,
-          description: c.description,
-          banner: c.campaignBanner,
-          campaignType: c.campaignType,
-          offerDetails: c.offerDetails,
-          applicableProducts: c.applicableProducts,
-          isCampaign: true,
-        }));
-      } 
-
-      // 4. Standard Categories (Fallback e.g., "fast-food", "chinese", "burgers")
-      else {
-        const slugified = formattedCategory
-          .replace(/&/g, "and")
-          .replace(/[\s_]+/g, "-")
-          .replace(/-+/g, "-");
-
-        responseData = await Product.find({
-          vendorId: vendorObjectId,
-          category: { $regex: new RegExp(`^${slugified}$`, "i") },
-        })
-          .select("name images price description category type isFavourite isAvailable rating")
-          .lean();
-      }
-    } else {
-      // Return all products for the vendor if categoryName is empty
-      responseData = await Product.find({ vendorId: vendorObjectId })
-        .select("name images price description category type isFavourite isAvailable rating")
-        .lean();
+      query.category = slugifiedCategory;
     }
+
+    const products = await Product.find(query)
+      .select("name images price description category")
+      .lean();
 
     return res.status(200).json({
       success: true,
-      count: responseData.length,
-      products: responseData,
+      count: products.length,
+      products,
     });
   } catch (err) {
-    console.error("GET PRODUCTS BY CATEGORY ERROR:", err);
+    console.error("GET PRODUCTS ERROR:", err);
     return res.status(500).json({
       success: false,
       message: err.message,
     });
   }
 };
+
+// exports.getProductsByVendorCategories = async (req, res) => {
+//   try {
+//     const { categoryName } = req.query;
+//     const { vendorId } = req.params;
+
+//     if (!vendorId || !mongoose.Types.ObjectId.isValid(vendorId)) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Valid vendorId is required",
+//       });
+//     }
+
+//     const vendorObjectId = new mongoose.Types.ObjectId(vendorId);
+//     let responseData = [];
+
+//     if (categoryName && categoryName.trim() !== "") {
+//       const formattedCategory = categoryName.trim().toLowerCase();
+
+//       // 1. Special Types (popular, featured, new)
+//       if (["popular items", "popular", "featured items", "featured", "new items", "new"].includes(formattedCategory)) {
+//         let typeValue = "popular";
+//         if (formattedCategory.includes("featured")) typeValue = "featured";
+//         if (formattedCategory.includes("new")) typeValue = "new";
+
+//         responseData = await Product.find({
+//           vendorId: vendorObjectId,
+//           type: typeValue,
+//         })
+//           .select("name images price description category type isFavourite isAvailable rating")
+//           .lean();
+//       } 
+      
+//       // 2. Deals / Combos Fetching
+//       else if (["deals", "combos", "deal", "combo"].includes(formattedCategory)) {
+//         const deals = await Deal.find({
+//           vendorId: vendorObjectId,
+//           isActive: true,
+//         }).lean();
+
+//         // Standardize output for Deals
+//         responseData = deals.map((d) => ({
+//           _id: d._id,
+//           name: d.title,
+//           image: d.image,
+//           originalPrice: d.originalPrice,
+//           price: d.discountPrice,
+//           dealType: d.dealType,
+//           isDeal: true,
+//         }));
+//       } 
+
+//       // 3. Campaigns / Offers Fetching
+//       else if (["campaigns", "offers", "campaign", "offer"].includes(formattedCategory)) {
+//         const campaigns = await Campaign.find({
+//           vendorId: vendorObjectId,
+//           isActive: true,
+//         }).lean();
+
+//         // Standardize output for Campaigns
+//         responseData = campaigns.map((c) => ({
+//           _id: c._id,
+//           name: c.campaignName,
+//           description: c.description,
+//           banner: c.campaignBanner,
+//           campaignType: c.campaignType,
+//           offerDetails: c.offerDetails,
+//           applicableProducts: c.applicableProducts,
+//           isCampaign: true,
+//         }));
+//       } 
+
+//       // 4. Standard Categories (Fallback e.g., "fast-food", "chinese", "burgers")
+//       else {
+//         const slugified = formattedCategory
+//           .replace(/&/g, "and")
+//           .replace(/[\s_]+/g, "-")
+//           .replace(/-+/g, "-");
+
+//         responseData = await Product.find({
+//           vendorId: vendorObjectId,
+//           category: { $regex: new RegExp(`^${slugified}$`, "i") },
+//         })
+//           .select("name images price description category type isFavourite isAvailable rating")
+//           .lean();
+//       }
+//     } else {
+//       // Return all products for the vendor if categoryName is empty
+//       responseData = await Product.find({ vendorId: vendorObjectId })
+//         .select("name images price description category type isFavourite isAvailable rating")
+//         .lean();
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       count: responseData.length,
+//       products: responseData,
+//     });
+//   } catch (err) {
+//     console.error("GET PRODUCTS BY CATEGORY ERROR:", err);
+//     return res.status(500).json({
+//       success: false,
+//       message: err.message,
+//     });
+//   }
+// };
 
 // =====================================
 // GET PRODUCTS BY VENDOR'S SUBCATEGORIES
