@@ -90,6 +90,7 @@ router.put(
   updateVendorProfile,
 );
 
+router.get("/all-vendors", auth, getAllVendors);
 // ======================================================
 // Dashboard and Analytics Routes
 // ======================================================
@@ -108,7 +109,6 @@ router.put(
 );
 
 router.patch("/toggle-rushmode", auth, toggleRushMode);
-router.get("/all-vendors", auth, getAllVendors);
 router.get("/brands", auth, getAllVendorBrands);
 router.get("/home-chefs", auth, getAllHomeChefs);
 router.get("/categories", auth, getVendorCategories);
