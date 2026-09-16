@@ -112,148 +112,142 @@ const vendorSchema = new mongoose.Schema(
     // =====================================================
 
     // vendorProfile: {
-      // ---------------------------------------------
-      // Business Information
-      // ---------------------------------------------
+    // ---------------------------------------------
+    // Business Information
+    // ---------------------------------------------
 
-      businessType: {
-        type: String,
-        // enum: [
-        //   "restaurant",
-        //   "bakery",
-        //   "home_chef",
-        //   "grocery",
-        //   "pharmacy",
-        //   "cafe",
-        //   "other",
-        // ],
-        required: true,
-        default: "restaurant",
-      },
+    businessType: {
+      type: String,
+      // enum: [
+      //   "restaurant",
+      //   "bakery",
+      //   "home_chef",
+      //   "grocery",
+      //   "pharmacy",
+      //   "cafe",
+      //   "other",
+      // ],
+      required: true,
+      default: "restaurant",
+    },
 
-      category: {
-        type: String,
-        default: "",
-        trim: true,
-      },
+    category: {
+      type: String,
+      default: "",
+      trim: true,
+    },
 
-      description: {
-        type: String,
-        default: "",
-        trim: true,
-      },
+    description: {
+      type: String,
+      default: "",
+      trim: true,
+    },
 
-      logo: {
-        type: String,
-        default: "",
-      },
+    logo: {
+      type: String,
+      default: "",
+    },
 
-      coverImage: {
-        type: String,
-        default: "",
-      },
+    coverImage: {
+      type: String,
+      default: "",
+    },
 
-      status: {
-        type: String,
-        enum: [
-          "pending",
-          "assigned",
-          "preparing",
-          "ready",
-          "completed",
-          "cancelled",
-        ],
-        default: "pending",
-      },
-
-      // ---------------------------------------------
-      // Business Verification
-      // ---------------------------------------------
-
-      businessRegistrationNumber: {
-        type: String,
-        default: "",
-      },
-
-      taxNumber: {
-        type: String,
-        default: "",
-      },
-
-      foodLicenseNumber: {
-        type: String,
-        default: "",
-      },
-
-      incorporationCertificate: {
-        type: String,
-        default: "",
-      },
-
-      foodSafetyLicense: {
-        type: String,
-        default: "",
-      },
-
-      ntnCertificate: {
-        type: String,
-        default: "",
-      },
-
-      otherDocuments: [
-        {
-          name: {
-            type: String,
-            default: "",
-          },
-
-          file: {
-            type: String,
-            default: "",
-          },
-        },
+    status: {
+      type: String,
+      enum: [
+        "pending",
+        "assigned",
+        "preparing",
+        "ready",
+        "completed",
+        "cancelled",
       ],
+      default: "pending",
+    },
 
-      // ---------------------------------------------
-      // Verification
-      // ---------------------------------------------
+    // ---------------------------------------------
+    // Business Verification
+    // ---------------------------------------------
 
-      verificationStatus: {
-        type: String,
-        enum: [
-          "draft",
-          "pending",
-          "approved",
-          "rejected",
-          "suspended",
-        ],
-        default: "draft",
+    businessRegistrationNumber: {
+      type: String,
+      default: "",
+    },
+
+    taxNumber: {
+      type: String,
+      default: "",
+    },
+
+    foodLicenseNumber: {
+      type: String,
+      default: "",
+    },
+
+    incorporationCertificate: {
+      type: String,
+      default: "",
+    },
+
+    foodSafetyLicense: {
+      type: String,
+      default: "",
+    },
+
+    ntnCertificate: {
+      type: String,
+      default: "",
+    },
+
+    otherDocuments: [
+      {
+        name: {
+          type: String,
+          default: "",
+        },
+
+        file: {
+          type: String,
+          default: "",
+        },
       },
+    ],
 
-      rejectionReason: {
-        type: String,
-        default: "",
-      },
+    // ---------------------------------------------
+    // Verification
+    // ---------------------------------------------
 
-      reviewedBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-        default: null,
-      },
+    verificationStatus: {
+      type: String,
+      enum: ["draft", "pending", "approved", "rejected", "suspended"],
+      default: "draft",
+    },
 
-      reviewedAt: {
-        type: Date,
-        default: null,
-      },
+    rejectionReason: {
+      type: String,
+      default: "",
+    },
 
-      // ---------------------------------------------
-      // Business Status
-      // ---------------------------------------------
+    reviewedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
 
-      isActive: {
-        type: Boolean,
-        default: true,
-      },
+    reviewedAt: {
+      type: Date,
+      default: null,
+    },
+
+    // ---------------------------------------------
+    // Business Status
+    // ---------------------------------------------
+
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
     // },
 
     // =====================================================
@@ -326,6 +320,11 @@ const vendorSchema = new mongoose.Schema(
       default: false,
     },
 
+    rating: {
+      average: { type: Number, default: 0 },
+      count: { type: Number, default: 0 },
+    },
+
     // =====================================================
     // ACCOUNT STATUS
     // =====================================================
@@ -342,7 +341,7 @@ const vendorSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 module.exports = mongoose.model("Vendor", vendorSchema);

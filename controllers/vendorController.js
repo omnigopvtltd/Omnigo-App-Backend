@@ -15,6 +15,8 @@ const { body, validationResult } = require("express-validator");
 const Order = require("../models/Order");
 const Deal = require("../models/Deal");
 const Product = require("../models/Product");
+const { createAndSendNotification } = require("./adminController");
+const Campaign = require("../models/Campaign");
 
 // ======================================================
 // CONFIGURATIONS & HELPERS
@@ -35,12 +37,7 @@ const generateToken = (vendor) => {
   });
 };
 
-const sendVendorResponse = (
-  res,
-  message,
-  payload,
-  statusCode = 200
-) => {
+const sendVendorResponse = (res, message, payload, statusCode = 200) => {
   // Extract vendor object whether passed directly or nested inside payload
   const vendorObj = payload.vendor || payload;
   const branchObj = payload.branch || null;
@@ -92,7 +89,7 @@ const sendVendorResponse = (
       taxNumber: vendorObj.taxNumber || "",
       foodLicenseNumber: vendorObj.foodLicenseNumber || "",
 
-      branches : vendorObj.branches || [],
+      branches: vendorObj.branches || [],
 
       // Payout Object
       payout: vendorObj.payout || {},
@@ -657,30 +654,30 @@ exports.signup = async (req, res) => {
         : String(businessEmail).toLowerCase().trim(),
       profilePicture: processMediaField(
         profilePicture,
-        files.profilePicture?.[0]
+        files.profilePicture?.[0],
       ),
 
       cnicNumber: cnicNumber || "",
       cnicFrontPicture: processMediaField(
         cnicFrontPicture,
-        files.cnicFrontPicture?.[0]
+        files.cnicFrontPicture?.[0],
       ),
       cnicBackPicture: processMediaField(
         cnicBackPicture,
-        files.cnicBackPicture?.[0]
+        files.cnicBackPicture?.[0],
       ),
 
       incorporationCertificate: processMediaField(
         incorporationCertificate,
-        files.incorporationCertificate?.[0]
+        files.incorporationCertificate?.[0],
       ),
       foodSafetyLicense: processMediaField(
         foodSafetyLicense,
-        files.foodSafetyLicense?.[0]
+        files.foodSafetyLicense?.[0],
       ),
       ntnCertificate: processMediaField(
         ntnCertificate,
-        files.ntnCertificate?.[0]
+        files.ntnCertificate?.[0],
       ),
 
       businessType: businessType || "restaurant",
@@ -805,7 +802,7 @@ exports.signup = async (req, res) => {
         branches: createdBranches, // Array of created branches
         tempPassword: rawAutoPassword,
       },
-      201
+      201,
     );
   } catch (err) {
     console.error("VENDOR SIGNUP ERROR:", err);
@@ -861,6 +858,14 @@ exports.login = async (req, res) => {
     const vendorResponse = vendor.toObject();
     delete vendorResponse.password;
 
+    await createAndSendNotification(req.app, {
+      recipientId: `${vendor._id}`, // Must be valid ObjectId string
+      recipientModel: "Vendor",
+      title: "Succesfully Logged In",
+      message: "You have successfully logged in.",
+      type: "system", // Explicitly handle string
+      // data: { orderId: "12345" },
+    });
     return sendVendorResponse(res, "Vendor login successful", vendorResponse);
   } catch (err) {
     console.error("VENDOR LOGIN ERROR:", err);
@@ -1130,16 +1135,20 @@ exports.updateVendorProfile = async (req, res) => {
 
     // 2. Core & Business Profile Details Update
     vendor.businessName = storeName || businessName || vendor.businessName;
-    vendor.description = businessDescription || description || vendor.description;
-    vendor.noOfBranches = noOfBranches !== undefined ? noOfBranches : vendor.noOfBranches;
+    vendor.description =
+      businessDescription || description || vendor.description;
+    vendor.noOfBranches =
+      noOfBranches !== undefined ? noOfBranches : vendor.noOfBranches;
 
-    if (businessEmail) vendor.businessEmail = String(businessEmail).toLowerCase().trim();
+    if (businessEmail)
+      vendor.businessEmail = String(businessEmail).toLowerCase().trim();
     if (businessPhone) vendor.businessPhone = String(businessPhone).trim();
 
     if (businessType) vendor.businessType = businessType;
     if (category) vendor.category = category;
 
-    if (businessRegistrationNumber) vendor.businessRegistrationNumber = businessRegistrationNumber;
+    if (businessRegistrationNumber)
+      vendor.businessRegistrationNumber = businessRegistrationNumber;
     if (taxNumber) vendor.taxNumber = taxNumber;
     if (foodLicenseNumber) vendor.foodLicenseNumber = foodLicenseNumber;
 
@@ -1151,7 +1160,8 @@ exports.updateVendorProfile = async (req, res) => {
     }
 
     if (storeHours) {
-      const parsedHours = typeof storeHours === "string" ? JSON.parse(storeHours) : storeHours;
+      const parsedHours =
+        typeof storeHours === "string" ? JSON.parse(storeHours) : storeHours;
       if (Array.isArray(parsedHours)) {
         formattedStoreHours = parsedHours.map((schedule) => ({
           day: schedule.day,
@@ -1169,22 +1179,56 @@ exports.updateVendorProfile = async (req, res) => {
     if (ownerEmail) vendor.ownerEmail = String(ownerEmail).toLowerCase().trim();
 
     // 5. Documents & Media Processing
-    vendor.profilePicture = processMediaField(profilePicture, files.profilePicture?.[0], vendor.profilePicture);
-    vendor.logo = processMediaField(logoImage || logo, files.logoImage?.[0] || files.logo?.[0], vendor.logo);
-    vendor.coverImage = processMediaField(bannerImage || coverImage, files.bannerImage?.[0] || files.coverImage?.[0], vendor.coverImage);
+    vendor.profilePicture = processMediaField(
+      profilePicture,
+      files.profilePicture?.[0],
+      vendor.profilePicture,
+    );
+    vendor.logo = processMediaField(
+      logoImage || logo,
+      files.logoImage?.[0] || files.logo?.[0],
+      vendor.logo,
+    );
+    vendor.coverImage = processMediaField(
+      bannerImage || coverImage,
+      files.bannerImage?.[0] || files.coverImage?.[0],
+      vendor.coverImage,
+    );
 
     vendor.cnicNumber = cnicNumber || vendor.cnicNumber || "";
-    vendor.cnicFrontPicture = processMediaField(cnicFrontPicture, files.cnicFrontPicture?.[0], vendor.cnicFrontPicture);
-    vendor.cnicBackPicture = processMediaField(cnicBackPicture, files.cnicBackPicture?.[0], vendor.cnicBackPicture);
+    vendor.cnicFrontPicture = processMediaField(
+      cnicFrontPicture,
+      files.cnicFrontPicture?.[0],
+      vendor.cnicFrontPicture,
+    );
+    vendor.cnicBackPicture = processMediaField(
+      cnicBackPicture,
+      files.cnicBackPicture?.[0],
+      vendor.cnicBackPicture,
+    );
 
-    vendor.incorporationCertificate = processMediaField(incorporationCertificate, files.incorporationCertificate?.[0], vendor.incorporationCertificate);
-    vendor.foodSafetyLicense = processMediaField(foodSafetyLicense, files.foodSafetyLicense?.[0], vendor.foodSafetyLicense);
-    vendor.ntnCertificate = processMediaField(ntnCertificate, files.ntnCertificate?.[0], vendor.ntnCertificate);
+    vendor.incorporationCertificate = processMediaField(
+      incorporationCertificate,
+      files.incorporationCertificate?.[0],
+      vendor.incorporationCertificate,
+    );
+    vendor.foodSafetyLicense = processMediaField(
+      foodSafetyLicense,
+      files.foodSafetyLicense?.[0],
+      vendor.foodSafetyLicense,
+    );
+    vendor.ntnCertificate = processMediaField(
+      ntnCertificate,
+      files.ntnCertificate?.[0],
+      vendor.ntnCertificate,
+    );
 
     // 6. Payout Details Update
     vendor.payout = {
-      accountHolderName: payoutAccountTitle || vendor.payout?.accountHolderName || "",
-      paymentMethod: payoutPaymentMethod || vendor.payout?.paymentMethod || "bank",
+      accountHolderName:
+        payoutAccountTitle || vendor.payout?.accountHolderName || "",
+      paymentMethod:
+        payoutPaymentMethod || vendor.payout?.paymentMethod || "bank",
       bankName: payoutBankName || vendor.payout?.bankName || "",
       accountNumber: payoutAccountNumber || vendor.payout?.accountNumber || "",
       iban: payoutIban || vendor.payout?.iban || "",
@@ -1198,18 +1242,22 @@ exports.updateVendorProfile = async (req, res) => {
     // 7. ALWAYS Create or Update Branch (Even if branchData is missing)
     let parsedBranch = {};
     if (branchData) {
-      parsedBranch = typeof branchData === "string" ? JSON.parse(branchData) : branchData;
+      parsedBranch =
+        typeof branchData === "string" ? JSON.parse(branchData) : branchData;
     }
 
-    const targetBranchName = parsedBranch.branchName || `${vendor.businessName} Main Branch`;
+    const targetBranchName =
+      parsedBranch.branchName || `${vendor.businessName} Main Branch`;
     const targetBranchPhone = parsedBranch.phone || vendor.businessPhone;
-    const targetIsStoreHoursActive = parsedBranch.isStoreHoursActive !== undefined 
-      ? parsedBranch.isStoreHoursActive 
-      : vendor.isStoreHoursActive;
-    
-    const targetStoreHours = (parsedBranch.storeHours && parsedBranch.storeHours.length > 0)
-      ? parsedBranch.storeHours
-      : formattedStoreHours;
+    const targetIsStoreHoursActive =
+      parsedBranch.isStoreHoursActive !== undefined
+        ? parsedBranch.isStoreHoursActive
+        : vendor.isStoreHoursActive;
+
+    const targetStoreHours =
+      parsedBranch.storeHours && parsedBranch.storeHours.length > 0
+        ? parsedBranch.storeHours
+        : formattedStoreHours;
 
     const defaultBranch = await VendorBranch.findOneAndUpdate(
       { vendorId: vendor._id }, // Vendor ki primary branch query karein
@@ -1221,19 +1269,23 @@ exports.updateVendorProfile = async (req, res) => {
           address: parsedBranch.address || "",
           area: parsedBranch.area || "",
           city: parsedBranch.city || "",
-          ...(parsedBranch.longitude !== undefined && parsedBranch.latitude !== undefined && {
-            location: {
-              type: "Point",
-              coordinates: [Number(parsedBranch.longitude) || 0, Number(parsedBranch.latitude) || 0],
-            },
-          }),
+          ...(parsedBranch.longitude !== undefined &&
+            parsedBranch.latitude !== undefined && {
+              location: {
+                type: "Point",
+                coordinates: [
+                  Number(parsedBranch.longitude) || 0,
+                  Number(parsedBranch.latitude) || 0,
+                ],
+              },
+            }),
           isActive: true,
           isOpen: true,
           isStoreHoursActive: targetIsStoreHoursActive || false,
           storeHours: targetStoreHours,
         },
       },
-      { new: true, upsert: true, setDefaultsOnInsert: true }
+      { new: true, upsert: true, setDefaultsOnInsert: true },
     );
 
     // 8. Socket IO Real-Time Broadcast
@@ -1270,19 +1322,38 @@ exports.updateVendorProfile = async (req, res) => {
 // =======================
 exports.getAllVendors = async (req, res) => {
   try {
-    const { status, search } = req.query;
+    const { status, search, type } = req.query;
 
     const filter = {};
 
+    // 1. Filter by Status (active/blocked)
     if (status && status !== "all") {
       if (status === "blocked") filter.isBlocked = true;
       if (status === "active") filter.isBlocked = false;
     }
 
-    const vendors = await Vendor.find(filter).sort({ createdAt: -1 });
+    // 2. Filter by Vendor Type/Category (e.g. restaurant, grocery, etc.)
+    if (type && type !== "all") {
+      // RegEx se case-insensitive match (e.g. "restaurant" or "restaurants")
+      filter.businessType = { $regex: new RegExp(type, "i") };
+    }
+
+    // 3. Search by Vendor Name
+    if (search && search.trim() !== "") {
+      filter.businessName = {
+        $regex: search.trim().toLowerCase(),
+        $options: "i",
+      };
+    }
+
+    // Default: Fetches all vendors matching filters (or all vendors if filters are empty)
+    const vendors = await Vendor.find(filter)
+      .select("businessName logo coverImage businessType rating")
+      .sort({ createdAt: -1 });
 
     res.json({
       success: true,
+      count: vendors.length,
       vendors,
     });
   } catch (err) {
@@ -1477,7 +1548,7 @@ exports.getVendorDashboardOverview = async (req, res) => {
 
     // 2. Fetch Vendor Profile Info (Correct Schema Fields)
     const vendor = await Vendor.findById(vendorId).select(
-      "businessName logo rating"
+      "businessName logo rating",
     );
 
     if (!vendor) {
@@ -1488,14 +1559,14 @@ exports.getVendorDashboardOverview = async (req, res) => {
     }
 
     // 3. Fetch Vendor Branch Info (for isRushMode and openingHours)
-    let vendorBranch = await VendorBranch.findOne({ vendorId: vendorId }).select(
-      "isRushMode openingHours"
-    );
+    let vendorBranch = await VendorBranch.findOne({
+      vendorId: vendorId,
+    }).select("isRushMode openingHours");
 
     // Fallback if Branch ID was passed directly
     if (!vendorBranch) {
       vendorBranch = await VendorBranch.findById(vendorId).select(
-        "isRushMode openingHours"
+        "isRushMode openingHours",
       );
     }
 
@@ -1806,7 +1877,12 @@ exports.getVendorPerformance = async (req, res) => {
 
 exports.vendorMenu = async (req, res) => {
   try {
-    const vendorId = req.user?.id || req.user?._id || req.params?.vendorId;
+    let vendorId;
+    if (!req.params?.vendorId) {
+      vendorId = req.user?.id || req.user?._id;
+    } else {
+      vendorId = req.params?.vendorId;
+    }
 
     if (!vendorId || !mongoose.Types.ObjectId.isValid(vendorId)) {
       return res.status(400).json({
@@ -1818,85 +1894,124 @@ exports.vendorMenu = async (req, res) => {
     const vendorObjectId = new mongoose.Types.ObjectId(vendorId);
 
     // 1. Fetch Deals, Special Types, Vendor Schema, & Products Grouped by Category
-    const [dealsGrouped, productsByType, vendorDoc, productsByCategory] =
-      await Promise.all([
-        // Group Active Deals by dealType for this Vendor
-        Deal.aggregate([
-          { $match: { vendorId: vendorObjectId, isActive: true } },
-          { $sort: { isFeatured: -1, createdAt: -1 } },
-          {
-            $group: {
-              _id: "$dealType",
-              items: {
-                $push: {
-                  _id: "$_id",
-                  name: "$title",
-                  image: "$image",
-                  originalPrice: "$originalPrice",
-                  discountPrice: "$discountPrice",
-                  dealType: "$dealType",
-                },
+    const [
+      campaignsGrouped,
+      dealsGrouped,
+      productsByType,
+      vendorDoc,
+      productsByCategory,
+    ] = await Promise.all([
+      // Group Active Campaigns by campaignType for this Vendor
+      Campaign.aggregate([
+        { $match: { vendorId: vendorObjectId, isActive: true } },
+        { $sort: { createdAt: -1 } },
+        {
+          $group: {
+            _id: "$campaignType",
+            items: {
+              $push: {
+                _id: "$_id",
+                name: "$campaignName",
+                description: "$description",
+                banner: "$campaignBanner",
+                campaignType: "$campaignType",
+                offerType: "$offerDetails.offerType",
+                discountType: "$offerDetails.discountType",
+                discountValue: "$offerDetails.discountValue",
+                originalPrice: "$offerDetails.originalPrice",
+                price: "$offerDetails.dealPrice", // Standardizing field as 'price' for UI
+                comboName: "$offerDetails.comboName",
+                buyQuantity: "$offerDetails.buyQuantity",
+                getQuantity: "$offerDetails.getQuantity",
+                applicableProducts: "$applicableProducts",
+                applicableCategories: "$applicableCategories",
               },
             },
           },
-          { $project: { items: { $slice: ["$items", 10] } } },
-        ]),
+        },
+        { $project: { items: { $slice: ["$items", 10] } } },
+      ]),
 
-        // Group Special Product Types
-        Product.aggregate([
-          {
-            $match: {
-              vendorId: vendorObjectId,
-              type: { $in: ["special", "popular", "featured", "new"] },
-            },
-          },
-          {
-            $group: {
-              _id: "$type",
-              items: {
-                $push: {
-                  _id: "$_id",
-                  name: "$name",
-                  description: "$description",
-                  price: "$price",
-                  images: "$images",
-                  isFavourite: "$isFavourite",
-                  rating: "$rating",
-                },
+      // Group Active Deals by dealType for this Vendor
+      Deal.aggregate([
+        { $match: { vendorId: vendorObjectId, isActive: true } },
+        { $sort: { isFeatured: -1, createdAt: -1 } },
+        {
+          $group: {
+            _id: "$dealType",
+            items: {
+              $push: {
+                _id: "$_id",
+                name: "$title",
+                image: "$image",
+                originalPrice: "$originalPrice",
+                discountPrice: "$discountPrice",
+                dealType: "$dealType",
               },
             },
           },
-          { $project: { items: { $slice: ["$items", 10] } } },
-        ]),
+        },
+        { $project: { items: { $slice: ["$items", 10] } } },
+      ]),
 
-        // Fetch Vendor Document
-        Vendor.findById(vendorObjectId).select("categories").lean(),
-
-        // Fetch ALL Regular Products Grouped by Category in Database
-        Product.aggregate([
-          { $match: { vendorId: vendorObjectId } },
-          {
-            $group: {
-              _id: "$category",
-              products: {
-                $push: {
-                  _id: "$_id",
-                  name: "$name",
-                  description: "$description",
-                  price: "$price",
-                  images: "$images",
-                  isFavourite: "$isFavourite",
-                  rating: "$rating",
-                },
+      // Group Special Product Types
+      Product.aggregate([
+        {
+          $match: {
+            vendorId: vendorObjectId,
+            type: { $in: ["special", "popular", "featured", "new"] },
+          },
+        },
+        {
+          $group: {
+            _id: "$type",
+            items: {
+              $push: {
+                _id: "$_id",
+                name: "$name",
+                description: "$description",
+                price: "$price",
+                images: "$images",
+                isFavourite: "$isFavourite",
+                rating: "$rating",
               },
             },
           },
-        ]),
-      ]);
+        },
+        { $project: { items: { $slice: ["$items", 10] } } },
+      ]),
+
+      // Fetch Vendor Document
+      Vendor.findById(vendorObjectId).select("categories").lean(),
+
+      // Fetch ALL Regular Products Grouped by Category in Database
+      Product.aggregate([
+        { $match: { vendorId: vendorObjectId } },
+        {
+          $group: {
+            _id: "$category",
+            products: {
+              $push: {
+                _id: "$_id",
+                name: "$name",
+                description: "$description",
+                price: "$price",
+                images: "$images",
+                isFavourite: "$isFavourite",
+                rating: "$rating",
+              },
+            },
+          },
+        },
+      ]),
+    ]);
 
     // 2. Maps for quick lookups
     const dealMap = {};
     dealsGrouped.forEach((d) => (dealMap[d._id] = d.items));
+
+    const campaignMap = {};
+    campaignsGrouped.forEach((c) => (campaignMap[c._id] = c.items));
 
     const productTypeMap = {};
     productsByType.forEach((p) => (productTypeMap[p._id] = p.items));
@@ -1929,6 +2044,27 @@ exports.vendorMenu = async (req, res) => {
       }
     });
 
+    // 3. Section 1: Deals
+    const campaignType = [
+      { key: "flash_deal", label: "Flash Deals" },
+      { key: "bogo_deal", label: "Bogo Deals" },
+      { key: "combo_deal", label: "Combo Deals" },
+      { key: "discount_deal", label: "Discount Deals" },
+      { key: "free_delivery_deal", label: "Free Delivery Deals" },
+      { key: "payment_card_deal", label: "Payment Card Deals" },
+      { key: "custom_deal", label: "Custom Deals" },
+    ];
+
+    campaignType.forEach(({ key, label }) => {
+      if (campaignMap[key] && campaignMap[key].length > 0) {
+        categoriesResponse.push({
+          _id: new mongoose.Types.ObjectId(),
+          categoryName: label,
+          products: campaignMap[key],
+        });
+      }
+    });
+
     // 4. Section 2: Special Product Types
     const productTypes = [
       { key: "special", label: "Special Items" },
@@ -1953,7 +2089,8 @@ exports.vendorMenu = async (req, res) => {
 
     if (storeCategories.length > 0) {
       storeCategories.forEach((cat) => {
-        const catName = typeof cat === "string" ? cat : cat.categoryName || cat.name;
+        const catName =
+          typeof cat === "string" ? cat : cat.categoryName || cat.name;
         if (catName) {
           addedCategories.add(catName.toString());
           categoriesResponse.push({
@@ -1990,6 +2127,191 @@ exports.vendorMenu = async (req, res) => {
   }
 };
 
+exports.vendorMenuProducts = async (req, res) => {
+  try {
+    let vendorId = req.params?.vendorId || req.user?.id || req.user?._id;
+    const { categoryName } = req.query;
+
+    if (!vendorId || !mongoose.Types.ObjectId.isValid(vendorId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Vendor ID format",
+      });
+    }
+
+    if (!categoryName) {
+      return res.status(400).json({
+        success: false,
+        message: "categoryName query parameter is required",
+      });
+    }
+
+    const vendorObjectId = new mongoose.Types.ObjectId(vendorId);
+    const cleanCategory = categoryName.trim().toLowerCase();
+    let products = [];
+
+    // Map Special Badges
+    const specialTypeMap = {
+      "popular items": "popular",
+      popular: "popular",
+      "featured items": "featured",
+      featured: "featured",
+      "new items": "new",
+      new: "new",
+      "special items": "special",
+      special: "special",
+    };
+
+    // Map Campaign Types
+    const campaignTypeMap = {
+      "flash deals": "flash_deal",
+      flash_deal: "flash_deal",
+      "bogo deals": "bogo_deal",
+      bogo_deal: "bogo_deal",
+      "combo deals": "combo_deal",
+      combo_deal: "combo_deal",
+      "discount deals": "discount_deal",
+      discount_deal: "discount_deal",
+      "free delivery deals": "free_delivery_deal",
+      free_delivery_deal: "free_delivery_deal",
+      "payment card deals": "payment_card_deal",
+      payment_card_deal: "payment_card_deal",
+      "custom deals": "custom_deal",
+      custom_deal: "custom_deal",
+    };
+
+    // 1. Check if Category is Special Product Type
+    if (specialTypeMap[cleanCategory]) {
+      products = await Product.find({
+        vendorId: vendorObjectId,
+        type: specialTypeMap[cleanCategory],
+      })
+        .select(
+          "name description price images isFavourite rating category type",
+        )
+        .lean();
+    }
+    // 2. Check if Category is a Campaign
+    // else if (campaignTypeMap[cleanCategory]) {
+    //   const campaigns = await Campaign.find({
+    //     vendorId: vendorObjectId,
+    //     campaignType: campaignTypeMap[cleanCategory],
+    //     isActive: true,
+    //   }).lean();
+
+    //   products = campaigns.map((c) => ({
+    //     _id: c._id,
+    //     name: c.campaignName,
+    //     description: c.description,
+    //     banner: c.campaignBanner,
+    //     campaignType: c.campaignType,
+    //     discountType: c.offerDetails?.discountType,
+    //     discountValue: c.offerDetails?.discountValue,
+    //     originalPrice: c.offerDetails?.originalPrice || 0,
+    //     price: c.offerDetails?.dealPrice || 0,
+    //     applicableProducts: c.applicableProducts || [],
+    //     applicableCategories: c.applicableCategories || [],
+    //     isCampaign: true,
+    //   }));
+    // }
+
+    // 2. Check if Category is a Campaign
+    else if (campaignTypeMap[cleanCategory]) {
+      const campaigns = await Campaign.find({
+        vendorId: vendorObjectId,
+        campaignType: campaignTypeMap[cleanCategory],
+        isActive: true,
+      }).lean();
+
+      // Extract all applicable product ObjectIds across campaigns
+      const allProductIds = campaigns.flatMap(
+        (c) => c.applicableProducts || [],
+      );
+
+      // Fetch product details for all applicable IDs in a single DB query
+      const productsList = await Product.find({
+        _id: { $in: allProductIds },
+      })
+        .select(
+          "name description price images isFavourite rating category type",
+        )
+        .lean();
+
+      // Create a quick lookup map
+      const productMap = {};
+      productsList.forEach((p) => {
+        productMap[p._id.toString()] = p;
+      });
+
+      // Map campaigns with populated applicable products
+      products = campaigns.map((c) => ({
+        _id: c._id,
+        name: c.campaignName,
+        description: c.description,
+        banner: c.campaignBanner,
+        campaignType: c.campaignType,
+        discountType: c.offerDetails?.discountType,
+        discountValue: c.offerDetails?.discountValue,
+        originalPrice: c.offerDetails?.originalPrice || 0,
+        price: c.offerDetails?.dealPrice || 0,
+        applicableCategories: c.applicableCategories || [],
+        applicableProducts: (c.applicableProducts || [])
+          .map((id) => productMap[id.toString()])
+          .filter(Boolean), // Remove any un-matched or null items
+        isCampaign: true,
+      }));
+    }
+    // 3. Check if Category is a Deal
+    else if (cleanCategory.includes("deal")) {
+      const deals = await Deal.find({
+        vendorId: vendorObjectId,
+        isActive: true,
+        $or: [
+          { dealType: { $regex: new RegExp(`^${categoryName}$`, "i") } },
+          { title: { $regex: new RegExp(`^${categoryName}$`, "i") } },
+        ],
+      }).lean();
+
+      products = deals.map((d) => ({
+        _id: d._id,
+        name: d.title,
+        image: d.image,
+        originalPrice: d.originalPrice,
+        price: d.discountPrice,
+        dealType: d.dealType,
+        isDeal: true,
+      }));
+    }
+    // 4. Fallback to Regular Product Category (e.g., "fast-food", "chinese", "burgers")
+    else {
+      const slugified = cleanCategory
+        .replace(/&/g, "and")
+        .replace(/[\s_]+/g, "-")
+        .replace(/-+/g, "-");
+
+      products = await Product.find({
+        vendorId: vendorObjectId,
+        category: { $regex: new RegExp(`^${slugified}$`, "i") },
+      })
+        .select(
+          "name description price images isFavourite rating category type",
+        )
+        .lean();
+    }
+
+    return res.status(200).json({
+      success: true,
+      vendorId: vendorId.toString(),
+      categoryName: categoryName,
+      count: products.length,
+      products,
+    });
+  } catch (err) {
+    console.error("GET VENDOR MENU PRODUCTS ERROR:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 exports.toggleRushMode = async (req, res) => {
   try {
     const vendorId = req.user?.id || req.user?._id;
@@ -2002,7 +2324,9 @@ exports.toggleRushMode = async (req, res) => {
     }
 
     // 1. Fetch main Vendor details for metadata
-    const vendor = await Vendor.findById(vendorId).select("businessName isActive");
+    const vendor = await Vendor.findById(vendorId).select(
+      "businessName isActive",
+    );
 
     if (!vendor) {
       return res.status(404).json({
@@ -2012,7 +2336,9 @@ exports.toggleRushMode = async (req, res) => {
     }
 
     // 2. Fetch current VendorBranch state (using vendorId ref or direct ID)
-    let branch = await VendorBranch.findOne({ vendorId: vendorId }).select("isRushMode");
+    let branch = await VendorBranch.findOne({ vendorId: vendorId }).select(
+      "isRushMode",
+    );
 
     // Fallback: If vendorId is itself the Branch ID
     if (!branch) {
@@ -2042,7 +2368,7 @@ exports.toggleRushMode = async (req, res) => {
     const updatedBranch = await VendorBranch.findByIdAndUpdate(
       branch._id,
       { $set: { isRushMode: targetRushState } },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     ).select("isRushMode");
 
     // 5. Real-time updates via Socket IO
@@ -2080,7 +2406,6 @@ exports.toggleRushMode = async (req, res) => {
   }
 };
 
-
 // =====================================
 // GET ALL RESTAURANT BRANDS (filter, search, paginate)
 // =====================================
@@ -2104,16 +2429,17 @@ exports.getAllVendorBrands = async (req, res) => {
 };
 
 // =====================================
-// GET ALL HOME CHEFS 
+// GET ALL HOME CHEFS
 // =====================================
 exports.getAllHomeChefs = async (req, res) => {
   try {
     const { search, isOpen, status } = req.query;
 
     // Filter by approved status by default (or query param if provided)
-    const query = { 
-       businessType: "homeChef",
-       isBlecked: false };
+    const query = {
+      businessType: "homeChef",
+      isBlecked: false,
+    };
 
     // Check availability (isOpen field in schema)
     // if (isActive !== undefined) {
@@ -2128,10 +2454,14 @@ exports.getAllHomeChefs = async (req, res) => {
       ];
     }
 
-    const vendors = await Vendor.find(query).select("businessName businessDescription logo coverImage deliveryFee deliveryTime rating").sort({
-      "rating.average": -1,
-      createdAt: -1,
-    });
+    const vendors = await Vendor.find(query)
+      .select(
+        "businessName businessDescription logo coverImage deliveryFee deliveryTime rating",
+      )
+      .sort({
+        "rating.average": -1,
+        createdAt: -1,
+      });
 
     return res.status(200).json({
       success: true,
@@ -2252,8 +2582,9 @@ exports.getHomeChefById = async (req, res) => {
 // =====================================
 exports.getVendorById = async (req, res) => {
   try {
-    const vendor = await Vendor.findById(req.params.id)
-    .select("businessName logo businessDescription coverImage rating isActive deliveryFee deliveryTime isFreeDelivery openingHours")
+    const vendor = await Vendor.findById(req.params.id).select(
+      "businessName logo businessDescription coverImage rating isActive deliveryFee deliveryTime isFreeDelivery openingHours",
+    );
     // .populate(
     //   "ownerId",
     //   "name email phone",
@@ -2283,9 +2614,7 @@ exports.getVendorById = async (req, res) => {
 // =====================================
 exports.getVendorCategories = async (req, res) => {
   try {
-    const vendor = await Vendor.findById(req.params.id).select(
-      "categories",
-    );
+    const vendor = await Vendor.findById(req.params.id).select("categories");
 
     if (!vendor) {
       return res.status(404).json({
