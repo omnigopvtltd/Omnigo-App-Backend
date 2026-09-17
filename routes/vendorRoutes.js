@@ -100,6 +100,6 @@ router.get("/vendor-menu-products/:vendorId", auth, vendorMenuProducts);
 router.get("/vendor-branches/:vendorId", auth, getVendorBranchById);
 
 router.get("/home-chef/:id", auth, getHomeChefById);
-router.get("/:id([0-9a-fA-F]{24})", auth, getVendorById);
+router.get("/:id", auth, getVendorById);
 
 module.exports = router;

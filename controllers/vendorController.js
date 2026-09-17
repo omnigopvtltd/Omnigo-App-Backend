@@ -1078,9 +1078,6 @@ exports.updateVendorProfile = async (req, res) => {
       businessDescription,
       logoImage,
       bannerImage,
-      noOfBranches,
-      isStoreHoursActive,
-      storeHours,
       cnicNumber,
       cnicFrontPicture,
       cnicBackPicture,
@@ -1109,9 +1106,17 @@ exports.updateVendorProfile = async (req, res) => {
       payoutIban,
       payoutWalletNumber,
       branchData,
+      storeHours,
     } = req.body;
 
+    // File Upload Processing (Multer compatibility)
     const files = req.files || {};
+
+    const processMediaField = (bodyField, fileField, defaultValue) => {
+      if (fileField && fileField.path) return fileField.path; // Multer Upload Path / Cloudinary URL
+      if (bodyField) return bodyField;
+      return defaultValue || "";
+    };
 
     // 1. Fetch Vendor
     const vendor = await Vendor.findById(vendorId);
@@ -1122,7 +1127,7 @@ exports.updateVendorProfile = async (req, res) => {
       });
     }
 
-    // 2. Core & Business Profile Details Update
+    // 2. Business Details Update
     vendor.businessName = storeName || businessName || vendor.businessName;
     vendor.description = businessDescription || description || vendor.description;
 
@@ -1136,10 +1141,17 @@ exports.updateVendorProfile = async (req, res) => {
     if (taxNumber) vendor.taxNumber = taxNumber;
     if (foodLicenseNumber) vendor.foodLicenseNumber = foodLicenseNumber;
 
-    // 3. Helper: Array Timings ko Schema Nested OpeningHours Object mein Transform karna
+    // 3. Helper: Format Opening Hours Array to Object Schema
     const formatOpeningHours = (inputHours) => {
       if (!inputHours) return null;
-      const parsed = typeof inputHours === "string" ? JSON.parse(inputHours) : inputHours;
+      let parsed = inputHours;
+      if (typeof inputHours === "string") {
+        try {
+          parsed = JSON.parse(inputHours);
+        } catch (e) {
+          return null;
+        }
+      }
 
       if (!Array.isArray(parsed)) return null;
 
@@ -1168,15 +1180,14 @@ exports.updateVendorProfile = async (req, res) => {
       return hoursObj;
     };
 
-    // Default timings agar incoming payload na ho
     const globalOpeningHours = formatOpeningHours(storeHours);
 
-    // 4. Owner Information Update
+    // 4. Owner Info
     if (ownerName) vendor.ownerName = ownerName;
     if (ownerPhone) vendor.ownerPhone = ownerPhone;
     if (ownerEmail) vendor.ownerEmail = String(ownerEmail).toLowerCase().trim();
 
-    // 5. Documents & Media Processing
+    // 5. Media Files Processing (Logo, Cover, CNIC, Licenses)
     vendor.profilePicture = processMediaField(profilePicture, files.profilePicture?.[0], vendor.profilePicture);
     vendor.logo = processMediaField(logoImage || logo, files.logoImage?.[0] || files.logo?.[0], vendor.logo);
     vendor.coverImage = processMediaField(bannerImage || coverImage, files.bannerImage?.[0] || files.coverImage?.[0], vendor.coverImage);
@@ -1189,7 +1200,7 @@ exports.updateVendorProfile = async (req, res) => {
     vendor.foodSafetyLicense = processMediaField(foodSafetyLicense, files.foodSafetyLicense?.[0], vendor.foodSafetyLicense);
     vendor.ntnCertificate = processMediaField(ntnCertificate, files.ntnCertificate?.[0], vendor.ntnCertificate);
 
-    // 6. Payout Details Update
+    // 6. Payout Info
     vendor.payout = {
       accountHolderName: payoutAccountTitle || vendor.payout?.accountHolderName || "",
       paymentMethod: payoutPaymentMethod || vendor.payout?.paymentMethod || "bank",
@@ -1203,7 +1214,7 @@ exports.updateVendorProfile = async (req, res) => {
     vendor.verificationStatus = "pending";
     await vendor.save();
 
-    // 7. MULTIPLE BRANCHES SUPPORT (Aligned with VendorBranch Schema)
+    // 7. BRANCHES PROCESSING (Duplicates & ID Conflict Fix)
     let parsedBranches = [];
     if (branchData) {
       const rawData = typeof branchData === "string" ? JSON.parse(branchData) : branchData;
@@ -1217,13 +1228,7 @@ exports.updateVendorProfile = async (req, res) => {
         parsedBranches.map(async (branch) => {
           const targetBranchName = branch.branchName || `${vendor.businessName} Branch`;
           const targetBranchPhone = branch.phone || vendor.businessPhone;
-
-          // Branch ke unique hours mapped karein ya global hours fallback use karein
-          const branchOpeningHours = formatOpeningHours(branch.storeHours || branch.openingHours) || globalOpeningHours;
-
-          const filter = branch._id
-            ? { _id: branch._id, vendorId: vendor._id }
-            : { vendorId: vendor._id, branchName: targetBranchName };
+          const branchOpeningHours = formatOpeningHours(branch.openingHours || branch.storeHours) || globalOpeningHours;
 
           const updatePayload = {
             vendorId: vendor._id,
@@ -1239,7 +1244,6 @@ exports.updateVendorProfile = async (req, res) => {
             isOpen: branch.isOpen !== undefined ? branch.isOpen : true,
           };
 
-          // Location handling
           if (branch.longitude !== undefined && branch.latitude !== undefined) {
             updatePayload.location = {
               type: "Point",
@@ -1247,55 +1251,44 @@ exports.updateVendorProfile = async (req, res) => {
             };
           }
 
-          // Schema field update
           if (branchOpeningHours) {
             updatePayload.openingHours = branchOpeningHours;
           }
 
+          const hasValidId = branch._id && mongoose.Types.ObjectId.isValid(branch._id);
+
+          if (hasValidId) {
+            // EXPLICIT UPDATE: Duplicate key error bachane ke liye pehle ID check karke direct update
+            const existingBranch = await VendorBranch.findOne({ _id: branch._id, vendorId: vendor._id });
+            if (existingBranch) {
+              return await VendorBranch.findByIdAndUpdate(
+                branch._id,
+                { $set: updatePayload },
+                { new: true }
+              );
+            }
+          }
+
+          // INSERT/UPSERT FOR NEW BRANCHES ONLY
           return await VendorBranch.findOneAndUpdate(
-            filter,
+            { vendorId: vendor._id, branchName: targetBranchName },
             { $set: updatePayload },
             { new: true, upsert: true, setDefaultsOnInsert: true }
           );
         })
       );
-    } else {
-      // Fallback: Primary/Main Branch Update or Creation
-      const filter = { vendorId: vendor._id };
-      const updatePayload = {
-        vendorId: vendor._id,
-        branchName: `${vendor.businessName} Main Branch`,
-        phone: vendor.businessPhone,
-        address: vendor.address || "Main Address",
-        city: vendor.city || "Karachi",
-        isActive: true,
-        isOpen: true,
-      };
-
-      if (globalOpeningHours) {
-        updatePayload.openingHours = globalOpeningHours;
-      }
-
-      const defaultBranch = await VendorBranch.findOneAndUpdate(
-        filter,
-        { $set: updatePayload },
-        { new: true, upsert: true, setDefaultsOnInsert: true }
-      );
-      updatedBranches.push(defaultBranch);
     }
 
-    // Real branch count update
     vendor.noOfBranches = updatedBranches.length;
     await vendor.save();
 
-    // 8. Socket IO Real-Time Broadcast
+    // 8. Real-time Broadcast via Socket IO
     const io = req.app.get("io");
     if (io) {
       io.to(`vendor:${vendor._id}`).emit("vendorProfileUpdated", {
         vendorId: vendor._id,
         vendor,
         branches: updatedBranches,
-        message: "Vendor profile and branches updated successfully",
       });
     }
 
@@ -1304,7 +1297,7 @@ exports.updateVendorProfile = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Vendor profile updated successfully and submitted for review",
+      message: "Vendor profile and branches updated successfully",
       vendor: vendorResponse,
       branches: updatedBranches,
     });
@@ -1453,6 +1446,7 @@ exports.getVendorProfile = async (req, res) => {
     res.json({
       success: true,
       vendor,
+      vendorBranch,
     });
   } catch (err) {
     res.status(500).json({

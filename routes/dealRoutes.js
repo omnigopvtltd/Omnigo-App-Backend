@@ -87,6 +87,6 @@ router.patch("/:id", toggleDealAvailability); // New route for toggling status
 router.delete("/:id", deleteDeal);
 
 router.get("/vendor/:vendorId", getAllVendorDeals);
-router.get("/:id([0-9a-fA-F]{24})", getDealById);
+router.get("/:id", getDealById);
 
 module.exports = router;
