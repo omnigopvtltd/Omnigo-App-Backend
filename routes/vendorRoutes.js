@@ -40,9 +40,6 @@ router.get("/brands", auth, getAllVendorBrands);
 router.get("/home-chefs", auth, getAllHomeChefs);
 router.get("/categories", auth, getVendorCategories);
 
-// ======================================================
-// AUTHENTICATION & ACCOUNT CREATION
-// ======================================================
 router.post(
   "/signup",
   upload.fields([
@@ -63,23 +60,11 @@ router.post("/login", login);
 // router.post("/google-login", googleLogin);
 // router.post("/facebook-login", facebookLogin);
 
-// ======================================================
-// VERIFICATION & OTP MANAGEMENT
-// ======================================================
-
 router.post("/send-otp", sendOTP);
 router.post("/verify-otp", verifyOTP);
 
-// ======================================================
-// PASSWORD MANAGEMENT
-// ======================================================
-
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password", resetPassword);
-
-// ======================================================
-// PROTECTED VENDOR ROUTES
-// ======================================================
 
 router.post("/save-fcm-token", auth, saveFcmToken);
 router.put(
@@ -99,9 +84,6 @@ router.put(
 );
 
 
-// ======================================================
-// Dashboard and Analytics Routes
-// ======================================================
 router.put(
   "/vendor-profile/update",
   upload.fields([

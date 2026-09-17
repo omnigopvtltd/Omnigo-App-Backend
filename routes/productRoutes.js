@@ -31,19 +31,19 @@ router.get("/product-by-category", auth, getProductsByCategory);
 router.get("/product-by-type", auth, getProductsByType);
 // Endpoint for "Craving It Again?" section
 router.get("/previously-ordered", auth, getPreviouslyOrderedItems);
-router.get("/previously-ordered/:category", auth,  getPreviouslyOrderedItemsByCategory);
-router.get("/product-by-vendor-categories/:vendorId", auth, getProductsByVendorCategories);
-router.get("/product-by-vendor-subcategories/:vendorId", auth, getProductsByVendorSubcategories);
-router.get("/product-by-vendor-types/:vendorId", auth, getProductsByVendorTypes);
-router.get("/product-by-home-chef-types/:homeChefId", auth, getProductsByHomeChefTypes);
-router.get("/product-by-vendor/:vendorId", auth, getProductsByVendor);
-router.get("/product-by-home-chef/:homeChefId", auth, getProductsByHomeChef);
 
 router.post("/create", auth, createProduct);
-router.get("/:id", auth, getProductById);
-router.get("/product-details/:id", auth, getProductDetails);
 router.put("/update/:id", auth, updateProduct);
 router.patch("/:id/availability", auth, toggleAvailability);
 router.delete("/delete/:id", auth, deleteProduct);
 
+router.get("/previously-ordered/:category", auth,  getPreviouslyOrderedItemsByCategory);
+router.get("/product-by-vendor-subcategories/:vendorId", auth, getProductsByVendorSubcategories);
+router.get("/product-by-vendor-categories/:vendorId", auth, getProductsByVendorCategories);
+router.get("/product-by-vendor-types/:vendorId", auth, getProductsByVendorTypes);
+router.get("/product-by-home-chef-types/:homeChefId", auth, getProductsByHomeChefTypes);
+router.get("/product-by-vendor/:vendorId", auth, getProductsByVendor);
+router.get("/product-by-home-chef/:homeChefId", auth, getProductsByHomeChef);
+router.get("/product-details/:id", auth, getProductDetails);
+router.get("/:id", auth, getProductById);
 module.exports = router;

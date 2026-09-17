@@ -16,6 +16,7 @@ const financeRoutes = require("./routes/financeRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
 const foodCategoryRoutes = require("./routes/foodCategoryRoutes");
 const homeChefRoutes = require("./routes/homeChefRoutes");
+const AdminSettings = require("./models/AdminSettings");
 require("./config/firebase");
 
 //  SOCKET
@@ -70,8 +71,7 @@ const paymentRoutes = require("./routes/paymentRoutes");
 app.use("/api/payments", paymentRoutes);
 app.use("/api/finance", financeRoutes);
 // ================= Tracking  =================
-const trackingRoutes = require("./routes/trackingRoutes");
-const AdminSettings = require("./models/AdminSettings");
+// const trackingRoutes = require("./routes/trackingRoutes");
 const { getNotification } = require("./utils/sendNotification");
 // app.use("/api/tracking", trackingRoutes);
 
@@ -91,7 +91,7 @@ app.use("/api/coupons", couponRoutes);
 app.use("/api/campaigns", campaignRoutes);
 app.use("/api/settings", AdminSettings);
 
-app.use("/api/chat", require("./routes/chatRoutes"));
+// app.use("/api/chat", require("./routes/chatRoutes"));
 app.use("/api/calls", require("./routes/callRoutes"));
 app.use("/api/search", require("./routes/searchRoutes"));
 app.use("/api/notifications", require("./routes/notificationRoutes"));
