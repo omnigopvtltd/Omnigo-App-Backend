@@ -37,9 +37,9 @@ router.put("/update/:id", auth, updateProduct);
 router.patch("/:id/availability", auth, toggleAvailability);
 router.delete("/delete/:id", auth, deleteProduct);
 
-router.get("/previously-ordered/:category", auth,  getPreviouslyOrderedItemsByCategory);
-router.get("/product-by-vendor-subcategories/:vendorId", auth, getProductsByVendorSubcategories);
 router.get("/product-by-vendor-categories/:vendorId", auth, getProductsByVendorCategories);
+router.get("/product-by-vendor-subcategories/:vendorId", auth, getProductsByVendorSubcategories);
+router.get("/previously-ordered/:category", auth,  getPreviouslyOrderedItemsByCategory);
 router.get("/product-by-vendor-types/:vendorId", auth, getProductsByVendorTypes);
 router.get("/product-by-home-chef-types/:homeChefId", auth, getProductsByHomeChefTypes);
 router.get("/product-by-vendor/:vendorId", auth, getProductsByVendor);

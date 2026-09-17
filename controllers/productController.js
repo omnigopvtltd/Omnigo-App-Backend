@@ -969,7 +969,7 @@ exports.getProductsByVendorSubcategories = async (req, res) => {
       });
     }
 
-    const vendor = await Vendor.findById({ _id: vendorId });
+    const vendor = await Vendor.findById(vendorId);
 
     if (!vendor) {
       return res.status(404).json({
@@ -978,18 +978,18 @@ exports.getProductsByVendorSubcategories = async (req, res) => {
       });
     }
 
-    // // Match either vendorId or chefId for flexibility
-    // const query = {
-    //   $or: [{ vendorId }, { chefId: vendorId }],
-    // };
+    // 1. Initialize query object with vendorId / chefId match
+    const query = {
+      $or: [{ vendorId }, { chefId: vendorId }],
+    };
 
-    // Partial & case-insensitive matching for subcategory
+    // 2. Partial & case-insensitive matching for subcategory
     if (subcategoryName) {
       const cleanSubcategory = subcategoryName.trim();
       query.subcategory = new RegExp(cleanSubcategory, "i");
     }
 
-    // Partial & case-insensitive matching for category
+    // 3. Partial & case-insensitive matching for category
     if (categoryName) {
       const cleanCategory = categoryName.trim();
       query.category = new RegExp(cleanCategory, "i");

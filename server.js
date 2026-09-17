@@ -55,8 +55,8 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 // ================= ROUTES =================
 app.use("/api/vendors", require("./routes/vendorRoutes"));
 app.use("/api/auth", require("./routes/authRoutes"));
-app.use("/api/main-category", categoryRoutes);
 app.use("/api/products", require("./routes/productRoutes"));
+app.use("/api/main-category", categoryRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/quick-orders", require("./routes/quickOrderRoutes"));
 app.use("/api/cart", require("./routes/cartRoutes"));
