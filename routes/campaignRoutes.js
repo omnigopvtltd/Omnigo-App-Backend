@@ -39,9 +39,9 @@ router.get("/form-config", getCampaignFormConfig);
 // Other Campaign routes
 router.post("/", createCampaign);
 router.get("/", getAllCampaigns);
-router.get("/:id", getCampaignById);
 router.put("/:id", updateCampaign);
 router.patch("/:id", toggleCampaignAvailability); // New route for toggling status
 router.delete("/:id", deleteCampaign);
 
+router.get("/:id", getCampaignById);
 module.exports = router;

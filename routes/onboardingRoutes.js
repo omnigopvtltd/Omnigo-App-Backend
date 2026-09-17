@@ -20,7 +20,6 @@ router.post(
 
 router.get("/", getOnboardings);
 
-router.get("/:id", getOnboardingById);
 
 router.put(
   "/:id", 
@@ -34,5 +33,7 @@ router.patch(
   "/status/:id",
   toggleOnboardingStatus
 );
+
+router.get("/:id", getOnboardingById);
 
 module.exports = router;

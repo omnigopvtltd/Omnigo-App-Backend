@@ -13,11 +13,11 @@ const {
 
 router.get("/", auth, role("admin"), getAllCoupons);
 router.post("/create", auth, role("admin"), createCoupon);
-router.get("/:id", auth, role("admin"), getCouponById);
 router.put("/update/:id", auth, role("admin"), updateCoupon);
 router.delete("/delete/:id", auth, role("admin"), deleteCoupon);
 
 // Customer-facing — applied at checkout
 router.post("/validate", auth, validateCoupon);
+router.get("/:id", auth, role("admin"), getCouponById);
 
 module.exports = router;

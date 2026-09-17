@@ -37,7 +37,6 @@ router.get("/all-orders", auth, role("admin", "superadmin"), getAllOrders);
 router.get("/available", auth, getAvailableOrders);
 router.get("/ongoing", auth, getOngoingOrders);
 
-router.get("/details/:id", auth, getOrderDetails);
 
 // CREATE ORDER
 router.post("/create", auth, createOrder);
@@ -47,7 +46,6 @@ router.get("/my-orders", auth, getMyOrders);
 
 // SINGLE ORDER
 router.get("/vendor-orders", auth, role("vendor"), getVendorOrders);
-router.get("/:id", auth, getOrderById);
 
 // router.get("/ongoing", auth, getOngoingOrders);
 
@@ -79,12 +77,14 @@ router.get("/rider/my-orders", auth, role("rider"), getRiderOrders);
 router.get("/rider/active-orders", auth, role("rider"), getRiderActiveOrders);
 
 // router.put("/rider/deliver/:id", auth, role("rider"), markDelivered);
+router.get("/details/:id", auth, getOrderDetails);
 router.put("/rider/deliver/:id", auth, role("rider"), completeOrderDelivery);
 router.post("/reorder/:id", auth, reorder);
 router.get("/track/:id", auth, trackOrder);
 router.put("/status/:id", auth, updateOrderStatus);
 router.patch("/status/:id", auth, updateOrderStatus);
 router.put("/:orderId/stops/:stopId/status", auth, updateOrderStatus);
+router.get("/:id", auth, getOrderById);
 
 // vendor routes
 // router.get("/vendor/orders/:id", auth, role("vendor"), getOrderById);

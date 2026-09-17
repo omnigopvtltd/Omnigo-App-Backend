@@ -82,10 +82,11 @@ router.get("/form-config", getDealFormConfig);
 // Other Deal routes
 router.post("/", createDeal);
 router.get("/", getAllDeals);
-router.get("/vendor/:vendorId", getAllVendorDeals);
-router.get("/:id", getDealById);
 router.put("/:id", updateDeal);
 router.patch("/:id", toggleDealAvailability); // New route for toggling status
 router.delete("/:id", deleteDeal);
+
+router.get("/vendor/:vendorId", getAllVendorDeals);
+router.get("/:id", getDealById);
 
 module.exports = router;

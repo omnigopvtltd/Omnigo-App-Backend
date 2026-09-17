@@ -27,12 +27,12 @@ router.put("/reorder", auth, reorderCategories);
 router.get("/all-categories", auth, AllCategoriesWithoutSubCategories);
 router.get("/subcategories", auth, getAllSubCategories);
 router.post("/create/subcategories", auth, createSubCategory);
-router.get("/:categoryId/subcategories", auth, getSubCategoriesByCategory);
-router.get("/subcategories/:subId", auth, getSubCategoryById);
 router.put("/update/subcategories/:subId", auth, updateSubCategory);
 router.delete("/delete/:id", auth, deleteCategory);
 router.delete("/delete/subcategories/:subId", auth, deleteSubCategory);
 
+router.get("/:categoryId/subcategories", auth, getSubCategoriesByCategory);
+router.get("/subcategories/:subId", auth, getSubCategoryById);
 router.put("/update/:id", auth, updateCategory);
 router.get("/:id", auth, getCategoryById);
 module.exports = router;

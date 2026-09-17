@@ -36,10 +36,10 @@ const {
 
 router.get("/contacts", getContactsController);
 router.get("/conversations", getConversations);
-router.get("/conversations/:id/messages", getMessages);
 router.post("/conversations", getOrCreateConversation);
 router.patch("/conversations/:id/read", markConversationRead);
 
+router.get("/conversations/:id/messages", getMessages);
 // REMOVED: router.post("/conversations/:id/messages", sendMessage);
 // Sending a message now happens ONLY through the Socket.IO "sendMessage"
 // event (see chatSocket.js). This route is gone on purpose — see the note

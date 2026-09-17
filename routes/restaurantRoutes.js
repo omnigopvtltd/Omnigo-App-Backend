@@ -18,12 +18,12 @@ const {
 router.get("/", auth, getAllRestaurants);
 router.get("/brands", auth, getAllRestaurantBrands);
 router.get("/fast-delivery", auth, getRestaurantByFastDeliveryTime);
-router.get("/menu/:restaurantId", auth, restaurantMenu);
 router.post("/create", auth, role("admin"), createRestaurant);
-router.get("/:id", auth, getRestaurantById);
-router.get("/categories/:id", auth, getRestaurantCategories);
 router.put("/update/:id", auth, role("admin"), updateRestaurant);
 router.patch("/update/:id/status", auth, role("admin"), updateRestaurantStatus);
 router.delete("/delete/:id", auth, role("admin"), deleteRestaurant);
 
+router.get("/menu/:restaurantId", auth, restaurantMenu);
+router.get("/categories/:id", auth, getRestaurantCategories);
+router.get("/:id", auth, getRestaurantById);
 module.exports = router;
