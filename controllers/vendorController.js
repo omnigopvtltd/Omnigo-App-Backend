@@ -1447,9 +1447,8 @@ exports.getVendorProfile = async (req, res) => {
       });
     }
 
-    const vendor = await Vendor.findById(vendorId).select(
-      "businessName businessDescription logo coverImage",
-    );
+    const vendor = await Vendor.findById(vendorId);
+    const vendorBranch = await VendorBranch.find({ vendorId });
 
     res.json({
       success: true,

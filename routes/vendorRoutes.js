@@ -31,10 +31,18 @@ const {
 const { saveFcmToken } = require("../controllers/vendorController");
 const upload = require("../middleware/upload");
 
+router.get("/all-vendors", auth, getAllVendors);
+router.get("/dashboard/overview", auth, getVendorDashboardOverview);
+router.get("/vendor-menu", auth, vendorMenu);
+router.get("/vendor-performance", auth, getVendorPerformance);
+router.get("/vendor-profile", auth, getVendorProfile);
+router.get("/brands", auth, getAllVendorBrands);
+router.get("/home-chefs", auth, getAllHomeChefs);
+router.get("/categories", auth, getVendorCategories);
+
 // ======================================================
 // AUTHENTICATION & ACCOUNT CREATION
 // ======================================================
-
 router.post(
   "/signup",
   upload.fields([
@@ -90,14 +98,10 @@ router.put(
   updateVendorProfile,
 );
 
-router.get("/all-vendors", auth, getAllVendors);
+
 // ======================================================
 // Dashboard and Analytics Routes
 // ======================================================
-router.get("/dashboard/overview", auth, getVendorDashboardOverview);
-router.get("/vendor-menu", auth, vendorMenu);
-router.get("/vendor-performance", auth, getVendorPerformance);
-router.get("/vendor-profile", auth, getVendorProfile);
 router.put(
   "/vendor-profile/update",
   upload.fields([
@@ -109,9 +113,6 @@ router.put(
 );
 
 router.patch("/toggle-rushmode", auth, toggleRushMode);
-router.get("/brands", auth, getAllVendorBrands);
-router.get("/home-chefs", auth, getAllHomeChefs);
-router.get("/categories", auth, getVendorCategories);
 router.get("/vendor-menu/:vendorId", auth, vendorMenu);
 router.get("/vendor-menu-products/:vendorId", auth, vendorMenuProducts);
 router.get("/vendor-branches/:vendorId", auth, getVendorBranchById);

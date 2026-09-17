@@ -43,8 +43,8 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // ================= ROUTES =================
-app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/vendors", require("./routes/vendorRoutes"));
+app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/main-category", categoryRoutes);
 app.use("/api/products", require("./routes/productRoutes"));
 app.use("/api/orders", orderRoutes);
