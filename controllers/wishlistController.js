@@ -134,70 +134,101 @@
 // };
 const User = require("../models/User");
 const Product = require("../models/Product");
+const Vendor = require("../models/Vendor");
+const Campaign = require("../models/Campaign");
+const Order = require("../models/Order");
 const mongoose = require("mongoose");
+const Deal = require("../models/Deal");
 
-// ADD / REMOVE FAVORITE (TOGGLE VIA PRODUCT LIKES)
+// Helper to get Model dynamically based on target type
+const getTargetModel = (type) => {
+  const modelType = (type || "product").toLowerCase();
+  switch (modelType) {
+    case "vendor":
+      return Vendor;
+    case "campaign":
+      return Campaign;
+    case "deal":
+      return Deal;
+    case "order":
+      return Order;
+    case "product":
+    default:
+      return Product;
+  }
+};
+
+// 1. UNIVERSAL TOGGLE FAVORITE (For Products, Vendors, Campaigns, Orders)
 exports.toggleFavorite = async (req, res) => {
   try {
-    const { productId } = req.body;
+    const { productId, itemId, type = "product" } = req.body;
     const userId = req.user.id;
+    
+    // Support both productId or generic itemId
+    const targetId = itemId || productId;
 
-    if (!mongoose.Types.ObjectId.isValid(productId)) {
+    if (!mongoose.Types.ObjectId.isValid(targetId)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid Product ID",
+        message: "Invalid Item ID",
       });
     }
 
-    const product = await Product.findById(productId);
-    if (!product) {
+    const TargetModel = getTargetModel(type);
+    const item = await TargetModel.findById(targetId);
+
+    if (!item) {
       return res.status(404).json({
         success: false,
-        message: "Product not found",
+        message: `${type} not found`,
       });
     }
 
-    const likesList = product.likes || [];
+    const likesList = item.likes || [];
     const isLiked = likesList.some(
       (id) => id.toString() === userId.toString()
     );
 
+    let updatedItem;
+
     if (isLiked) {
-      // Remove userId from likes array and set isFavourite: false
-      const updatedProduct = await Product.findByIdAndUpdate(
-        productId,
-        {
-          $pull: { likes: userId },
-          $set: { isFavourite: false },
-        },
+      // Remove userId from likes array
+      updatedItem = await TargetModel.findByIdAndUpdate(
+        targetId,
+        { $pull: { likes: userId } },
         { new: true }
       );
 
       return res.status(200).json({
         success: true,
-        message: "Removed from favorites",
+        message: `Removed from favorites`,
         isFavorite: false,
         isFavourite: false,
-        product: updatedProduct,
+        data: {
+          ...updatedItem.toObject(),
+          isFavorite: false,
+          isFavourite: false,
+        },
       });
     }
 
-    // Add userId to likes array and set isFavourite: true
-    const updatedProduct = await Product.findByIdAndUpdate(
-      productId,
-      {
-        $addToSet: { likes: userId },
-        $set: { isFavourite: true },
-      },
+    // Add userId to likes array
+    updatedItem = await TargetModel.findByIdAndUpdate(
+      targetId,
+      { $addToSet: { likes: userId } },
       { new: true }
     );
 
     return res.status(200).json({
       success: true,
-      message: "Added to favorites",
+      message: `Added to favorites`,
       isFavorite: true,
       isFavourite: true,
-      product: updatedProduct,
+      data: {
+        ...updatedItem.toObject(),
+        isFavorite: true,
+        isFavourite: true,
+      },
     });
   } catch (err) {
     console.error("TOGGLE FAVORITE ERROR:", err);
@@ -208,16 +239,24 @@ exports.toggleFavorite = async (req, res) => {
   }
 };
 
-// GET ALL FAVORITES FOR CURRENT USER
+// 2. GET ALL FAVORITES FOR CURRENT USER BY TYPE
 exports.getFavorites = async (req, res) => {
   try {
     const userId = req.user.id;
+    const { type = "product" } = req.query; // e.g. /favorites?type=vendor
 
-    // Direct wo tamaam products fetch karein jinki likes array main user.id ho
-    const favorites = await Product.find({ likes: userId });
+    const TargetModel = getTargetModel(type);
+    const rawFavorites = await TargetModel.find({ likes: userId });
+
+    const favorites = rawFavorites.map((doc) => ({
+      ...doc.toObject(),
+      isFavorite: true,
+      isFavourite: true,
+    }));
 
     return res.status(200).json({
       success: true,
+      type,
       total: favorites.length,
       favorites,
     });
@@ -230,28 +269,31 @@ exports.getFavorites = async (req, res) => {
   }
 };
 
-// CHECK FAVORITE STATUS FOR A SPECIFIC PRODUCT
+// 3. CHECK FAVORITE STATUS FOR SPECIFIC ITEM
 exports.checkFavorite = async (req, res) => {
   try {
     const { productId } = req.params;
+    const { type = "product" } = req.query;
     const userId = req.user.id;
 
     if (!mongoose.Types.ObjectId.isValid(productId)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid Product ID",
+        message: "Invalid Item ID",
       });
     }
 
-    const product = await Product.findById(productId);
-    if (!product) {
+    const TargetModel = getTargetModel(type);
+    const item = await TargetModel.findById(productId);
+
+    if (!item) {
       return res.status(404).json({
         success: false,
-        message: "Product not found",
+        message: `${type} not found`,
       });
     }
 
-    const likesList = product.likes || [];
+    const likesList = item.likes || [];
     const isFavorite = likesList.some(
       (id) => id.toString() === userId.toString()
     );
@@ -259,6 +301,7 @@ exports.checkFavorite = async (req, res) => {
     return res.status(200).json({
       success: true,
       isFavorite,
+      isFavourite: isFavorite,
     });
   } catch (err) {
     console.error("CHECK FAVORITE ERROR:", err);
@@ -269,25 +312,33 @@ exports.checkFavorite = async (req, res) => {
   }
 };
 
-// DIRECTLY REMOVE FAVORITE VIA PRODUCT LIKES
+// 4. DIRECTLY REMOVE FAVORITE VIA LIKES
 exports.removeFavorite = async (req, res) => {
   try {
     const { productId } = req.params;
+    const { type = "product" } = req.query;
     const userId = req.user.id;
 
     if (!mongoose.Types.ObjectId.isValid(productId)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid Product ID",
+        message: "Invalid Item ID",
       });
     }
 
-    await Product.findByIdAndUpdate(productId, {
+    const TargetModel = getTargetModel(type);
+
+    await TargetModel.findByIdAndUpdate(productId, {
       $pull: { likes: userId },
     });
 
-    // Updated user's favorite products send back karne ke liye
-    const updatedFavorites = await Product.find({ likes: userId });
+    const rawFavorites = await TargetModel.find({ likes: userId });
+
+    const updatedFavorites = rawFavorites.map((doc) => ({
+      ...doc.toObject(),
+      isFavorite: true,
+      isFavourite: true,
+    }));
 
     return res.status(200).json({
       success: true,
