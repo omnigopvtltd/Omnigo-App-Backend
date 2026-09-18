@@ -12,7 +12,7 @@ const productSchema = new mongoose.Schema(
       type: String,
       enum: [
         "restaurant",
-        "homeChef",
+        "home-chef",
         "grocery",
         "pharmacy",
         "stationary",
