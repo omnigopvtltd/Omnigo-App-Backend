@@ -325,7 +325,7 @@
 const Groq = require("groq-sdk");
 
 const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY || "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",
+  apiKey: process.env.GROQ_API_KEY,
 });
 
 exports.parseOrderWithGroq = async ({ category, textPrompt = "" }) => {
@@ -374,5 +374,96 @@ exports.parseOrderWithGroq = async ({ category, textPrompt = "" }) => {
   } catch (error) {
     console.error("Groq Order Parse Error:", error);
     throw new Error("Failed to parse order: " + error.message);
+  }
+};
+
+
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+
+exports.parseOrderWithGemmaVision = async ({ category, imageBuffer, mimeType = "image/png", textPrompt = "" }) => {
+  try {
+    let categoryContext = "";
+    if (category?.toUpperCase() === "PHARMACY") {
+      categoryContext = "Extract medicine names, dosage/strength (e.g., 500mg, 10ml), and quantities.";
+    } else {
+      categoryContext = `Category is ${category || "FOOD/GROCERY"}. Extract items, quantities, and estimated unit prices.`;
+    }
+
+    const systemPrompt = `
+      You are an AI order parser for OmniGo.
+      ${categoryContext}
+
+      Read the text or handwritten notes from the image or text input carefully.
+      Respond strictly with valid JSON matching this schema:
+      {
+        "items": [
+          {
+            "name": "Item or Medicine Name",
+            "quantity": 1,
+            "dosage": "500mg or empty string",
+            "estimatedUnitPrice": 5.00
+          }
+        ],
+        "customerNotes": "Any additional notes"
+      }
+    `;
+
+    // Prepare content payload
+    const userContent = [];
+
+    if (textPrompt && textPrompt.trim() !== "") {
+      userContent.push({ type: "text", text: `User instructions/note: ${textPrompt}` });
+    }
+
+    // Attach Image as Base64 Data URL if available
+    if (imageBuffer && Buffer.isBuffer(imageBuffer) && imageBuffer.length > 0) {
+      const base64Image = imageBuffer.toString("base64");
+      const imageUrl = `data:${mimeType};base64,${base64Image}`;
+      userContent.push({
+        type: "image_url",
+        image_url: { url: imageUrl },
+      });
+    }
+
+    if (userContent.length === 0) {
+      throw new Error("No text or image provided to parse.");
+    }
+
+    // OpenRouter API Call using Gemma Model
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://omnigo.app", // Optional site url for OpenRouter rankings
+        "X-Title": "OmniGo App",
+      },
+      body: JSON.stringify({
+        model: "google/gemma-3-27b-it", // Target OpenRouter Gemma Vision model ID
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userContent },
+        ],
+        max_tokens: 600,
+        response_format: { type: "json_object" },
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error("OpenRouter API Error Response:", data);
+      throw new Error(data.error?.message || "Failed request from OpenRouter");
+    }
+
+    let responseText = data.choices[0]?.message?.content || "{}";
+
+    // Clean Markdown formatting if present
+    responseText = responseText.replace(/```json/g, "").replace(/```/g, "").trim();
+
+    return JSON.parse(responseText);
+  } catch (error) {
+    console.error("Gemma Vision Parse Error:", error);
+    throw new Error("Failed to parse order via Gemma: " + error.message);
   }
 };
