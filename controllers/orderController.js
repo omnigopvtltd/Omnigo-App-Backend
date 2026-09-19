@@ -21,7 +21,7 @@ exports.createOrder = async (req, res) => {
       promoDiscount = 0,
       instructions = "",
       deliveryFee = 200,
-      tax = 2.5,
+      salesAndServiceTaxForUser = 10,
       routingMetrics,
     } = req.body;
 
@@ -105,7 +105,7 @@ exports.createOrder = async (req, res) => {
     };
 
     const discount = Number(promoDiscount) || 0;
-    const totalAmount = subtotal + Number(deliveryFee) + Number(tax) - discount;
+    const totalAmount = subtotal + Number(deliveryFee) + Number(salesAndServiceTaxForUser) - discount;
 
     const order = await Order.create({
       orderNumber: "ORD" + Date.now() + Math.floor(Math.random() * 1000),
@@ -117,7 +117,7 @@ exports.createOrder = async (req, res) => {
       paymentStatus: "pending",
       subtotal,
       deliveryFee: Number(deliveryFee),
-      tax: Number(tax),
+      salesAndServiceTaxForUser: Number(salesAndServiceTaxForUser),
       instructions,
       promoDiscount: discount,
       totalAmount,
@@ -1725,7 +1725,7 @@ exports.getOrderDetails = async (req, res) => {
         paymentStatus: order.paymentStatus,
         subtotal: order.subtotal,
         deliveryFee: order.deliveryFee,
-        tax: order.tax,
+        salesAndServiceTaxForUser: order.salesAndServiceTaxForUser,
         promoDiscount: order.promoDiscount,
         totalAmount: order.totalAmount,
         status: order.status,
@@ -1781,9 +1781,9 @@ exports.reorder = async (req, res) => {
     });
 
     const deliveryFee = oldOrder.deliveryFee || 200;
-    const tax = oldOrder.tax || 2.5;
+    const salesAndServiceTaxForUser = oldOrder.salesAndServiceTaxForUser || 2.5;
     const promoDiscount = 0;
-    const totalAmount = subtotal + deliveryFee + tax - promoDiscount;
+    const totalAmount = subtotal + deliveryFee + salesAndServiceTaxForUser - promoDiscount;
 
     const newOrder = await Order.create({
       orderNumber: "ORD" + Date.now() + Math.floor(Math.random() * 1000),
@@ -1795,7 +1795,7 @@ exports.reorder = async (req, res) => {
       paymentStatus: "pending",
       subtotal,
       deliveryFee,
-      tax,
+      salesAndServiceTaxForUser,
       promoDiscount,
       totalAmount,
       status: "pending",

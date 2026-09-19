@@ -310,13 +310,13 @@ const orderSchema = new mongoose.Schema(
     },
 
     salesAndServiceTaxForUser: {
-      type: String,
-      default: "10%"
+      type: Number,
+      default: 10
     },
 
     salesAndServiceTaxForRider: {
-      type: String,
-      default: "20%"
+      type: Number,
+      default: 20
     },
     
     // Float & Session Tracking
