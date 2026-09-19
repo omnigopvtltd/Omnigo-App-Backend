@@ -108,6 +108,7 @@ exports.createAndSendNotification = async (app, {
       data,
       link,
     });
+    //  const response = await getMessaging().send(message);
 
     // 4. Emit Socket IO Real-Time Event
     const io = app?.get ? app.get("io") : null;

@@ -70,7 +70,7 @@ exports.createOrder = async (req, res) => {
 
     // Step 1: Order items me se saare Product IDs collect karein
     const productIds = cart.items.map((item) => item.productId).filter(Boolean);
-console.log("Product IDs in this order:", productIds);
+    console.log("Product IDs in this order:", productIds);
 
     // Step 2: In Products ke Database records se direct Vendor IDs query karein
     const products = await Product.find({ _id: { $in: productIds } }).select(
@@ -156,7 +156,7 @@ console.log("Product IDs in this order:", productIds);
           link: `/vendor/orders/${order._id}`,
         }),
       );
-console.log(vendorNotifications, "vendorNotifications");
+      console.log(vendorNotifications, "vendorNotifications");
       // Parallel Execution: Tamam vendors ko ek sath save aur emit karega
       await Promise.all(vendorNotifications);
     }
@@ -315,19 +315,34 @@ exports.cancelOrder = async (req, res) => {
 
     // FCM Push Notification
     const customer = await User.findById(order.userId);
-    if (customer?.fcmToken) {
-      await sendNotification(
-        customer.fcmToken,
-        "Order Cancelled",
-        `Your order has cancelled #${order.orderNumber}`,
-        {
-          riderId: rider._id.toString(),
-          riderName: rider.name || "",
-          riderEmail: rider.email || "",
-          riderPhone: rider.phone || "",
-        },
-      );
-    }
+    createAndSendNotification(req.app, {
+      recipientId: order.stops[0]?.vendorId,
+      recipientModel: "Vendor",
+      title: "Order Cancelled",
+      message: `Order#${order.orderNumber} has been cancelled.`,
+      type: "cancelled_order",
+      data: {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        totalAmount: order.totalAmount || order.grandTotal,
+        itemCount: order.items?.length || 0,
+        screenToOpen: "VendorOrderDetails",
+      },
+      link: `/vendor/orders/cancel/${order._id}`,
+    });
+    // if (customer?.fcmToken) {
+    //   await sendNotification(
+    //     customer.fcmToken,
+    //     "Order Cancelled",
+    //     `Your order has cancelled #${order.orderNumber}`,
+    //     {
+    //       riderId: rider._id.toString(),
+    //       riderName: rider.name || "",
+    //       riderEmail: rider.email || "",
+    //       riderPhone: rider.phone || "",
+    //     },
+    //   );
+    // }
 
     return res.status(200).json({
       success: true,
@@ -426,7 +441,23 @@ exports.cancelRiderOrder = async (req, res) => {
     order.isAssigned = false;
     order.status = "confirmed";
 
+    createAndSendNotification(req.app, {
+          recipientId: order.riderId,
+          recipientModel: "Rider",
+          title: "Order Cancelled",
+          message: `You have cancelled Order#${order.orderNumber}.`,
+          type: "cancelled_order",
+          data: {
+            orderId: order._id,
+            orderNumber: order.orderNumber,
+            // totalAmount: order.totalAmount || order.grandTotal,
+            // itemCount: order.items?.length || 0,
+            screenToOpen: "RiderOrderDetails",
+          },
+          link: `/rider/orders/cancel/${order._id}`,
+        })
     await order.save();
+
 
     return res.status(200).json({
       success: true,
@@ -525,15 +556,31 @@ exports.confirmOrder = async (req, res) => {
       });
     }
 
+    createAndSendNotification(req.app, {
+          recipientId: order.userId,
+          recipientModel: "User",
+          title: "Order Confirmed!",
+          message: `Your order #${order.orderNumber} has been confirmed.`,
+          type: "confirmed_order",
+          data: {
+            orderId: order._id,
+            orderNumber: order.orderNumber,
+            totalAmount: order.totalAmount || order.grandTotal,
+            itemCount: order.items?.length || 0,
+            screenToOpen: "UserOrderDetails",
+          },
+          link: `/user/orders/confirmed/${order._id}`,
+        })
+
     // 5. Send FCM Push Notification to Customer
-    const customer = await User.findById(order.userId);
-    if (customer?.fcmToken) {
-      await sendNotification(
-        customer.fcmToken,
-        "Order Confirmed",
-        `Your order #${order.orderNumber} has been confirmed by the vendor.`,
-      );
-    }
+    // const customer = await User.findById(order.userId);
+    // if (customer?.fcmToken) {
+    //   await sendNotification(
+    //     customer.fcmToken,
+    //     "Order Confirmed",
+    //     `Your order #${order.orderNumber} has been confirmed by the vendor.`,
+    //   );
+    // }
 
     return res.status(200).json({
       success: true,
@@ -636,15 +683,30 @@ exports.readyOrder = async (req, res) => {
       });
     }
 
+    createAndSendNotification(req.app, {
+          recipientId: order?.riderId ,
+          recipientModel: "Rider",
+          title: "Order Ready For Pickup",
+          message: `Order #${order.orderNumber} is raedy. Please pickup order now.`,
+          type: "ready_order",
+          data: {
+            orderId: order._id,
+            orderNumber: order.orderNumber,
+            totalAmount: order.totalAmount || order.grandTotal,
+            itemCount: order.items?.length || 0,
+            screenToOpen: "RiderOrderDetails",
+          },
+          link: `/rider/orders/ready/${order._id}`,
+        })
     // 5. Send FCM Push Notification to Customer
-    const customer = await User.findById(order.userId);
-    if (customer?.fcmToken) {
-      await sendNotification(
-        customer.fcmToken,
-        "Order Ready",
-        `Your order #${order.orderNumber} is prepared and ready!`,
-      );
-    }
+    // const customer = await User.findById(order.userId);
+    // if (customer?.fcmToken) {
+    //   await sendNotification(
+    //     customer.fcmToken,
+    //     "Order Ready",
+    //     `Your order #${order.orderNumber} is prepared and ready!`,
+    //   );
+    // }
 
     return res.status(200).json({
       success: true,
@@ -755,15 +817,30 @@ exports.cancelOrderByVendor = async (req, res) => {
       }
     }
 
+    createAndSendNotification(req.app, {
+          recipientId: order.userId,
+          recipientModel: "User",
+          title: "Order Cancelled!",
+          message: `Order #${order.orderNumber} Cancelled. Reason: ${order.cancellationReason}`,
+          type: "cancelled_order",
+          data: {
+            orderId: order._id,
+            orderNumber: order.orderNumber,
+            totalAmount: order.totalAmount || order.grandTotal,
+            itemCount: order.items?.length || 0,
+            screenToOpen: "UserOrderDetails",
+          },
+          link: `/user/orders/cancel/${order._id}`,
+        })
     // Send FCM Push Notification to Customer
-    const customer = await User.findById(order.userId);
-    if (customer?.fcmToken) {
-      await sendNotification(
-        customer.fcmToken,
-        "Order Cancelled",
-        `Your order #${order.orderNumber} was cancelled by vendor: ${order.cancellationReason}`,
-      );
-    }
+    // const customer = await User.findById(order.userId);
+    // if (customer?.fcmToken) {
+    //   await sendNotification(
+    //     customer.fcmToken,
+    //     "Order Cancelled",
+    //     `Your order #${order.orderNumber} was cancelled by vendor: ${order.cancellationReason}`,
+    //   );
+    // }
 
     return res.status(200).json({
       success: true,

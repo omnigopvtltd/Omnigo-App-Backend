@@ -243,7 +243,7 @@
 // };
 
 const QuickOrder = require("../models/QuickOrder.js");
-const { parseOrderWithGroq } = require("../utils/geminiHelper.js");
+// const { parseOrderWithGroq } = require("../utils/geminiHelper.js");
 const { extractTextFromImage } = require("../utils/ocrHelper.js");
 const Order = require("../models/Order");
 const Address = require("../models/Address");
@@ -251,10 +251,13 @@ const User = require("../models/User.js");
 const Product = require("../models/Product");
 const Vendor = require("../models/Vendor");
 
+// const QuickOrder = require("../models/QuickOrder.js");
+const { parseOrderWithGemmaVision } = require("../utils/geminiHelper.js");
+
 exports.createQuickOrder = async (req, res) => {
   try {
     const { userId, category, textMessage } = req.body;
-    const file = req.file;
+    const file = req.file; // Express Multer file object
 
     if (!userId) {
       return res.status(400).json({ success: false, message: "UserId is required" });
@@ -267,31 +270,17 @@ exports.createQuickOrder = async (req, res) => {
       });
     }
 
-    let extractedOcrText = "";
-
-    // Step 1: Run OCR if file is uploaded
-    if (file) {
-      extractedOcrText = await extractTextFromImage(file.buffer, file.mimetype);
-      console.log("---------------- OCR RESULT ----------------");
-      console.log(extractedOcrText || "⚠️ No text extracted by OCR");
-      console.log("--------------------------------------------");
-    }
-
-    // Step 2: Combine text message and OCR result
-    const combinedPrompt = [
-      textMessage ? `User Instruction: ${textMessage}` : "",
-      extractedOcrText ? `[Extracted from Image/Prescription]:\n${extractedOcrText}` : ""
-    ].filter(Boolean).join("\n\n");
-
-    // Step 3: Pass combined text to Groq AI
-    const aiParsedData = await parseOrderWithGroq({
+    // Direct Image + Text Parsing with Gemma Vision via OpenRouter
+    const aiParsedData = await parseOrderWithGemmaVision({
       category: category || "food",
-      textPrompt: combinedPrompt,
+      imageBuffer: file ? file.buffer : null,
+      mimeType: file ? file.mimetype : "image/png",
+      textPrompt: textMessage || "",
     });
 
-    console.log("---------------- GROQ PARSED DATA ----------------");
+    console.log("---------------- GEMMA PARSED RESULT ----------------");
     console.log(aiParsedData);
-    console.log("-------------------------------------------------");
+    console.log("-----------------------------------------------------");
 
     // Subtotal Calculation
     let subtotal = 0;
@@ -318,7 +307,7 @@ exports.createQuickOrder = async (req, res) => {
       orderType: file ? "IMAGE" : "TEXT",
       rawInputText: textMessage || "",
       prescriptionImageUrl: file ? `/uploads/${file.filename || file.originalname}` : "",
-      items,
+      items: items || aiParsedData,
       subtotal: Number(subtotal.toFixed(2)),
       deliveryFee,
       grandTotal,
@@ -330,7 +319,7 @@ exports.createQuickOrder = async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: `${category || "Order"} slip created successfully via Groq AI`,
+      message: `${category || "Order"} slip created successfully via Gemma AI`,
       data: newQuickOrder,
     });
   } catch (error) {
@@ -342,6 +331,98 @@ exports.createQuickOrder = async (req, res) => {
     });
   }
 };
+
+// exports.createQuickOrder = async (req, res) => {
+//   try {
+//     const { userId, category, textMessage } = req.body;
+//     const file = req.file;
+
+//     if (!userId) {
+//       return res.status(400).json({ success: false, message: "UserId is required" });
+//     }
+
+//     if (!textMessage && !file) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Provide a text message or upload an image for Quick Order",
+//       });
+//     }
+
+//     let extractedOcrText = "";
+
+//     // Step 1: Run OCR if file is uploaded
+//     if (file) {
+//       extractedOcrText = await extractTextFromImage(file.buffer, file.mimetype);
+//       console.log("---------------- OCR RESULT ----------------");
+//       console.log(extractedOcrText || "⚠️ No text extracted by OCR");
+//       console.log("--------------------------------------------");
+//     }
+
+//     // Step 2: Combine text message and OCR result
+//     const combinedPrompt = [
+//       textMessage ? `User Instruction: ${textMessage}` : "",
+//       extractedOcrText ? `[Extracted from Image/Prescription]:\n${extractedOcrText}` : ""
+//     ].filter(Boolean).join("\n\n");
+
+//     // Step 3: Pass combined text to Groq AI
+//     const aiParsedData = await parseOrderWithGroq({
+//       category: category || "food",
+//       textPrompt: combinedPrompt,
+//     });
+
+//     console.log("---------------- GROQ PARSED DATA ----------------");
+//     console.log(aiParsedData);
+//     console.log("-------------------------------------------------");
+
+//     // Subtotal Calculation
+//     let subtotal = 0;
+//     const items = (aiParsedData.items || []).map((item) => {
+//       const unitPrice = item.estimatedUnitPrice || 0;
+//       const totalItemPrice = Number((item.quantity * unitPrice).toFixed(2));
+//       subtotal += totalItemPrice;
+
+//       return {
+//         name: item.name,
+//         quantity: item.quantity || 1,
+//         dosage: item.dosage || "",
+//         estimatedUnitPrice: unitPrice,
+//         totalItemPrice,
+//       };
+//     });
+
+//     const deliveryFee = 2.0;
+//     const grandTotal = Number((subtotal + deliveryFee).toFixed(2));
+
+//     const newQuickOrder = new QuickOrder({
+//       user: userId,
+//       category: category || "food",
+//       orderType: file ? "IMAGE" : "TEXT",
+//       rawInputText: textMessage || "",
+//       prescriptionImageUrl: file ? `/uploads/${file.filename || file.originalname}` : "",
+//       items,
+//       subtotal: Number(subtotal.toFixed(2)),
+//       deliveryFee,
+//       grandTotal,
+//       customerNotes: aiParsedData.customerNotes || "",
+//       status: "PROPOSED",
+//     });
+
+//     await newQuickOrder.save();
+
+//     return res.status(201).json({
+//       success: true,
+//       message: `${category || "Order"} slip created successfully via Groq AI`,
+//       data: newQuickOrder,
+//     });
+//   } catch (error) {
+//     console.error("Quick Order Parse Error:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to parse order",
+//       error: error.message,
+//     });
+//   }
+// };
 
 // const QuickOrder = require("../models/QuickOrder");
 // const Order = require("../models/Order");
@@ -460,6 +541,166 @@ exports.createQuickOrder = async (req, res) => {
 //   }
 // };
 
+/////////////////////////////////////////////
+// const mapCategoryToEnum = (cat) => {
+//   const categoryStr = (cat || "").toLowerCase();
+//   if (categoryStr.includes("food") || categoryStr.includes("restaurant")) return "fast-food";
+//   if (categoryStr.includes("pharmacy") || categoryStr.includes("medicine")) return "pharmacy";
+//   if (categoryStr.includes("grocery") || categoryStr.includes("mart")) return "grocery";
+//   if (categoryStr.includes("bakery")) return "bakery";
+//   return "other";
+// };
+
+// exports.confirmQuickOrderToMainOrder = async (req, res) => {
+//   try {
+//     const { quickOrderId, addressId, paymentMethod, instructions } = req.body;
+
+//     const quickOrder = await QuickOrder.findById(quickOrderId);
+//     if (!quickOrder) {
+//       return res.status(404).json({ success: false, message: "Quick Order not found" });
+//     }
+
+//     // 1. User & Address Resolution
+//     const user = await User.findById(quickOrder.user);
+//     if (!user || !user.addresses || user.addresses.length === 0) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "User has no saved addresses.",
+//       });
+//     }
+
+//     let selectedAddress = addressId ? user.addresses.id(addressId) : null;
+//     if (!selectedAddress) {
+//       selectedAddress = user.addresses.find((addr) => addr.isSave) || user.addresses[0];
+//     }
+
+//     const defaultOrderFrom = mapCategoryToEnum(quickOrder.category);
+
+//     // 2. Query Database to Match AI Items with Real Products & Vendors
+//     let matchedSubtotal = 0;
+//     const vendorIdsSet = new Set();
+
+//     const mappedItems = await Promise.all(
+//       quickOrder.items.map(async (item) => {
+//         // Regex Search in Product DB using AI Item Name
+//         const dbProduct = await Product.findOne({
+//           name: { $regex: new RegExp(item.name.trim(), "i") },
+//         }).populate("vendorId");
+
+//         const price = dbProduct ? dbProduct.price : item.estimatedUnitPrice || 0;
+//         const quantity = item.quantity || 1;
+//         const itemTotal = price * quantity;
+//         matchedSubtotal += itemTotal;
+
+//         if (dbProduct && dbProduct.vendorId) {
+//           vendorIdsSet.add(dbProduct.vendorId._id.toString());
+//         }
+
+//         return {
+//           productId: dbProduct ? dbProduct._id : null, // Real Product ID
+//           name: dbProduct ? dbProduct.name : item.name,
+//           orderFrom: dbProduct?.category ? mapCategoryToEnum(dbProduct.category) : defaultOrderFrom,
+//           image: dbProduct?.image || "",
+//           category: dbProduct?.category || quickOrder.category || "custom",
+//           price,
+//           quantity,
+//           total: itemTotal,
+//         };
+//       })
+//     );
+
+//     // 3. Build Real Stops from Found Vendors
+//     let stops = [];
+//     const uniqueVendorIds = Array.from(vendorIdsSet);
+
+//     if (uniqueVendorIds.length > 0) {
+//       const realVendors = await Vendor.find({ _id: { $in: uniqueVendorIds } });
+      
+//       stops = realVendors.map((vendor, index) => ({
+//         stopNumber: index + 1,
+//         vendorId: vendor._id,
+//         vendorName: vendor.name || vendor.storeName || "Partner Vendor",
+//         vendorType: mapCategoryToEnum(vendor.vendorType || quickOrder.category),
+//         address: vendor.address || "Vendor Address",
+//         location: {
+//           type: "Point",
+//           coordinates: vendor.location?.coordinates || [0, 0],
+//         },
+//         status: "assigned",
+//       }));
+//     } else {
+//       // Fallback: Fetch nearest active vendor for this category if product exact match is missing
+//       const fallbackVendor = await Vendor.findOne({
+//         vendorType: defaultOrderFrom,
+//       });
+
+//       stops = [
+//         {
+//           stopNumber: 1,
+//           vendorId: fallbackVendor ? fallbackVendor._id : null,
+//           vendorName: fallbackVendor ? fallbackVendor.name : `Omnigo ${quickOrder.category?.toUpperCase() || "Mart"}`,
+//           vendorType: defaultOrderFrom === "grocery" ? "other" : defaultOrderFrom,
+//           address: fallbackVendor ? fallbackVendor.address : "Assigned Regional Merchant",
+//           location: {
+//             type: "Point",
+//             coordinates: fallbackVendor?.location?.coordinates || [0, 0],
+//           },
+//           status: "assigned",
+//         },
+//       ];
+//     }
+
+//     // 4. Create Main Order Document
+//     const finalSubtotal = matchedSubtotal > 0 ? matchedSubtotal : quickOrder.subtotal;
+//     const deliveryFee = quickOrder.deliveryFee || 200;
+
+//     const newMainOrder = new Order({
+//       userId: quickOrder.user,
+//       address: {
+//         phone: selectedAddress.phone || user.phone || "",
+//         address: selectedAddress.address || selectedAddress.street || "",
+//         city: selectedAddress.city || "Chakwal",
+//         zipCode: selectedAddress.zipCode || "",
+//         country: selectedAddress.country || "Pakistan",
+//         location: {
+//           type: "Point",
+//           coordinates: selectedAddress.location?.coordinates || user.location?.coordinates || [0, 0],
+//         },
+//       },
+//       instructions: instructions || quickOrder.customerNotes || "Quick AI Order",
+//       stops,
+//       items: mappedItems,
+//       paymentMethod: paymentMethod || "cash_on_delivery",
+//       paymentStatus: "pending",
+//       subtotal: finalSubtotal,
+//       deliveryFee,
+//       tax: 0,
+//       totalAmount: finalSubtotal + deliveryFee,
+//       status: "pending",
+//     });
+
+//     await newMainOrder.save();
+
+//     quickOrder.status = "CONFIRMED";
+//     await quickOrder.save();
+
+//     return res.status(201).json({
+//       success: true,
+//       message: "Order placed successfully with database product matching",
+//       order: newMainOrder,
+//       orderId: newMainOrder._id,
+//     });
+//   } catch (error) {
+//     console.error("Quick Order Confirmation Error:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to confirm order",
+//       error: error.message,
+//     });
+//   }
+// };
+
+
 const mapCategoryToEnum = (cat) => {
   const categoryStr = (cat || "").toLowerCase();
   if (categoryStr.includes("food") || categoryStr.includes("restaurant")) return "fast-food";
@@ -493,45 +734,68 @@ exports.confirmQuickOrderToMainOrder = async (req, res) => {
     }
 
     const defaultOrderFrom = mapCategoryToEnum(quickOrder.category);
+    const isPharmacyOrder = defaultOrderFrom === "pharmacy";
 
-    // 2. Query Database to Match AI Items with Real Products & Vendors
     let matchedSubtotal = 0;
     const vendorIdsSet = new Set();
+    let mappedItems = [];
 
-    const mappedItems = await Promise.all(
-      quickOrder.items.map(async (item) => {
-        // Regex Search in Product DB using AI Item Name
-        const dbProduct = await Product.findOne({
-          name: { $regex: new RegExp(item.name.trim(), "i") },
-        }).populate("vendorId");
-
-        const price = dbProduct ? dbProduct.price : item.estimatedUnitPrice || 0;
+    // 2. Query Database ONLY IF it is NOT a pharmacy order
+    if (isPharmacyOrder) {
+      // Pharmacy logic: Skip Product DB search & keep prescription/custom AI items directly
+      mappedItems = quickOrder.items.map((item) => {
+        const price = item.estimatedUnitPrice || 0;
         const quantity = item.quantity || 1;
         const itemTotal = price * quantity;
         matchedSubtotal += itemTotal;
 
-        if (dbProduct && dbProduct.vendorId) {
-          vendorIdsSet.add(dbProduct.vendorId._id.toString());
-        }
-
         return {
-          productId: dbProduct ? dbProduct._id : null, // Real Product ID
-          name: dbProduct ? dbProduct.name : item.name,
-          orderFrom: dbProduct?.category ? mapCategoryToEnum(dbProduct.category) : defaultOrderFrom,
-          image: dbProduct?.image || "",
-          category: dbProduct?.category || quickOrder.category || "custom",
+          productId: null,
+          name: item.dosage ? `${item.name} (${item.dosage})` : item.name,
+          orderFrom: "pharmacy",
+          image: "",
+          category: "pharmacy",
           price,
           quantity,
           total: itemTotal,
         };
-      })
-    );
+      });
+    } else {
+      // Non-Pharmacy logic: Regular Database Product matching
+      mappedItems = await Promise.all(
+        quickOrder.items.map(async (item) => {
+          const dbProduct = await Product.findOne({
+            name: { $regex: new RegExp(item.name.trim(), "i") },
+          }).populate("vendorId");
 
-    // 3. Build Real Stops from Found Vendors
+          const price = dbProduct ? dbProduct.price : item.estimatedUnitPrice || 0;
+          const quantity = item.quantity || 1;
+          const itemTotal = price * quantity;
+          matchedSubtotal += itemTotal;
+
+          if (dbProduct && dbProduct.vendorId) {
+            vendorIdsSet.add(dbProduct.vendorId._id.toString());
+          }
+
+          return {
+            productId: dbProduct ? dbProduct._id : null,
+            name: dbProduct ? dbProduct.name : item.name,
+            orderFrom: dbProduct?.category ? mapCategoryToEnum(dbProduct.category) : defaultOrderFrom,
+            image: dbProduct?.image || "",
+            category: dbProduct?.category || quickOrder.category || "custom",
+            price,
+            quantity,
+            total: itemTotal,
+          };
+        })
+      );
+    }
+
+    // 3. Build Stops
     let stops = [];
     const uniqueVendorIds = Array.from(vendorIdsSet);
 
-    if (uniqueVendorIds.length > 0) {
+    if (!isPharmacyOrder && uniqueVendorIds.length > 0) {
       const realVendors = await Vendor.find({ _id: { $in: uniqueVendorIds } });
       
       stops = realVendors.map((vendor, index) => ({
@@ -547,17 +811,21 @@ exports.confirmQuickOrderToMainOrder = async (req, res) => {
         status: "assigned",
       }));
     } else {
-      // Fallback: Fetch nearest active vendor for this category if product exact match is missing
+      // For Pharmacy or Unmatched Items: Find active regional vendor/pharmacy partner
       const fallbackVendor = await Vendor.findOne({
-        vendorType: defaultOrderFrom,
+        vendorType: isPharmacyOrder ? "pharmacy" : defaultOrderFrom,
       });
 
       stops = [
         {
           stopNumber: 1,
           vendorId: fallbackVendor ? fallbackVendor._id : null,
-          vendorName: fallbackVendor ? fallbackVendor.name : `Omnigo ${quickOrder.category?.toUpperCase() || "Mart"}`,
-          vendorType: defaultOrderFrom === "grocery" ? "other" : defaultOrderFrom,
+          vendorName: fallbackVendor
+            ? fallbackVendor.name
+            : isPharmacyOrder
+            ? "OmniGo Partner Pharmacy"
+            : `OmniGo ${quickOrder.category?.toUpperCase() || "Mart"}`,
+          vendorType: isPharmacyOrder ? "pharmacy" : defaultOrderFrom,
           address: fallbackVendor ? fallbackVendor.address : "Assigned Regional Merchant",
           location: {
             type: "Point",
@@ -604,7 +872,9 @@ exports.confirmQuickOrderToMainOrder = async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: "Order placed successfully with database product matching",
+      message: isPharmacyOrder 
+        ? "Pharmacy prescription order placed successfully" 
+        : "Order placed successfully with database product matching",
       order: newMainOrder,
       orderId: newMainOrder._id,
     });
