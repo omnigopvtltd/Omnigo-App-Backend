@@ -1341,7 +1341,7 @@ exports.getAllVendors = async (req, res) => {
 
     // Default: Fetches all vendors matching filters (or all vendors if filters are empty)
     const vendors = await Vendor.find(filter)
-      .select("businessName logo coverImage businessType rating")
+      .select("businessName logo coverImage businessType rating businessDesicription description")
       .sort({ createdAt: -1 });
 
     res.json({
