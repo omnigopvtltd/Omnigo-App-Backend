@@ -325,7 +325,7 @@
 const Groq = require("groq-sdk");
 
 const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
+  apiKey: process.env.GROQ_API_KEY || "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",
 });
 
 exports.parseOrderWithGroq = async ({ category, textPrompt = "" }) => {
