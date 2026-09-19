@@ -308,6 +308,16 @@ const orderSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+
+    salesAndServiceTaxForUser: {
+      type: String,
+      default: "10%"
+    },
+
+    salesAndServiceTaxForRider: {
+      type: String,
+      default: "20%"
+    },
     
     // Float & Session Tracking
     riderFloatAmount: {
