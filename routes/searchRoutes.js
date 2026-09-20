@@ -7,15 +7,24 @@ const {
   removeRecentSearch,
   clearAllRecentSearches,
 } = require("../controllers/searchController");
-const auth= require("../middleware/authMiddleware");
+const auth = require("../middleware/authMiddleware");
 
-// Initial search screen feed (Cuisines + Sponsored)
-router.get("/initial", getSearchInitialData);
-router.get("/", searchAndFilter);
+// Optional Auth middleware helper
+const optionalAuth = (req, res, next) => {
+  if (req.headers.authorization) {
+    return auth(req, res, next);
+  }
+  next();
+};
+
+// Initial search screen feed (Popular Cuisines + Sponsored + Recent Searches)
+router.get("/initial", optionalAuth, getSearchInitialData);
 
 // Main search & multi-filter API endpoint
-router.get("/filter", searchAndFilter);
+router.get("/filter", optionalAuth, searchAndFilter);
+router.get("/", optionalAuth, searchAndFilter);
 
+// Recent searches management
 router.get("/recent", auth, getRecentSearches);
 router.delete("/recent/remove", auth, removeRecentSearch);
 router.delete("/recent/clear-all", auth, clearAllRecentSearches);
