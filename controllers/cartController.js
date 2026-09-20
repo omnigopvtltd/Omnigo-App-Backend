@@ -53,11 +53,15 @@ exports.addToCart = async (req, res) => {
           productId: product._id,
           orderFrom: newItem.orderFrom || "fast-food",
           name: product.name,
-          image: product.image,
+          image: product.image || product.images[0],
           category: product.category,
           weight: product.weight,
           price: product.price,
           quantity: qty,
+          variations: product.variations,
+          addOns: product.addOns,
+          serving: product.serving,
+          isVeg: product.isVeg,
           total: product.price * qty,
         });
       }
@@ -287,7 +291,11 @@ exports.bulkAddToCart = async (req, res) => {
           price: product.price,
           quantity,
           category: product.category,
-          image: product.image,
+          image: product.image || product.images[0],
+          variations: product.variations,
+          addOns: product.addOns,
+          serving: product.serving,
+          isVeg: product.isVeg,
           description: product.description,
         });
       }
