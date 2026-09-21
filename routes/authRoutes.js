@@ -69,8 +69,8 @@ const {
   logout,
   updateUserProfile,
   getUser,
-  updateFcmToken
- 
+  updateFcmToken,
+ socialLogin,
 } = require("../controllers/authController");
 const { getRiderById } = require("../controllers/riderController");
 const upload = require("../middleware/upload");
@@ -88,6 +88,7 @@ router.post("/update-fcm-token", auth, updateFcmToken);
 // SOCIAL LOGIN
 router.post("/google-login", googleLogin);
 router.post("/facebook-login", facebookLogin);
+router.post("/social-login", socialLogin);
 
 // ======================================================
 // CUSTOMER
