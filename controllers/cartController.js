@@ -85,8 +85,8 @@ exports.addToCart = async (req, res) => {
           orderFrom: newItem.orderFrom || "fast-food",
           name: matchedEntity.name || matchedEntity.title || matchedEntity.dealName || matchedEntity.campaignName || newItem.name || "Item",
           image:
-            matchedEntity.image
-            (matchedEntity.images && matchedEntity.images[0]) ||  matchedEntity.campaignBanner || matchedEntity.dealBanner ||
+            matchedEntity.image ||
+            (matchedEntity.images && matchedEntity.images[0]) || matchedEntity.campaignBanner || matchedEntity.dealBanner ||
             newItem.image || 
             "",
           category: matchedEntity.category || newItem.category || entityType,
