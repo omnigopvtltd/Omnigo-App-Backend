@@ -14,7 +14,7 @@ const { body, validationResult } = require("express-validator");
 const Order = require("../models/Order");
 const Product = require("../models/Product");
 const Cart = require("../models/Cart");
-const {auth} = require("../config/firebase");
+const admin = require("../config/firebase");
 
 // ======================================================
 // GOOGLE CLIENT
@@ -768,7 +768,7 @@ exports.socialLogin = async (req, res) => {
     }
 
     // 1. Verify Firebase ID Token
-    const decodedToken = await auth.verifyIdToken(idToken);
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
     const { uid, email, name, picture } = decodedToken;
 
     if (!email) {
