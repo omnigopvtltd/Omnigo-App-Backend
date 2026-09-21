@@ -97,7 +97,7 @@ exports.addToCart = async (req, res) => {
           addOns: newItem.addOns || matchedEntity.addOns || [],
           serving: newItem.serving || matchedEntity.serving || "full",
           isVeg: newItem.isVeg ?? matchedEntity.isVeg ?? false,
-          total: itemPrice || matchedEntity.discountPrice * qty,
+          total: itemPrice * qty,
         };
 
         // Attach specific ID based on match
