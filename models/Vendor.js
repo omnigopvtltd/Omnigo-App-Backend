@@ -314,6 +314,11 @@ const vendorSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    
+    isSponsored: {
+      type: Boolean,
+      default: false,
+    },
 
     isEmailVerified: {
       type: Boolean,
