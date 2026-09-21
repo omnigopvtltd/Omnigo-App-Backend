@@ -6,6 +6,7 @@ const {
   getFavorites,
   removeFavorite,
   checkFavorite,
+  getAllFavorites,
 } = require("../controllers/wishlistController");
 
 // POST /api/wishlist/toggle - Add/Remove favorite toggle
@@ -13,6 +14,9 @@ router.patch("/toggle", auth, toggleFavorite);
 
 // GET /api/wishlist - Fetch all user favorites
 router.get("/", auth, getFavorites);
+
+// Saare favorites ek sath fetch karne ke liye
+router.get("/all", auth, getAllFavorites);
 
 // DELETE /api/wishlist/:productId (or /remove/:productId) - Remove favorite directly
 router.delete("/remove/:productId", auth, removeFavorite);

@@ -269,6 +269,60 @@ exports.getFavorites = async (req, res) => {
   }
 };
 
+// ========================================================
+// GET ALL FAVORITES (Products, Vendors, Campaigns, Deals)
+// ========================================================
+exports.getAllFavorites = async (req, res) => {
+  try {
+    const userId = req.user.id || req.user._id;
+
+    // Sabhi models se parallel queries run karein
+    const [products, vendors, campaigns, deals] = await Promise.all([
+      Product.find({ likes: userId }).lean(),
+      Vendor.find({ likes: userId }).lean(),
+      Campaign.find({ likes: userId }).lean(), // Make sure Campaign model imported hai
+      Deal.find({ likes: userId }).lean(),         // Make sure Deal model imported hai
+    ]);
+
+    // Helper function to attach isFavorite flag
+    const formatFavorites = (items) =>
+      items.map((item) => ({
+        ...item,
+        isFavorite: true,
+        isFavourite: true,
+      }));
+
+    const formattedProducts = formatFavorites(products);
+    const formattedVendors = formatFavorites(vendors);
+    const formattedCampaigns = formatFavorites(campaigns);
+    const formattedDeals = formatFavorites(deals);
+
+    const grandTotal =
+      formattedProducts.length +
+      formattedVendors.length +
+      formattedCampaigns.length +
+      formattedDeals.length;
+
+    return res.status(200).json({
+      success: true,
+      totalFavorites: grandTotal,
+      data: {
+        products: formattedProducts,
+        vendors: formattedVendors,
+        campaigns: formattedCampaigns,
+        deals: formattedDeals,
+      },
+    });
+  } catch (err) {
+    console.error("GET ALL FAVORITES ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server Error",
+      error: err.message,
+    });
+  }
+};
+
 // 3. CHECK FAVORITE STATUS FOR SPECIFIC ITEM
 exports.checkFavorite = async (req, res) => {
   try {

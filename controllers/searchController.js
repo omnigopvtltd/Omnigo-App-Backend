@@ -58,7 +58,7 @@ exports.getSearchInitialData = async (req, res) => {
 
     // Popular cuisine chips for initial view
     const popularCuisines = await Product.find({ type: "popular" })
-      .select("id name category subcategory image")
+      .select("id name category subcategory images")
       .limit(8);
 
     // Fetch recent searches if user is authenticated
@@ -207,14 +207,14 @@ exports.searchAndFilter = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      summary: {
-        totalPlaces: places.length,
-        totalProducts: products.length,
-      },
-      results: {
-        places,
-        products,
-      },
+      // summary: {
+      //   totalPlaces: places.length,
+      //   totalProducts: products.length,
+      // },
+      // results: {
+      //   places,
+      //   products,
+      // },
     });
   } catch (err) {
     console.error("SEARCH & FILTER ERROR:", err);
