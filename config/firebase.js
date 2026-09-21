@@ -1,5 +1,5 @@
 const { initializeApp, cert, getApps } = require("firebase-admin/app");
-
+const { getAuth } = require("firebase-admin/auth");
 // const serviceAccount = require("../serviceAccountKey.json");
 // const admin = require("firebase-admin");
 
@@ -25,4 +25,8 @@ const app =
 
     console.log("Firebase Initialized");
 
-module.exports = app;
+    const auth = getAuth(app);
+
+console.log("Firebase Initialized Successfully");
+
+module.exports = { app, auth };
