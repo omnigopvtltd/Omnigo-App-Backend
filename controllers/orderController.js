@@ -161,6 +161,7 @@ exports.createOrder = async (req, res) => {
       await Promise.all(vendorNotifications);
     }
 
+
     return res.status(201).json({
       success: true,
       message: "Order placed successfully",
@@ -556,21 +557,21 @@ exports.confirmOrder = async (req, res) => {
       });
     }
 
-    createAndSendNotification(req.app, {
-          recipientId: order.userId,
-          recipientModel: "User",
-          title: "Order Confirmed!",
-          message: `Your order #${order.orderNumber} has been confirmed.`,
-          type: "confirmed_order",
-          data: {
-            orderId: order._id,
-            orderNumber: order.orderNumber,
-            totalAmount: order.totalAmount || order.grandTotal,
-            itemCount: order.items?.length || 0,
-            screenToOpen: "UserOrderDetails",
-          },
-          link: `/user/orders/confirmed/${order._id}`,
-        })
+    // createAndSendNotification(req.app, {
+    //       recipientId: order.userId,
+    //       recipientModel: "User",
+    //       title: "Order Confirmed!",
+    //       message: `Your order #${order.orderNumber} has been confirmed.`,
+    //       type: "confirmed_order",
+    //       data: {
+    //         orderId: order._id,
+    //         orderNumber: order.orderNumber,
+    //         totalAmount: order.totalAmount || order.grandTotal,
+    //         itemCount: order.items?.length || 0,
+    //         screenToOpen: "UserOrderDetails",
+    //       },
+    //       link: `/user/orders/confirmed/${order._id}`,
+    //     })
 
     // 5. Send FCM Push Notification to Customer
     // const customer = await User.findById(order.userId);
@@ -581,6 +582,16 @@ exports.confirmOrder = async (req, res) => {
     //     `Your order #${order.orderNumber} has been confirmed by the vendor.`,
     //   );
     // }
+
+    // Notification Trigger
+    await sendNotification({
+      userId: order.userId,
+      orderId: order._id,
+      title: "Order Update",
+      message: `Your order status is now: ${status}`,
+      type: "order_confirmed",
+    });
+
 
     return res.status(200).json({
       success: true,

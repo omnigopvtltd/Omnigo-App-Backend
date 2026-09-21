@@ -1,10 +1,10 @@
-const express = require("express");
-const router = express.Router();
-const {
-  getNotification
-} = require("../utils/sendNotification");
+// const express = require("express");
+// const router = express.Router();
+// const {
+//   getNotification
+// } = require("../utils/sendNotification");
 
-router.get("/", getNotification);
+// router.get("/", getNotification);
 
 
-module.exports = router;
+// module.exports = router;
