@@ -152,7 +152,16 @@ const userSchema = new mongoose.Schema(
           ref: "Order",
         },
       ],
-
+      // Add these fields to your existing User Schema
+      feedbackSkipCount: {
+        type: Number,
+        default: 0,
+      },
+      isFeedbackBlocked: {
+        type: Boolean,
+        default: false,
+      },
+      
       autoAcceptOrders: {
         type: Boolean,
         default: false,
