@@ -14,6 +14,7 @@ const { body, validationResult } = require("express-validator");
 const Order = require("../models/Order");
 const Product = require("../models/Product");
 const Cart = require("../models/Cart");
+const admin = require("../config/firebase");
 
 // ======================================================
 // GOOGLE CLIENT
@@ -747,6 +748,105 @@ exports.facebookLogin = async (req, res) => {
     return res.status(401).json({
       success: false,
       message: "Invalid Facebook Token",
+    });
+  }
+};
+
+// ======================================================
+// FIREBASE SOCIAL LOGIN (GOOGLE / FACEBOOK)
+// Handles Google & Facebook for Customer, Rider & Admin
+// ======================================================
+exports.socialLogin = async (req, res) => {
+  try {
+    const { idToken, role = "user", riderProfile, phone } = req.body;
+
+    if (!idToken) {
+      return res.status(400).json({
+        success: false,
+        message: "Firebase ID token is required",
+      });
+    }
+
+    // 1. Verify Firebase ID Token
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    const { uid, email, name, picture } = decodedToken;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email permission is required for authentication",
+      });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // 2. Check if user already exists
+    let user = await User.findOne({ email: normalizedEmail });
+
+    if (!user) {
+      // Security Check: Restrict admin creation via Social Login
+      if (role === "admin") {
+        const existingAdmin = await User.findOne({ role: "admin" });
+        if (existingAdmin) {
+          return res.status(403).json({
+            success: false,
+            message: "Admin account already exists.",
+          });
+        }
+      }
+
+      // Build New User Payload
+      const newUserData = {
+        name: name || `${role}_user`,
+        email: normalizedEmail,
+        role: role, // 'user' (customer), 'rider', or 'admin' passed from app
+        firebaseUid: uid,
+        profileImage: picture || "",
+        isEmailVerified: true,
+        phone: phone ? String(phone).trim() : "",
+      };
+
+      // Set Rider specific defaults if role is 'rider'
+      if (role === "rider") {
+        newUserData.riderProfile = {
+          category: riderProfile?.category || null,
+          vehicleType: riderProfile?.vehicleType || "bike",
+          vehiclePlate: riderProfile?.vehiclePlate || "",
+          vehicleModel: riderProfile?.vehicleModel || "",
+          verificationSelfie: riderProfile?.verificationSelfie || null,
+          verificationStatus: riderProfile?.verificationStatus || "not_submitted",
+          isOnline: false,
+        };
+      }
+
+      user = await User.create(newUserData);
+    } else {
+      // Existing User: Update Firebase UID if not saved
+      if (!user.firebaseUid) {
+        user.firebaseUid = uid;
+      }
+      user.lastLogin = new Date();
+      await user.save();
+    }
+
+    // 3. Generate App JWT Token
+    const token = generateToken(user);
+
+    const userResponse = user.toObject();
+    delete userResponse.password;
+
+    return res.status(200).json({
+      success: true,
+      message: "Social login successful",
+      token,
+      data: userResponse,
+    });
+  } catch (err) {
+    console.error("SOCIAL LOGIN ERROR:", err);
+    return res.status(401).json({
+      success: false,
+      message: "Invalid or expired Firebase Token",
+      error: err.message,
     });
   }
 };

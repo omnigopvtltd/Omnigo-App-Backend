@@ -306,6 +306,14 @@ exports.updateCart = async (req, res) => {
 exports.removeItem = async (req, res) => {
   try {
     const io = req.app.get("io");
+    const removeId = req.params.id; // URL parameter se aane wali ID
+
+    if (!removeId) {
+      return res.status(400).json({
+        success: false,
+        msg: "Item ID is required",
+      });
+    }
 
     const cart = await Cart.findOne({
       userId: req.user.id,
@@ -318,29 +326,45 @@ exports.removeItem = async (req, res) => {
       });
     }
 
-    cart.items = cart.items.filter(
-      (item) => item.productId.toString() !== req.params.id.toString(),
-    );
+    // Filter array: ObjectId ko string me convert karke compare karein
+    cart.items = cart.items.filter((item) => {
+      const pId = item.productId ? item.productId.toString() : null;
+      const dId = item.dealId ? item.dealId.toString() : null;
+      const cId = item.campaignId ? item.campaignId.toString() : null;
+      const subItemId = item._id ? item._id.toString() : null;
+
+      // Agar ID productId, dealId, campaignId, ya item._id me se kisi se match ho jaye toh usko array se nikaal do
+      const isMatch =
+        pId === removeId ||
+        dId === removeId ||
+        cId === removeId ||
+        subItemId === removeId;
+
+      return !isMatch; // Jis par match hoga, wo filter out (remove) ho jaye ga
+    });
 
     await cart.save();
 
-    io.to(`user_${req.user.id}`).emit("cart_updated", cart);
+    // Socket Room Naming Check: user: ID format match karein
+    if (io) {
+      io.to(`user:${req.user.id}`).emit("cart_updated", cart);
+    }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      msg: "Item removed",
+      msg: "Item removed successfully",
       cart,
     });
   } catch (err) {
-    console.log("REMOVE ITEM ERROR:", err);
+    console.error("REMOVE ITEM ERROR:", err);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       msg: "Server Error",
+      error: err.message,
     });
   }
 };
-
 // ================= CLEAR CART =================
 exports.clearCart = async (req, res) => {
   try {
