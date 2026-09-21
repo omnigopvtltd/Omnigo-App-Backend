@@ -751,6 +751,21 @@ exports.facebookLogin = async (req, res) => {
   }
 };
 
+exports.updateFcmToken = async (req, res) => {
+  try {
+    const { userId, fcmToken } = req.body;
+
+    await User.findByIdAndUpdate(userId, { fcmToken });
+
+    return res.status(200).json({
+      success: true,
+      message: "FCM Token updated successfully",
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 // ======================================================
 // LOGOUT
 // ======================================================

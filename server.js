@@ -81,7 +81,7 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/finance", financeRoutes);
 // ================= Tracking  =================
 // const trackingRoutes = require("./routes/trackingRoutes");
-const { getNotification } = require("./utils/sendNotification");
+// const { getNotification } = require("./utils/sendNotification");
 // app.use("/api/tracking", trackingRoutes);
 
 //  ================= Restaurant ===========================
@@ -103,7 +103,7 @@ app.use("/api/settings", AdminSettings);
 // app.use("/api/chat", require("./routes/chatRoutes"));
 app.use("/api/calls", require("./routes/callRoutes"));
 app.use("/api/search", require("./routes/searchRoutes"));
-app.use("/api/notifications", require("./routes/notificationRoutes"));
+// app.use("/api/notifications", require("./routes/notificationRoutes"));
 app.use("/api/cms", require("./routes/cmsRoutes"));
 
 // Fast Food //

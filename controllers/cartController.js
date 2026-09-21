@@ -1,6 +1,10 @@
 const Cart = require("../models/Cart");
 const Product = require("../models/Product");
-const { getIO } = require("../socket");
+// const { getIO } = require("../socket");
+
+// const Product = require("../models/Product");
+const Deal = require("../models/Deal");
+const Campaign = require("../models/Campaign");
 
 // ================= ADD TO CART =================
 exports.addToCart = async (req, res) => {
@@ -27,43 +31,85 @@ exports.addToCart = async (req, res) => {
 
     // 3. Process each item in the array
     for (const newItem of items) {
-      const { productId, quantity = 1 } = newItem;
+      // Single ID incoming from frontend (could be productId, itemId, or id)
+      const itemId = newItem.productId || newItem.itemId || newItem.id;
+      if (!itemId) continue;
 
-      if (!productId) continue;
+      const qty = Number(newItem.quantity) || 1;
 
-      // Verify product exists in database
-      const product = await Product.findById(productId);
-      if (!product) continue;
+      // ----------------------------------------------------
+      // AUTO-MATCH ID WITH PRODUCT, DEAL, OR CAMPAIGN
+      // ----------------------------------------------------
+      const [product, deal, campaign] = await Promise.all([
+        Product.findById(itemId).lean(),
+        Deal.findById(itemId).lean(),
+        Campaign.findById(itemId).lean(),
+      ]);
 
-      const qty = Number(quantity) || 1;
+      const matchedEntity = product || deal || campaign;
 
-      // Check if product is already in cart
-      const existingIndex = cart.items.findIndex(
-        (item) => item.productId.toString() === productId.toString()
+      if (!matchedEntity) continue; // If ID doesn't match anything, skip
+
+      // Determine entity type
+      let entityType = "product";
+      if (deal) entityType = "deal";
+      else if (campaign) entityType = "campaign";
+
+      // Check if item already exists in user's cart
+      const existingIndex = cart.items.findIndex((item) => {
+        if (entityType === "product" && item.productId) {
+          return item.productId.toString() === itemId.toString();
+        }
+        if (entityType === "deal" && item.productId) {
+          return item.productId.toString() === itemId.toString();
+        }
+        if (entityType === "campaign" && item.campaignId) {
+          return item.productId.toString() === itemId.toString();
+        }
+        return false;
+      });
+
+      // Price determination
+      const itemPrice = Number(
+        matchedEntity.price || matchedEntity.discountPrice || newItem.price || 0
       );
 
       if (existingIndex > -1) {
-        // Update quantity & total
+        // Update quantity & total if already in cart
         cart.items[existingIndex].quantity += qty;
         cart.items[existingIndex].total =
           cart.items[existingIndex].quantity * cart.items[existingIndex].price;
       } else {
-        // Add new item entry
-        cart.items.push({
-          productId: product._id,
+        // Construct new cart item object
+        const cartItem = {
           orderFrom: newItem.orderFrom || "fast-food",
-          name: product.name,
-          image: product.image || product.images[0],
-          category: product.category,
-          weight: product.weight,
-          price: product.price,
+          name: matchedEntity.name || matchedEntity.title || matchedEntity.dealName || matchedEntity.campaignName || newItem.name || "Item",
+          image:
+            matchedEntity.image || matchedEntity.campaignBanner || matchedEntity.dealBanner
+            (matchedEntity.images && matchedEntity.images[0]) ||
+            newItem.image || 
+            "",
+          category: matchedEntity.category || newItem.category || entityType,
+          weight: matchedEntity.weight || newItem.weight || "",
+          price: itemPrice || matchedEntity.discountPrice,
           quantity: qty,
-          variations: product.variations,
-          addOns: product.addOns,
-          serving: product.serving,
-          isVeg: product.isVeg,
-          total: product.price * qty,
-        });
+          variations: newItem.variations || matchedEntity.variations || [],
+          addOns: newItem.addOns || matchedEntity.addOns || [],
+          serving: newItem.serving || matchedEntity.serving || "full",
+          isVeg: newItem.isVeg ?? matchedEntity.isVeg ?? false,
+          total: itemPrice || matchedEntity.discountPrice * qty,
+        };
+
+        // Attach specific ID based on match
+        if (entityType === "deal") {
+          cartItem.productId = matchedEntity._id;
+        } else if (entityType === "campaign") {
+          cartItem.productId = matchedEntity._id;
+        } else {
+          cartItem.productId = matchedEntity._id;
+        }
+
+        cart.items.push(cartItem);
       }
     }
 
@@ -77,6 +123,7 @@ exports.addToCart = async (req, res) => {
     return res.status(200).json({
       success: true,
       msg: "Added to cart successfully",
+      items: cart.length,
       cart,
     });
   } catch (err) {
@@ -88,6 +135,92 @@ exports.addToCart = async (req, res) => {
     });
   }
 };
+// // ================= ADD TO CART =================
+// exports.addToCart = async (req, res) => {
+//   try {
+//     const io = req.app.get("io");
+//     const { items } = req.body;
+
+//     // 1. Array validation check
+//     if (!Array.isArray(items) || items.length === 0) {
+//       return res.status(400).json({
+//         success: false,
+//         msg: "Please select at least one item",
+//       });
+//     }
+
+//     // 2. Fetch or create user cart
+//     let cart = await Cart.findOne({ userId: req.user.id });
+//     if (!cart) {
+//       cart = new Cart({
+//         userId: req.user.id,
+//         items: [],
+//       });
+//     }
+
+//     // 3. Process each item in the array
+//     for (const newItem of items) {
+//       const { productId, quantity = 1 } = newItem;
+
+//       if (!productId) continue;
+
+//       // Verify product exists in database
+//       const product = await Product.findById(productId);
+//       if (!product) continue;
+
+//       const qty = Number(quantity) || 1;
+
+//       // Check if product is already in cart
+//       const existingIndex = cart.items.findIndex(
+//         (item) => item.productId.toString() === productId.toString()
+//       );
+
+//       if (existingIndex > -1) {
+//         // Update quantity & total
+//         cart.items[existingIndex].quantity += qty;
+//         cart.items[existingIndex].total =
+//           cart.items[existingIndex].quantity * cart.items[existingIndex].price;
+//       } else {
+//         // Add new item entry
+//         cart.items.push({
+//           productId: product._id,
+//           orderFrom: newItem.orderFrom || "fast-food",
+//           name: product.name,
+//           image: product.image || product.images[0],
+//           category: product.category,
+//           weight: product.weight,
+//           price: product.price,
+//           quantity: qty,
+//           variations: product.variations,
+//           addOns: product.addOns,
+//           serving: product.serving,
+//           isVeg: product.isVeg,
+//           total: product.price * qty,
+//         });
+//       }
+//     }
+
+//     await cart.save();
+
+//     // 4. Emit socket event
+//     if (io) {
+//       io.to(`user:${req.user.id}`).emit("cart_updated", cart);
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       msg: "Added to cart successfully",
+//       cart,
+//     });
+//   } catch (err) {
+//     console.error("ADD TO CART ERROR:", err);
+//     return res.status(500).json({
+//       success: false,
+//       msg: "Server Error",
+//       error: err.message,
+//     });
+//   }
+// };
 // ================= GET CART =================
 exports.getCart = async (req, res) => {
   try {
