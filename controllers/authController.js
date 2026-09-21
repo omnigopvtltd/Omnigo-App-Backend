@@ -763,18 +763,22 @@ exports.socialLogin = async (req, res) => {
     if (!idToken) {
       return res.status(400).json({
         success: false,
-        message: "Firebase ID token is required",
+        message: "ID token is required",
       });
     }
 
-    // 1. Verify Firebase ID Token
-    const decodedToken = await admin.auth().verifyIdToken(idToken);
-    const { uid, email, name, picture } = decodedToken;
+    // 1. Google ID Token Verification (No Firebase Admin dependencies needed)
+    const ticket = await googleClient.verifyIdToken({
+      idToken: idToken,
+    });
+
+    const payload = ticket.getPayload();
+    const { sub, email, name, picture } = payload;
 
     if (!email) {
       return res.status(400).json({
         success: false,
-        message: "Email permission is required for authentication",
+        message: "Email permission is required",
       });
     }
 
@@ -784,7 +788,7 @@ exports.socialLogin = async (req, res) => {
     let user = await User.findOne({ email: normalizedEmail });
 
     if (!user) {
-      // Security Check: Restrict admin creation via Social Login
+      // Admin check
       if (role === "admin") {
         const existingAdmin = await User.findOne({ role: "admin" });
         if (existingAdmin) {
@@ -795,12 +799,12 @@ exports.socialLogin = async (req, res) => {
         }
       }
 
-      // Build New User Payload
+      // Create new user object
       const newUserData = {
         name: name || `${role}_user`,
         email: normalizedEmail,
-        role: role, // 'user' (customer), 'rider', or 'admin' passed from app
-        firebaseUid: uid,
+        role: role,
+        googleId: sub,
         profileImage: picture || "",
         isEmailVerified: true,
         phone: phone ? String(phone).trim() : "",
@@ -821,9 +825,9 @@ exports.socialLogin = async (req, res) => {
 
       user = await User.create(newUserData);
     } else {
-      // Existing User: Update Firebase UID if not saved
-      if (!user.firebaseUid) {
-        user.firebaseUid = uid;
+      // Existing User update
+      if (!user.googleId) {
+        user.googleId = sub;
       }
       user.lastLogin = new Date();
       await user.save();
@@ -845,7 +849,7 @@ exports.socialLogin = async (req, res) => {
     console.error("SOCIAL LOGIN ERROR:", err);
     return res.status(401).json({
       success: false,
-      message: "Invalid or expired Firebase Token",
+      message: "Invalid or expired token",
       error: err.message,
     });
   }
