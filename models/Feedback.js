@@ -2,44 +2,40 @@ const mongoose = require("mongoose");
 
 const feedbackSchema = new mongoose.Schema(
   {
-    user: {
+    orderId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Order",
+      required: true,
+    },
+    userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
-
-    rating: {
-      type: Number,
-      min: 1,
-      max: 5,
+    vendorId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Vendor",
       required: true,
     },
-
-    feedbackType: {
-      type: String,
-      enum: [
-        "very_bad",
-        "bad",
-        "average",
-        "good",
-        "excellent",
-      ],
+    products: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Product",
+      },
+    ],
+    rating: {
+      type: Number,
+      required: true,
+      min: 1,
+      max: 5,
     },
-
-    message: {
+    comment: {
       type: String,
       trim: true,
-      maxlength: 1000,
-      default: "",
-    },
-    image: {
-      type: String,
-      default: "",
+      maxLength: 250,
     },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
 module.exports = mongoose.model("Feedback", feedbackSchema);

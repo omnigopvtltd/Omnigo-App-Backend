@@ -1,34 +1,34 @@
 const express = require("express");
+
 const router = express.Router();
 
 const auth = require("../middleware/authMiddleware");
 
 const {
+  checkPendingFeedback,
   submitFeedback,
-  getAllFeedbacks,
-  getReviews,
-  getRatingSummary,
-  deleteFeedback,
+  skipFeedback,
+  getFeedbacks,
 } = require("../controllers/feedbackController");
 
-// User Submit Feedback
+// ========================================================
+// 1. Check if feedback popup should be shown
+// ========================================================
+router.get("/pending", auth, checkPendingFeedback);
 
+// ========================================================
+// 2. Submit feedback
+// ========================================================
 router.post("/", auth, submitFeedback);
 
-// Reviews List
+// ========================================================
+// 3. Skip feedback popup
+// ========================================================
+router.post("/skip", auth, skipFeedback);
 
-router.get("/reviews", getReviews);
-
-// Rating Summary
-
-router.get("/summary", getRatingSummary);
-
-// Admin All Feedbacks
-
-router.get("/", auth, getAllFeedbacks);
-
-// Delete Feedback
-
-router.delete("/:id", auth, deleteFeedback);
+// ========================================================
+// 4. Get reviews / feedbacks
+// ========================================================
+router.get("/", getFeedbacks);
 
 module.exports = router;
