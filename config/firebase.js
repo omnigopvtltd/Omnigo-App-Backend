@@ -1,7 +1,7 @@
-// const { initializeApp, cert, getApps } = require("firebase-admin/app");
+const { initializeApp, cert, getApps } = require("firebase-admin/app");
 
-// // const serviceAccount = require("../serviceAccountKey.json");
-// // const admin = require("firebase-admin");
+const serviceAccount = require("../serviceAccountKey.json");
+const admin = require("firebase-admin");
 
 // const serviceAccount = {
 //   type: process.env.FIREBASE_TYPE,
@@ -16,46 +16,14 @@
 //   client_x509_cert_url: process.env.FIREBASE_CLIENT_X509_CERT_URL,
 // };
 
-// const app =
-//   getApps().length === 0
-//     ? initializeApp({
-//         credential: cert(serviceAccount || "../serviceAccountKey.json"),
-//       })
-//     : getApps()[0];
-
-//     console.log("Firebase Initialized");
-
-// module.exports = app;
-
-const { initializeApp, cert, getApps } = require("firebase-admin/app");
-
-// Safe extraction with optional chaining or fallback
-const privateKey = process.env.FIREBASE_PRIVATE_KEY
-  ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n")
-  : undefined;
-
-const serviceAccount = process.env.FIREBASE_PRIVATE_KEY
-  ? {
-      type: process.env.FIREBASE_TYPE,
-      project_id: process.env.FIREBASE_PROJECT_ID,
-      private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
-      private_key: privateKey,
-      client_email: process.env.FIREBASE_CLIENT_EMAIL,
-      client_id: process.env.FIREBASE_CLIENT_ID,
-      auth_uri: process.env.FIREBASE_AUTH_URI,
-      token_uri: process.env.FIREBASE_TOKEN_URI,
-      auth_provider_x509_cert_url: process.env.FIREBASE_AUTH_PROVIDER_X509_CERT_URL,
-      client_x509_cert_url: process.env.FIREBASE_CLIENT_X509_CERT_URL,
-    }
-  : require("../serviceAccountKey.json"); // Agar env load na ho toh JSON file load ho
-
 const app =
   getApps().length === 0
     ? initializeApp({
-        credential: cert(serviceAccount),
+        credential: cert(serviceAccount || "../serviceAccountKey.json"),
       })
     : getApps()[0];
 
-console.log("Firebase Initialized Successfully");
+    console.log("Firebase Initialized");
 
 module.exports = app;
+
