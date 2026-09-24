@@ -1311,6 +1311,324 @@ exports.updateVendorProfile = async (req, res) => {
 };
 
 // =======================
+// UPDATE VENDOR 
+// =======================
+exports.updateVendor = async (req, res) => {
+  try {
+    const vendorId = req.params.id || req.params._id;
+
+    const {
+      storeName,
+      businessDescription,
+      logoImage,
+      bannerImage,
+      cnicNumber,
+      cnicFrontPicture,
+      cnicBackPicture,
+      incorporationCertificate,
+      foodSafetyLicense,
+      ntnCertificate,
+      businessName,
+      businessType,
+      businessPhone,
+      businessEmail,
+      category,
+      logo,
+      coverImage,
+      description,
+      businessRegistrationNumber,
+      taxNumber,
+      foodLicenseNumber,
+      ownerName,
+      ownerEmail,
+      ownerPhone,
+      profilePicture,
+      payoutBankName,
+      payoutAccountTitle,
+      payoutAccountNumber,
+      payoutPaymentMethod,
+      payoutIban,
+      payoutWalletNumber,
+      branchData,
+      storeHours,
+    } = req.body;
+
+    // File Upload Processing (Multer compatibility)
+    const files = req.files || {};
+
+    const processMediaField = (bodyField, fileField, defaultValue) => {
+      if (fileField && fileField.path) return fileField.path; // Multer Upload Path / Cloudinary URL
+      if (bodyField) return bodyField;
+      return defaultValue || "";
+    };
+
+    // 1. Fetch Vendor
+    const vendor = await Vendor.findById(vendorId);
+    if (!vendor) {
+      return res.status(404).json({
+        success: false,
+        message: "Vendor account not found",
+      });
+    }
+
+    // 2. Business Details Update
+    vendor.businessName = storeName || businessName || vendor.businessName;
+    vendor.description = businessDescription || description || vendor.description;
+
+    if (businessEmail) vendor.businessEmail = String(businessEmail).toLowerCase().trim();
+    if (businessPhone) vendor.businessPhone = String(businessPhone).trim();
+
+    if (businessType) vendor.businessType = businessType;
+    if (category) vendor.category = category;
+
+    if (businessRegistrationNumber) vendor.businessRegistrationNumber = businessRegistrationNumber;
+    if (taxNumber) vendor.taxNumber = taxNumber;
+    if (foodLicenseNumber) vendor.foodLicenseNumber = foodLicenseNumber;
+
+    // 3. Helper: Format Opening Hours Array to Object Schema
+    const formatOpeningHours = (inputHours) => {
+      if (!inputHours) return null;
+      let parsed = inputHours;
+      if (typeof inputHours === "string") {
+        try {
+          parsed = JSON.parse(inputHours);
+        } catch (e) {
+          return null;
+        }
+      }
+
+      if (!Array.isArray(parsed)) return null;
+
+      const defaultDay = { isOpen: true, open: "10:00", close: "23:00" };
+      const hoursObj = {
+        monday: { ...defaultDay },
+        tuesday: { ...defaultDay },
+        wednesday: { ...defaultDay },
+        thursday: { ...defaultDay },
+        friday: { ...defaultDay },
+        saturday: { ...defaultDay },
+        sunday: { ...defaultDay },
+      };
+
+      parsed.forEach((item) => {
+        const dayKey = item.day ? item.day.toLowerCase().trim() : "";
+        if (hoursObj[dayKey]) {
+          hoursObj[dayKey] = {
+            isOpen: item.isOpen !== undefined ? Boolean(item.isOpen) : true,
+            open: item.open || item.timeFrom || "10:00",
+            close: item.close || item.timeTo || "23:00",
+          };
+        }
+      });
+
+      return hoursObj;
+    };
+
+    const globalOpeningHours = formatOpeningHours(storeHours);
+
+    // 4. Owner Info
+    if (ownerName) vendor.ownerName = ownerName;
+    if (ownerPhone) vendor.ownerPhone = ownerPhone;
+    if (ownerEmail) vendor.ownerEmail = String(ownerEmail).toLowerCase().trim();
+
+    // 5. Media Files Processing (Logo, Cover, CNIC, Licenses)
+    vendor.profilePicture = processMediaField(profilePicture, files.profilePicture?.[0], vendor.profilePicture);
+    vendor.logo = processMediaField(logoImage || logo, files.logoImage?.[0] || files.logo?.[0], vendor.logo);
+    vendor.coverImage = processMediaField(bannerImage || coverImage, files.bannerImage?.[0] || files.coverImage?.[0], vendor.coverImage);
+
+    vendor.cnicNumber = cnicNumber || vendor.cnicNumber || "";
+    vendor.cnicFrontPicture = processMediaField(cnicFrontPicture, files.cnicFrontPicture?.[0], vendor.cnicFrontPicture);
+    vendor.cnicBackPicture = processMediaField(cnicBackPicture, files.cnicBackPicture?.[0], vendor.cnicBackPicture);
+
+    vendor.incorporationCertificate = processMediaField(incorporationCertificate, files.incorporationCertificate?.[0], vendor.incorporationCertificate);
+    vendor.foodSafetyLicense = processMediaField(foodSafetyLicense, files.foodSafetyLicense?.[0], vendor.foodSafetyLicense);
+    vendor.ntnCertificate = processMediaField(ntnCertificate, files.ntnCertificate?.[0], vendor.ntnCertificate);
+
+    // 6. Payout Info
+    vendor.payout = {
+      accountHolderName: payoutAccountTitle || vendor.payout?.accountHolderName || "",
+      paymentMethod: payoutPaymentMethod || vendor.payout?.paymentMethod || "bank",
+      bankName: payoutBankName || vendor.payout?.bankName || "",
+      accountNumber: payoutAccountNumber || vendor.payout?.accountNumber || "",
+      iban: payoutIban || vendor.payout?.iban || "",
+      walletNumber: payoutWalletNumber || vendor.payout?.walletNumber || "",
+      isVerified: vendor.payout?.isVerified || false,
+    };
+
+    vendor.verificationStatus = "pending";
+    await vendor.save();
+
+    // 7. BRANCHES PROCESSING (Duplicates & ID Conflict Fix)
+    let parsedBranches = [];
+    if (branchData) {
+      const rawData = typeof branchData === "string" ? JSON.parse(branchData) : branchData;
+      parsedBranches = Array.isArray(rawData) ? rawData : [rawData];
+    }
+
+    let updatedBranches = [];
+
+    if (parsedBranches.length > 0) {
+      updatedBranches = await Promise.all(
+        parsedBranches.map(async (branch) => {
+          const targetBranchName = branch.branchName || `${vendor.businessName} Branch`;
+          const targetBranchPhone = branch.phone || vendor.businessPhone;
+          const branchOpeningHours = formatOpeningHours(branch.openingHours || branch.storeHours) || globalOpeningHours;
+
+          const updatePayload = {
+            vendorId: vendor._id,
+            branchName: targetBranchName,
+            phone: targetBranchPhone,
+            email: branch.email || vendor.businessEmail || "",
+            address: branch.address || "",
+            area: branch.area || "",
+            city: branch.city || "Karachi",
+            zipCode: branch.zipCode || "",
+            country: branch.country || "Pakistan",
+            isActive: branch.isActive !== undefined ? branch.isActive : true,
+            isOpen: branch.isOpen !== undefined ? branch.isOpen : true,
+          };
+
+          if (branch.longitude !== undefined && branch.latitude !== undefined) {
+            updatePayload.location = {
+              type: "Point",
+              coordinates: [Number(branch.longitude) || 0, Number(branch.latitude) || 0],
+            };
+          }
+
+          if (branchOpeningHours) {
+            updatePayload.openingHours = branchOpeningHours;
+          }
+
+          const hasValidId = branch._id && mongoose.Types.ObjectId.isValid(branch._id);
+
+          if (hasValidId) {
+            // EXPLICIT UPDATE: Duplicate key error bachane ke liye pehle ID check karke direct update
+            const existingBranch = await VendorBranch.findOne({ _id: branch._id, vendorId: vendor._id });
+            if (existingBranch) {
+              return await VendorBranch.findByIdAndUpdate(
+                branch._id,
+                { $set: updatePayload },
+                { new: true }
+              );
+            }
+          }
+
+          // INSERT/UPSERT FOR NEW BRANCHES ONLY
+          return await VendorBranch.findOneAndUpdate(
+            { vendorId: vendor._id, branchName: targetBranchName },
+            { $set: updatePayload },
+            { new: true, upsert: true, setDefaultsOnInsert: true }
+          );
+        })
+      );
+    }
+
+    vendor.noOfBranches = updatedBranches.length;
+    await vendor.save();
+
+    // 8. Real-time Broadcast via Socket IO
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`vendor:${vendor._id}`).emit("vendorProfileUpdated", {
+        vendorId: vendor._id,
+        vendor,
+        branches: updatedBranches,
+      });
+    }
+
+    const vendorResponse = vendor.toObject();
+    delete vendorResponse.password;
+
+    return res.status(200).json({
+      success: true,
+      message: "Vendor profile and branches updated successfully",
+      vendor: vendorResponse,
+      branches: updatedBranches,
+    });
+  } catch (err) {
+    console.error("UPDATE VENDOR PROFILE ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// =====================================
+// UPDATE VENDOR STATUS (draft / approve / reject / pending/ suspend)
+// =====================================
+exports.updateVendorStatus = async (req, res) => {
+  try {
+    const { status } = req.body;
+    console.log("Status", status);
+    const allowedStatuses = ["draft", "pending", "approved", "rejected", "suspended"];
+
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid status",
+      });
+    }
+
+    const vendor = await Vendor.findByIdAndUpdate(
+      req.params.id,
+      { verificationStatus: status },
+      { new: true },
+    );
+
+    if (!vendor) {
+      return res.status(404).json({
+        success: false,
+        message: "Vendor not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Vendor marked as ${status}`,
+      vendor,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// =====================================
+// DELETE VENDOR
+// =====================================
+exports.deleteVendor = async (req, res) => {
+  try {
+    const vendor = await Vendor.findByIdAndDelete(req.params.id);
+
+    if (!vendor) {
+      return res.status(404).json({
+        success: false,
+        message: "Vendor not found",
+      });
+    }
+
+    // Keep the catalog consistent — a vendor's products can't exist without it
+    await Product.deleteMany({ vendorId: vendor._id });
+
+    return res.status(200).json({
+      success: true,
+      message: "Vendor and its products deleted successfully",
+    });
+  } catch (err) {
+    console.log("DELETE VENDOR ERROR:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+
+// =======================
 // Get All Vendors
 // =======================
 exports.getAllVendors = async (req, res) => {

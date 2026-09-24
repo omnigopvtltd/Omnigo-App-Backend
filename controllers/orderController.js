@@ -997,7 +997,7 @@ exports.getOngoingOrders = async (req, res) => {
 exports.getAvailableOrders = async (req, res) => {
   try {
     const allOrders = await Order.find({
-      status: "confirmed",
+      status: "confirmed" || "preparing" || "ready",
       isAssigned: false,
     })
       .populate("userId", "name email phone")
@@ -1051,6 +1051,7 @@ exports.acceptOrder = async (req, res) => {
           "picked_up",
           "ongoing",
           "on_the_way",
+          "confirmed"
         ],
       },
     });
@@ -1086,7 +1087,7 @@ exports.acceptOrder = async (req, res) => {
     order.riderId = rider._id;
     order.isAssigned = true;
     order.acceptedAt = new Date();
-    order.status = "on_the_way";
+    order.status = "assigned";
 
     // Mark Rider Busy
     if (rider.riderProfile) {
