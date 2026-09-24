@@ -3,6 +3,7 @@ const router = express.Router();
 
 // Middleware to authenticate JWT token
 const auth = require("../middleware/authMiddleware");
+const role = require("../middleware/rolemiddleware");
 const {
   validateSignup,
   resetPassword,
@@ -27,6 +28,9 @@ const {
   getVendorBranchById,
   getAllVendors,
   vendorMenuProducts,
+  updateVendor,
+  updateVendorStatus,
+  deleteVendor,
 } = require("../controllers/vendorController");
 const { saveFcmToken } = require("../controllers/vendorController");
 const upload = require("../middleware/upload");
@@ -93,13 +97,28 @@ router.put(
   auth,
   updateVendorProfile,
 );
+router.put(
+  "/update/:id",
+  upload.fields([
+    { name: "logo", maxCount: 1 },
+    { name: "coverImage", maxCount: 1 },
+  ]),
+  auth,
+  updateVendor,
+);
 
+router.patch("/update/:id/status", auth, updateVendorStatus);
 router.patch("/toggle-rushmode", auth, toggleRushMode);
+
+router.delete("/delete/:id", auth, role("admin"), deleteVendor);
+
+
 router.get("/vendor-menu/:vendorId", auth, vendorMenu);
 router.get("/vendor-menu-products/:vendorId", auth, vendorMenuProducts);
 router.get("/vendor-branches/:vendorId", auth, getVendorBranchById);
 
 router.get("/home-chef/:id", auth, getHomeChefById);
 router.get("/:id", auth, getVendorById);
+
 
 module.exports = router;
