@@ -31,10 +31,12 @@ const {
   updateVendor,
   updateVendorStatus,
   deleteVendor,
+  getVendors,
 } = require("../controllers/vendorController");
 const { saveFcmToken } = require("../controllers/vendorController");
 const upload = require("../middleware/upload");
 
+router.get("/", auth, getVendors);
 router.get("/all-vendors", auth, getAllVendors);
 router.get("/dashboard/overview", auth, getVendorDashboardOverview);
 router.get("/vendor-menu", auth, vendorMenu);
