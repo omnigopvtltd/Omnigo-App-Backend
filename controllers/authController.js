@@ -768,8 +768,13 @@ exports.socialLogin = async (req, res) => {
     }
 
     // 1. Google ID Token Verification (No Firebase Admin dependencies needed)
+    // const ticket = await googleClient.verifyIdToken({
+    //   idToken: idToken,
+    // });
+
     const ticket = await googleClient.verifyIdToken({
       idToken: idToken,
+      audience: process.env.GOOGLE_CLIENT_ID, // yeh line add karein
     });
 
     const payload = ticket.getPayload();
@@ -818,7 +823,8 @@ exports.socialLogin = async (req, res) => {
           vehiclePlate: riderProfile?.vehiclePlate || "",
           vehicleModel: riderProfile?.vehicleModel || "",
           verificationSelfie: riderProfile?.verificationSelfie || null,
-          verificationStatus: riderProfile?.verificationStatus || "not_submitted",
+          verificationStatus:
+            riderProfile?.verificationStatus || "not_submitted",
           isOnline: false,
         };
       }

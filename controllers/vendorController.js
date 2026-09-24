@@ -1627,6 +1627,53 @@ exports.deleteVendor = async (req, res) => {
   }
 };
 
+// =======================
+// Get Vendors
+// =======================
+exports.getVendors = async (req, res) => {
+  try {
+    const { status, search, type } = req.query;
+
+    const filter = {};
+
+    // 1. Filter by Status (active/blocked)
+    // if (status && status !== "all") {
+    //   if (status === "blocked") filter.isBlocked = true;
+    //   if (status === "active") filter.isBlocked = false;
+    // }
+
+    // 2. Filter by Vendor Type/Category (e.g. restaurant, grocery, etc.)
+    if (type && type !== "all") {
+      // RegEx se case-insensitive match (e.g. "restaurant" or "restaurants")
+      filter.businessType = { $regex: new RegExp(type, "i") };
+    }
+
+    // 3. Search by Vendor Name
+    if (search && search.trim() !== "") {
+      filter.businessName = {
+        $regex: search.trim().toLowerCase(),
+        $options: "i",
+      };
+    }
+
+    // Default: Fetches all vendors matching filters (or all vendors if filters are empty)
+    const vendors = await Vendor.find(filter)
+      // .select("businessName logo coverImage businessType rating businessDesicription description")
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      count: vendors.length,
+      vendors,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
 
 // =======================
 // Get All Vendors
