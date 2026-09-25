@@ -248,6 +248,12 @@ const vendorSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+
+    package: {
+      type: String,
+      enum: ["basic", "premium", "featured"],
+      default: "",
+    },
     // },
 
     // =====================================================
@@ -314,7 +320,7 @@ const vendorSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    
+
     isSponsored: {
       type: Boolean,
       default: false,
@@ -344,6 +350,7 @@ const vendorSchema = new mongoose.Schema(
       default: null,
     },
   },
+
   {
     timestamps: true,
   },
