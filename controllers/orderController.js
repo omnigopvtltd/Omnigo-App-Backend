@@ -105,7 +105,11 @@ exports.createOrder = async (req, res) => {
     };
 
     const discount = Number(promoDiscount) || 0;
-    const totalAmount = subtotal + Number(deliveryFee) + Number(salesAndServiceTaxForUser) - discount;
+    const totalAmount =
+      subtotal +
+      Number(deliveryFee) +
+      Number(salesAndServiceTaxForUser) -
+      discount;
 
     const order = await Order.create({
       orderNumber: "ORD" + Date.now() + Math.floor(Math.random() * 1000),
@@ -160,7 +164,6 @@ exports.createOrder = async (req, res) => {
       // Parallel Execution: Tamam vendors ko ek sath save aur emit karega
       await Promise.all(vendorNotifications);
     }
-
 
     return res.status(201).json({
       success: true,
@@ -443,22 +446,21 @@ exports.cancelRiderOrder = async (req, res) => {
     order.status = "confirmed";
 
     createAndSendNotification(req.app, {
-          recipientId: order.riderId,
-          recipientModel: "Rider",
-          title: "Order Cancelled",
-          message: `You have cancelled Order#${order.orderNumber}.`,
-          type: "cancelled_order",
-          data: {
-            orderId: order._id,
-            orderNumber: order.orderNumber,
-            // totalAmount: order.totalAmount || order.grandTotal,
-            // itemCount: order.items?.length || 0,
-            screenToOpen: "RiderOrderDetails",
-          },
-          link: `/rider/orders/cancel/${order._id}`,
-        })
+      recipientId: order.riderId,
+      recipientModel: "Rider",
+      title: "Order Cancelled",
+      message: `You have cancelled Order#${order.orderNumber}.`,
+      type: "cancelled_order",
+      data: {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        // totalAmount: order.totalAmount || order.grandTotal,
+        // itemCount: order.items?.length || 0,
+        screenToOpen: "RiderOrderDetails",
+      },
+      link: `/rider/orders/cancel/${order._id}`,
+    });
     await order.save();
-
 
     return res.status(200).json({
       success: true,
@@ -592,7 +594,6 @@ exports.confirmOrder = async (req, res) => {
       type: "order_confirmed",
     });
 
-
     return res.status(200).json({
       success: true,
       message: "Order confirmed successfully",
@@ -695,20 +696,20 @@ exports.readyOrder = async (req, res) => {
     }
 
     createAndSendNotification(req.app, {
-          recipientId: order?.riderId ,
-          recipientModel: "Rider",
-          title: "Order Ready For Pickup",
-          message: `Order #${order.orderNumber} is raedy. Please pickup order now.`,
-          type: "ready_order",
-          data: {
-            orderId: order._id,
-            orderNumber: order.orderNumber,
-            totalAmount: order.totalAmount || order.grandTotal,
-            itemCount: order.items?.length || 0,
-            screenToOpen: "RiderOrderDetails",
-          },
-          link: `/rider/orders/ready/${order._id}`,
-        })
+      recipientId: order?.riderId,
+      recipientModel: "Rider",
+      title: "Order Ready For Pickup",
+      message: `Order #${order.orderNumber} is raedy. Please pickup order now.`,
+      type: "ready_order",
+      data: {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        totalAmount: order.totalAmount || order.grandTotal,
+        itemCount: order.items?.length || 0,
+        screenToOpen: "RiderOrderDetails",
+      },
+      link: `/rider/orders/ready/${order._id}`,
+    });
     // 5. Send FCM Push Notification to Customer
     // const customer = await User.findById(order.userId);
     // if (customer?.fcmToken) {
@@ -829,20 +830,20 @@ exports.cancelOrderByVendor = async (req, res) => {
     }
 
     createAndSendNotification(req.app, {
-          recipientId: order.userId,
-          recipientModel: "User",
-          title: "Order Cancelled!",
-          message: `Order #${order.orderNumber} Cancelled. Reason: ${order.cancellationReason}`,
-          type: "cancelled_order",
-          data: {
-            orderId: order._id,
-            orderNumber: order.orderNumber,
-            totalAmount: order.totalAmount || order.grandTotal,
-            itemCount: order.items?.length || 0,
-            screenToOpen: "UserOrderDetails",
-          },
-          link: `/user/orders/cancel/${order._id}`,
-        })
+      recipientId: order.userId,
+      recipientModel: "User",
+      title: "Order Cancelled!",
+      message: `Order #${order.orderNumber} Cancelled. Reason: ${order.cancellationReason}`,
+      type: "cancelled_order",
+      data: {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        totalAmount: order.totalAmount || order.grandTotal,
+        itemCount: order.items?.length || 0,
+        screenToOpen: "UserOrderDetails",
+      },
+      link: `/user/orders/cancel/${order._id}`,
+    });
     // Send FCM Push Notification to Customer
     // const customer = await User.findById(order.userId);
     // if (customer?.fcmToken) {
@@ -977,6 +978,8 @@ exports.getOngoingOrders = async (req, res) => {
           "picked_up",
           "ongoing",
           "on_the_way",
+          "assigned",
+          "ready",
         ],
       },
     })
@@ -997,7 +1000,9 @@ exports.getOngoingOrders = async (req, res) => {
 exports.getAvailableOrders = async (req, res) => {
   try {
     const allOrders = await Order.find({
-      status: "confirmed" || "preparing" || "ready",
+      status: {
+        $in: ["confirmed", "preparing", "ready"],
+      },
       isAssigned: false,
     })
       .populate("userId", "name email phone")
@@ -1051,7 +1056,7 @@ exports.acceptOrder = async (req, res) => {
           "picked_up",
           "ongoing",
           "on_the_way",
-          "confirmed"
+          "confirmed",
         ],
       },
     });
@@ -1171,6 +1176,8 @@ exports.getRiderActiveOrders = async (req, res) => {
           "picked_up",
           "ongoing",
           "on_the_way",
+          "assigned",
+          "ready",
         ],
       },
     })
@@ -1795,7 +1802,8 @@ exports.reorder = async (req, res) => {
     const deliveryFee = oldOrder.deliveryFee || 200;
     const salesAndServiceTaxForUser = oldOrder.salesAndServiceTaxForUser || 2.5;
     const promoDiscount = 0;
-    const totalAmount = subtotal + deliveryFee + salesAndServiceTaxForUser - promoDiscount;
+    const totalAmount =
+      subtotal + deliveryFee + salesAndServiceTaxForUser - promoDiscount;
 
     const newOrder = await Order.create({
       orderNumber: "ORD" + Date.now() + Math.floor(Math.random() * 1000),
@@ -1991,8 +1999,8 @@ exports.getVendorOrders = async (req, res) => {
     // Tab Status Mapping
     const tabStatusMap = {
       pending: ["pending"],
-      preparing: ["confirmed", "preparing"],
-      ready: ["ready", "assigned", "arrived_at_vendor", "on_the_way"],
+      preparing: ["confirmed", "preparing", "assigned"],
+      ready: ["ready", "arrived_at_vendor", "on_the_way"],
       complete: ["delivered", "completed"],
       cancelled: ["cancelled", "rejected_by_vendor", "cancelled_by_user"],
       order_issues: ["refund_requested", "disputed", "complaint_raised"],

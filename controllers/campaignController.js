@@ -207,7 +207,7 @@ exports.getAllCampaigns = async (req, res) => {
 
     const [campaigns, total] = await Promise.all([
       Campaign.find(query)
-        .populate("vendorId", "businessName logo rating")
+        .populate("vendorId", "businessName logo rating package")
         .populate(
           "branchId",
           "branchName address area city phone isOpen isActive",
