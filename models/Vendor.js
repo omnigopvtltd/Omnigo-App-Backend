@@ -251,7 +251,7 @@ const vendorSchema = new mongoose.Schema(
 
     package: {
       type: String,
-      enum: ["basic", "premium", "featured"],
+      enum: ["basic", "premium", "featured", ""],
       default: "",
     },
     // },
