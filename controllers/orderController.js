@@ -1057,6 +1057,7 @@ exports.acceptOrder = async (req, res) => {
           "ongoing",
           "on_the_way",
           "confirmed",
+          "assigned",
         ],
       },
     });
@@ -1081,7 +1082,7 @@ exports.acceptOrder = async (req, res) => {
       });
     }
 
-    if ((rider.wallet?.balance || 0) < order.totalAmount) {
+    if ((rider.wallet?.balance || 0) < 2000) {
       return res.status(400).json({
         success: false,
         message: "You have insufficient balance to accept this order",
