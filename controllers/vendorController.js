@@ -1116,6 +1116,99 @@ exports.login = async (req, res) => {
 };
 
 // ======================================================
+// VENDOR GOOGLE SOCIAL LOGIN
+// Dedicated for Vendor Model and Separate Collection
+// ======================================================
+exports.vendorSocialLogin = async (req, res) => {
+  try {
+    const { idToken } = req.body;
+
+    if (!idToken) {
+      return res.status(400).json({
+        success: false,
+        message: "ID token is required",
+      });
+    }
+
+    // 1. Verify Google ID Token
+    const ticket = await googleClient.verifyIdToken({
+      idToken: idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    const { sub, email, name, picture } = payload;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email permission is required from Google account",
+      });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // 2. Search Vendor in Vendor Collection
+    let vendor = await Vendor.findOne({ businessEmail: normalizedEmail });
+
+    if (!vendor) {
+      // Create New Vendor Entry with Required Schema Fallbacks
+      const newVendorData = {
+        businessName: name || "New Vendor Business",
+        businessEmail: normalizedEmail,
+        ownerName: name || "",
+        ownerEmail: normalizedEmail,
+        googleId: sub,
+        profilePicture: picture || "",
+        isEmailVerified: true,
+        
+        // Schema Defaults for Required/Non-nullable fields
+        password: "", // Social login vendors don't use raw password
+        businessPhone: "", // Optional or can be updated later in profile completion
+        cnicNumber: "PENDING_VERIFICATION", // Schema fallback for required cnicNumber
+      };
+
+      vendor = await Vendor.create(newVendorData);
+    } else {
+      // Existing Vendor - Link Google ID & update login date
+      if (!vendor.googleId) {
+        vendor.googleId = sub;
+      }
+      vendor.lastLogin = new Date();
+      await vendor.save();
+    }
+
+    // Check if vendor is blocked by Admin
+    if (vendor.isBlocked) {
+      return res.status(403).json({
+        success: false,
+        message: "Your vendor account has been blocked. Please contact support.",
+      });
+    }
+
+    // 3. Generate Auth JWT Token
+    const token = generateToken(vendor);
+
+    const vendorResponse = vendor.toObject();
+    delete vendorResponse.password;
+
+    return res.status(200).json({
+      success: true,
+      message: "Vendor Google login successful",
+      token,
+      data: vendorResponse,
+    });
+  } catch (err) {
+    console.error("VENDOR SOCIAL LOGIN ERROR:", err);
+    return res.status(401).json({
+      success: false,
+      message: "Invalid or expired Google token",
+      error: err.message,
+    });
+  }
+};
+
+// ======================================================
 // OAUTH LOGINS
 // ======================================================
 exports.googleLogin = async (req, res) => {

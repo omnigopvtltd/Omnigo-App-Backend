@@ -33,6 +33,7 @@ const {
   updateVendorStatus,
   deleteVendor,
   getVendors,
+  vendorSocialLogin
 } = require("../controllers/vendorController");
 const { saveFcmToken } = require("../controllers/vendorController");
 const upload = require("../middleware/upload");
@@ -79,6 +80,7 @@ router.post(
 );
 router.post("/login", login);
 
+router.post("/social-login", vendorSocialLogin);
 router.post("/google-login", googleLogin);
 // router.post("/facebook-login", facebookLogin);
 
