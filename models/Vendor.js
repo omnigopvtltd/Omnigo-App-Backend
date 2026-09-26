@@ -26,14 +26,14 @@ const vendorSchema = new mongoose.Schema(
       trim: true,
     },
 
-    password: {
-      type: String,
-      required: true,
-    },
+    // password: {
+    //   type: String,
+    //   required: true,
+    // },
 
     businessPhone: {
       type: String,
-      required: true,
+      // required: true,
       unique: true,
       trim: true,
     },
