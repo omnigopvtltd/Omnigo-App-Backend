@@ -810,6 +810,248 @@ exports.signup = async (req, res) => {
   }
 };
 
+exports.register = async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    const {
+      // Vendor Documents & Verification
+      cnicNumber,
+      cnicFrontPicture,
+      cnicBackPicture,
+      incorporationCertificate,
+      foodSafetyLicense,
+      ntnCertificate,
+
+      // Vendor Profile Details
+      businessName,
+      businessType,
+      businessPhone,
+      businessEmail,
+      category,
+      logo,
+      coverImage,
+      description,
+      businessRegistrationNumber,
+      taxNumber,
+      foodLicenseNumber,
+
+      // Owner information
+      ownerName,
+      ownerEmail,
+      ownerPhone,
+      profilePicture,
+
+      // Payout Configuration
+      payoutBankName,
+      payoutAccountTitle,
+      payoutAccountNumber,
+      payoutPaymentMethod,
+      payoutIban,
+      payoutWalletNumber,
+
+      // Branch Details (Supports single Object or Array of Objects)
+      branchData,
+    } = req.body;
+
+    const files = req.files || {};
+    const normalizedPhone = String(businessPhone).trim();
+
+    // 1. Check existing vendor
+    // const existingVendor = await Vendor.findOne({
+    //   businessPhone: normalizedPhone,
+    // });
+    // if (existingVendor) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Phone number already registered to a vendor",
+    //   });
+    // }
+
+    // // 2. AUTO-GENERATE RANDOM PASSWORD
+    // const rawAutoPassword = generateRandomPassword(6);
+    // const hash = await bcrypt.hash(rawAutoPassword, 12);
+
+    // 3. Build vendorData Object
+    const vendorData = {
+      businessName: businessName || `Vendor_${normalizedPhone.slice(-4)}`,
+      businessPhone: normalizedPhone,
+      businessEmail: businessEmail
+        ? String(businessEmail).toLowerCase().trim()
+        : "",
+      password: hash,
+
+      isPhoneVerified: false,
+      isEmailVerified: false,
+      verificationStatus: "pending",
+      isBlocked: false,
+
+      ownerName: ownerName || "",
+      ownerPhone: ownerPhone || "",
+      ownerEmail: ownerEmail
+        ? String(ownerEmail).toLowerCase().trim()
+        : String(businessEmail).toLowerCase().trim(),
+      profilePicture: processMediaField(
+        profilePicture,
+        files.profilePicture?.[0],
+      ),
+
+      cnicNumber: cnicNumber || "",
+      cnicFrontPicture: processMediaField(
+        cnicFrontPicture,
+        files.cnicFrontPicture?.[0],
+      ),
+      cnicBackPicture: processMediaField(
+        cnicBackPicture,
+        files.cnicBackPicture?.[0],
+      ),
+
+      incorporationCertificate: processMediaField(
+        incorporationCertificate,
+        files.incorporationCertificate?.[0],
+      ),
+      foodSafetyLicense: processMediaField(
+        foodSafetyLicense,
+        files.foodSafetyLicense?.[0],
+      ),
+      ntnCertificate: processMediaField(
+        ntnCertificate,
+        files.ntnCertificate?.[0],
+      ),
+
+      businessType: businessType || "restaurant",
+      category: category || "",
+      logo: processMediaField(logo, files.logo?.[0]),
+      coverImage: processMediaField(coverImage, files.coverImage?.[0]),
+      description: description || "",
+      businessRegistrationNumber: businessRegistrationNumber || "",
+      taxNumber: taxNumber || "",
+      foodLicenseNumber: foodLicenseNumber || "",
+
+      payout: {
+        accountHolderName: payoutAccountTitle || "",
+        paymentMethod: payoutPaymentMethod || "bank",
+        bankName: payoutBankName || "",
+        accountNumber: payoutAccountNumber || "",
+        iban: payoutIban || "",
+        walletNumber: payoutWalletNumber || "",
+        isVerified: false,
+      },
+    };
+
+    // 4. Save Vendor to MongoDB
+    const vendor = await Vendor.create(vendorData);
+
+    // 5. CREATE OPERATIONAL BRANCHES (Handles Single & Multiple Branches)
+    let createdBranches = [];
+
+    if (branchData) {
+      let parsedBranches = [];
+
+      // Parse JSON string if sent via FormData
+      if (typeof branchData === "string") {
+        try {
+          parsedBranches = JSON.parse(branchData);
+        } catch (e) {
+          parsedBranches = [];
+        }
+      } else {
+        parsedBranches = branchData;
+      }
+
+      // Convert Single Branch Object to Array
+      if (!Array.isArray(parsedBranches)) {
+        parsedBranches = [parsedBranches];
+      }
+
+      // Format branches payload for insertMany
+      const branchesToInsert = parsedBranches.map((b, index) => ({
+        vendorId: vendor._id,
+        branchName:
+          b.branchName ||
+          `${vendor.businessName} ${index === 0 ? "Main Branch" : `Branch ${index + 1}`}`,
+        phone: b.phone || vendor.businessPhone,
+        address: b.address || "",
+        area: b.area || "",
+        city: b.city || "",
+        location: {
+          type: "Point",
+          coordinates: [Number(b.longitude) || 0, Number(b.latitude) || 0],
+        },
+        isActive: true,
+        isRushMode: false,
+        isOpen: true,
+      }));
+
+      // Batch Insert in DB
+      if (branchesToInsert.length > 0) {
+        createdBranches = await VendorBranch.insertMany(branchesToInsert);
+      }
+    }
+
+    // 6. REAL-TIME SOCKET EMIT & PUSH NOTIFICATIONS
+    const io = req.app.get("io");
+
+    const payloadData = {
+      vendorId: vendor._id,
+      businessName: vendor.businessName,
+      logo: vendor.logo,
+      category: vendor.category,
+      branches: createdBranches,
+    };
+
+    if (io) {
+      io.to("role:user").emit("newVendorAdded", {
+        message: "A new vendor has joined Omnigo!",
+        vendor: payloadData,
+      });
+
+      io.to("role:admin").emit("newVendorRegisteredAdmin", {
+        message: "New vendor registered and pending approval",
+        vendorId: vendor._id,
+      });
+    }
+
+    try {
+      await sendFCMNotificationToTopic({
+        topic: "users",
+        title: `New ${vendor.businessType} On Omnigo!`,
+        body: `${vendor.businessName} is now available near you. Order now!`,
+        data: { type: "NEW_VENDOR", vendorId: String(vendor._id) },
+      });
+
+      await sendFCMNotificationToTopic({
+        topic: "riders",
+        title: "New Partner Onboarded 🚀",
+        body: `${vendor.businessName} joined Omnigo. Get ready for new pickup orders!`,
+        data: { type: "NEW_VENDOR_RIDER", vendorId: String(vendor._id) },
+      });
+    } catch (notifErr) {
+      console.error("FCM Notification Error (Non-blocking):", notifErr.message);
+    }
+
+    const vendorResponse = vendor.toObject();
+    delete vendorResponse.password;
+
+    return sendVendorResponse(
+      res,
+      "Vendor register successful",
+      {
+        vendor: vendorResponse,
+        branches: createdBranches, // Array of created branches
+        tempPassword: rawAutoPassword,
+      },
+      201,
+    );
+  } catch (err) {
+    console.error("VENDOR REGISTER ERROR:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 exports.login = async (req, res) => {
   try {
     const { businessPhone, businessEmail, password } = req.body;
@@ -891,6 +1133,7 @@ exports.googleLogin = async (req, res) => {
       vendor = await Vendor.create({
         name,
         email,
+        role :"vendor",
         googleId: sub,
         isEmailVerified: true,
       });

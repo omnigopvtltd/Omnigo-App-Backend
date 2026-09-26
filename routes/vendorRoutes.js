@@ -14,6 +14,7 @@ const {
   sendOTP,
   verifyOTP,
   signup,
+  register,
   updateVendorProfile,
   vendorMenu,
   getVendorPerformance,
@@ -48,6 +49,21 @@ router.get("/categories", auth, getVendorCategories);
 
 router.post(
   "/signup",
+  // upload.fields([
+  //   { name: "logo", maxCount: 1 },
+  //   { name: "coverImage", maxCount: 1 },
+  //   { name: "profilePicture", maxCount: 1 },
+  //   { name: "cnicFrontPicture", maxCount: 1 },
+  //   { name: "cnicBackPicture", maxCount: 1 },
+  //   { name: "incorporationCertificate", maxCount: 1 },
+  //   { name: "foodSafetyLicense", maxCount: 1 },
+  //   { name: "ntnCertificate", maxCount: 1 },
+  // ]),
+  validateSignup,
+  signup,
+);
+router.post(
+  "/register",
   upload.fields([
     { name: "logo", maxCount: 1 },
     { name: "coverImage", maxCount: 1 },
@@ -59,11 +75,11 @@ router.post(
     { name: "ntnCertificate", maxCount: 1 },
   ]),
   validateSignup,
-  signup,
+  register,
 );
 router.post("/login", login);
 
-// router.post("/google-login", googleLogin);
+router.post("/google-login", googleLogin);
 // router.post("/facebook-login", facebookLogin);
 
 router.post("/send-otp", sendOTP);
