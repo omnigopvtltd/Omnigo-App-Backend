@@ -194,7 +194,7 @@ exports.completeOrderDelivery = async (req, res) => {
     const order = await Order.findOne({
       _id: req.params.id,
       $or: [{ riderId: riderId }, { driverId: riderId }],
-      status: { $in: ["on_the_way", "ongoing", "ready", "arrived_at_vendor"] },
+      status: { $in: ["on_the_way", "ongoing", "ready", "arrived_at_vendor", "assigned", "picked_up"] },
     });
 
     if (!order) {
