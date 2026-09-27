@@ -248,6 +248,81 @@ exports.getAllCampaigns = async (req, res) => {
   }
 };
 
+// Get Campaigns By Vendor (With Search, Filtering & Pagination)
+exports.getCampaignsByVendor = async (req, res) => {
+  try {
+
+    const vendorId = req.user?.id || req.user?._id || req.params?.vendorId;
+    const {
+      search,
+      isActive,
+      campaignType,
+      branchId,
+      page = 1,
+      limit = 20,
+    } = req.query;
+
+    const query = {};
+
+    if (search) {
+      query.$or = [
+        { campaignName: new RegExp(search, "i") },
+        { "offerDetails.dealTitle": new RegExp(search, "i") },
+      ];
+    }
+
+    if (isActive !== undefined) query.isActive = isActive === "true";
+    if (campaignType && campaignType !== "all")
+      query.campaignType = campaignType;
+    if (branchId) query.branchId = branchId;
+
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+    const limitNum = Math.max(parseInt(limit, 10) || 20, 1);
+    const skip = (pageNum - 1) * limitNum;
+
+    const [campaigns, total] = await Promise.all([
+      Campaign.find({query, vendorId})
+        .populate("vendorId", "businessName logo rating package")
+        .populate(
+          "branchId",
+          "branchName address area city phone isOpen isActive",
+        ) // <--- Properly populate Branch details here
+        .populate("offerDetails.freeItemId", "name price image")
+        .populate("offerDetails.comboItems", "name price image")
+        .populate("applicableCategories", "name")
+        .populate("applicableProducts", "name price image")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(), // Modifiable JS Objects for safe manipulation
+      Campaign.countDocuments(query),
+    ]);
+
+    // OPTIONAL: Fetch all branches for the unique vendors present in these campaigns
+    const vendorIds = [
+      ...new Set(
+        campaigns.map((c) => c.vendorId?._id || c.vendorId).filter(Boolean),
+      ),
+    ];
+    const vendorBranches = await VendorBranch.find({
+      vendorId: { $in: vendorIds },
+    }).lean();
+
+    return res.status(200).json({
+      success: true,
+      count: campaigns.length,
+      total,
+      page: pageNum,
+      totalPages: Math.ceil(total / limitNum) || 1,
+      campaigns,
+      vendorBranches, // Passed as a clean separate top-level key instead of array corrupting push
+    });
+  } catch (err) {
+    console.error("GET CAMPAIGNS ERROR:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 // Get Single Campaign by ID
 exports.getCampaignById = async (req, res) => {
   try {

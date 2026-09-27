@@ -29,7 +29,8 @@ const {
   updateCampaign,
   deleteCampaign,
   getCampaignFormConfig,
-  toggleCampaignAvailability
+  toggleCampaignAvailability,
+  getCampaignsByVendor
 } = require("../controllers/campaignController");
 
 
@@ -39,6 +40,7 @@ router.get("/form-config", getCampaignFormConfig);
 // Other Campaign routes
 router.post("/", createCampaign);
 router.get("/", getAllCampaigns);
+router.get("/vendor/:vendorId", auth, getCampaignsByVendor);
 router.put("/:id", updateCampaign);
 router.patch("/:id", toggleCampaignAvailability); // New route for toggling status
 router.delete("/:id", deleteCampaign);
