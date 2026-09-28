@@ -301,7 +301,7 @@ exports.validateSignup = [
   //   .withMessage("Password must be at least 6 characters"),
 ];
 
-const BACKEND_URL = "https://omnigo-app-backend-production.up.railway.app";
+const BACKEND_URL = "https://api.omnigoapp.com";
 
 // Helper Function: Local file upload ya URL string dono ko absolute backend URL me convert kar
 const processMediaField = (bodyField, fileField, existingFieldValue) => {
@@ -860,6 +860,12 @@ exports.register = async (req, res) => {
     const files = req.files || {};
     const normalizedPhone = String(businessPhone).trim();
 
+    if (cnicNumber == "") {
+      return res.status(400).json({
+        success: false,
+        message: "Cnic Number is required",
+      });
+    }
     // 1. Check existing vendor
     // const existingVendor = await Vendor.findOne({
     //   businessPhone: normalizedPhone,
@@ -1119,6 +1125,102 @@ exports.login = async (req, res) => {
 // VENDOR GOOGLE SOCIAL LOGIN
 // Dedicated for Vendor Model and Separate Collection
 // ======================================================
+// exports.vendorSocialLogin = async (req, res) => {
+//   try {
+//     const { idToken } = req.body;
+
+//     if (!idToken) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "ID token is required",
+//       });
+//     }
+
+//     // 1. Verify Google ID Token
+//     const ticket = await googleClient.verifyIdToken({
+//       idToken: idToken,
+//       // audience: process.env.GOOGLE_CLIENT_ID,
+//       audience: [
+//     process.env.GOOGLE_CLIENT_ID,
+//     process.env.GOOGLE_WEB_CLIENT_ID,
+//     process.env.GOOGLE_ANDROID_CLIENT_ID,
+//   ].filter(Boolean),
+//     });
+
+//     const payload = ticket.getPayload();
+//     const { sub, email, name, picture } = payload;
+
+//     if (!email) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Email permission is required from Google account",
+//       });
+//     }
+
+//     const normalizedEmail = email.toLowerCase().trim();
+
+//     // 2. Search Vendor in Vendor Collection
+//     let vendor = await Vendor.findOne({ businessEmail: normalizedEmail });
+
+//     if (!vendor) {
+//       // Create New Vendor Entry with Required Schema Fallbacks
+//       const newVendorData = {
+//         businessName: name || "New Vendor Business",
+//         businessEmail: normalizedEmail,
+//         ownerName: name || "",
+//         ownerEmail: normalizedEmail,
+//         googleId: sub,
+//         profilePicture: picture || "",
+//         isEmailVerified: true,
+
+//         // Schema Defaults for Required/Non-nullable fields
+//         password: "", // Social login vendors don't use raw password
+//         businessPhone: "", // Optional or can be updated later in profile completion
+//         cnicNumber: "PENDING_VERIFICATION", // Schema fallback for required cnicNumber
+//       };
+
+//       vendor = await Vendor.create(newVendorData);
+//     } else {
+//       // Existing Vendor - Link Google ID & update login date
+//       if (!vendor.googleId) {
+//         vendor.googleId = sub;
+//       }
+//       vendor.lastLogin = new Date();
+//       await vendor.save();
+//     }
+
+//     // Check if vendor is blocked by Admin
+//     if (vendor.isBlocked) {
+//       return res.status(403).json({
+//         success: false,
+//         message: "Your vendor account has been blocked. Please contact support.",
+//       });
+//     }
+
+//     // 3. Generate Auth JWT Token
+//     const token = generateToken(vendor);
+
+//     const vendorResponse = vendor.toObject();
+//     delete vendorResponse.password;
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Vendor Google login successful",
+//       token,
+//       data: vendorResponse,
+//     });
+//   } catch (err) {
+//     console.error("VENDOR SOCIAL LOGIN ERROR:", err);
+//     return res.status(401).json({
+//       success: false,
+//       message: "Invalid or expired Google token",
+//       error: err.message,
+//     });
+//   }
+// };
+// ======================================================
+// VENDOR GOOGLE SOCIAL LOGIN (FIXED)
+// ======================================================
 exports.vendorSocialLogin = async (req, res) => {
   try {
     const { idToken } = req.body;
@@ -1131,12 +1233,24 @@ exports.vendorSocialLogin = async (req, res) => {
     }
 
     // 1. Verify Google ID Token
-    const ticket = await googleClient.verifyIdToken({
-      idToken: idToken,
-      audience: process.env.GOOGLE_CLIENT_ID,
-    });
+    let payload;
+    try {
+      const ticket = await googleClient.verifyIdToken({
+        idToken: idToken,
+        audience: process.env.GOOGLE_CLIENT_ID,
+      });
+      payload = ticket.getPayload();
+    } catch (googleErr) {
+      console.error("Google Token Verification Failed:", googleErr.message);
+      return res.status(401).json({
+        success: false,
+        message: "Invalid or expired Google token",
+        error: googleErr.message,
+      });
+    }
 
-    const payload = ticket.getPayload();
+    console.log(payload);
+
     const { sub, email, name, picture } = payload;
 
     if (!email) {
@@ -1153,6 +1267,8 @@ exports.vendorSocialLogin = async (req, res) => {
 
     if (!vendor) {
       // Create New Vendor Entry with Required Schema Fallbacks
+      const dummyPhone = `+92${Math.floor(1000000000 + Math.random() * 9000000000)}`;
+
       const newVendorData = {
         businessName: name || "New Vendor Business",
         businessEmail: normalizedEmail,
@@ -1161,11 +1277,11 @@ exports.vendorSocialLogin = async (req, res) => {
         googleId: sub,
         profilePicture: picture || "",
         isEmailVerified: true,
-        
-        // Schema Defaults for Required/Non-nullable fields
-        password: "", // Social login vendors don't use raw password
-        businessPhone: "", // Optional or can be updated later in profile completion
-        cnicNumber: "PENDING_VERIFICATION", // Schema fallback for required cnicNumber
+
+        // Dummy values to satisfy Mongoose 'required' & 'unique' schema
+        password: "SOCIAL_LOGIN_NOPASSWORD",
+        businessPhone: dummyPhone, // Empty string throws unique index error if duplicated
+        cnicNumber: `PENDING_${Date.now()}`,
       };
 
       vendor = await Vendor.create(newVendorData);
@@ -1178,20 +1294,24 @@ exports.vendorSocialLogin = async (req, res) => {
       await vendor.save();
     }
 
-    // Check if vendor is blocked by Admin
+    // Check if vendor is blocked
     if (vendor.isBlocked) {
       return res.status(403).json({
         success: false,
-        message: "Your vendor account has been blocked. Please contact support.",
+        message:
+          "Your vendor account has been blocked. Please contact support.",
       });
     }
 
+    console.log(vendor);
+
     // 3. Generate Auth JWT Token
     const token = generateToken(vendor);
-
+    console.log(token);
     const vendorResponse = vendor.toObject();
     delete vendorResponse.password;
 
+    console.log(vendorResponse);
     return res.status(200).json({
       success: true,
       message: "Vendor Google login successful",
@@ -1199,10 +1319,10 @@ exports.vendorSocialLogin = async (req, res) => {
       data: vendorResponse,
     });
   } catch (err) {
-    console.error("VENDOR SOCIAL LOGIN ERROR:", err);
-    return res.status(401).json({
+    console.error("VENDOR DB/INTERNAL ERROR:", err);
+    return res.status(500).json({
       success: false,
-      message: "Invalid or expired Google token",
+      message: "Server error during social login",
       error: err.message,
     });
   }
@@ -1226,7 +1346,7 @@ exports.googleLogin = async (req, res) => {
       vendor = await Vendor.create({
         name,
         email,
-        role :"vendor",
+        role: "vendor",
         googleId: sub,
         isEmailVerified: true,
       });
@@ -1465,15 +1585,18 @@ exports.updateVendorProfile = async (req, res) => {
 
     // 2. Business Details Update
     vendor.businessName = storeName || businessName || vendor.businessName;
-    vendor.description = businessDescription || description || vendor.description;
+    vendor.description =
+      businessDescription || description || vendor.description;
 
-    if (businessEmail) vendor.businessEmail = String(businessEmail).toLowerCase().trim();
+    if (businessEmail)
+      vendor.businessEmail = String(businessEmail).toLowerCase().trim();
     if (businessPhone) vendor.businessPhone = String(businessPhone).trim();
 
     if (businessType) vendor.businessType = businessType;
     if (category) vendor.category = category;
 
-    if (businessRegistrationNumber) vendor.businessRegistrationNumber = businessRegistrationNumber;
+    if (businessRegistrationNumber)
+      vendor.businessRegistrationNumber = businessRegistrationNumber;
     if (taxNumber) vendor.taxNumber = taxNumber;
     if (foodLicenseNumber) vendor.foodLicenseNumber = foodLicenseNumber;
 
@@ -1524,22 +1647,56 @@ exports.updateVendorProfile = async (req, res) => {
     if (ownerEmail) vendor.ownerEmail = String(ownerEmail).toLowerCase().trim();
 
     // 5. Media Files Processing (Logo, Cover, CNIC, Licenses)
-    vendor.profilePicture = processMediaField(profilePicture, files.profilePicture?.[0], vendor.profilePicture);
-    vendor.logo = processMediaField(logoImage || logo, files.logoImage?.[0] || files.logo?.[0], vendor.logo);
-    vendor.coverImage = processMediaField(bannerImage || coverImage, files.bannerImage?.[0] || files.coverImage?.[0], vendor.coverImage);
+    vendor.profilePicture = processMediaField(
+      profilePicture,
+      files.profilePicture?.[0],
+      vendor.profilePicture,
+    );
+    vendor.logo = processMediaField(
+      logoImage || logo,
+      files.logoImage?.[0] || files.logo?.[0],
+      vendor.logo,
+    );
+    vendor.coverImage = processMediaField(
+      bannerImage || coverImage,
+      files.bannerImage?.[0] || files.coverImage?.[0],
+      vendor.coverImage,
+    );
 
     vendor.cnicNumber = cnicNumber || vendor.cnicNumber || "";
-    vendor.cnicFrontPicture = processMediaField(cnicFrontPicture, files.cnicFrontPicture?.[0], vendor.cnicFrontPicture);
-    vendor.cnicBackPicture = processMediaField(cnicBackPicture, files.cnicBackPicture?.[0], vendor.cnicBackPicture);
+    vendor.cnicFrontPicture = processMediaField(
+      cnicFrontPicture,
+      files.cnicFrontPicture?.[0],
+      vendor.cnicFrontPicture,
+    );
+    vendor.cnicBackPicture = processMediaField(
+      cnicBackPicture,
+      files.cnicBackPicture?.[0],
+      vendor.cnicBackPicture,
+    );
 
-    vendor.incorporationCertificate = processMediaField(incorporationCertificate, files.incorporationCertificate?.[0], vendor.incorporationCertificate);
-    vendor.foodSafetyLicense = processMediaField(foodSafetyLicense, files.foodSafetyLicense?.[0], vendor.foodSafetyLicense);
-    vendor.ntnCertificate = processMediaField(ntnCertificate, files.ntnCertificate?.[0], vendor.ntnCertificate);
+    vendor.incorporationCertificate = processMediaField(
+      incorporationCertificate,
+      files.incorporationCertificate?.[0],
+      vendor.incorporationCertificate,
+    );
+    vendor.foodSafetyLicense = processMediaField(
+      foodSafetyLicense,
+      files.foodSafetyLicense?.[0],
+      vendor.foodSafetyLicense,
+    );
+    vendor.ntnCertificate = processMediaField(
+      ntnCertificate,
+      files.ntnCertificate?.[0],
+      vendor.ntnCertificate,
+    );
 
     // 6. Payout Info
     vendor.payout = {
-      accountHolderName: payoutAccountTitle || vendor.payout?.accountHolderName || "",
-      paymentMethod: payoutPaymentMethod || vendor.payout?.paymentMethod || "bank",
+      accountHolderName:
+        payoutAccountTitle || vendor.payout?.accountHolderName || "",
+      paymentMethod:
+        payoutPaymentMethod || vendor.payout?.paymentMethod || "bank",
       bankName: payoutBankName || vendor.payout?.bankName || "",
       accountNumber: payoutAccountNumber || vendor.payout?.accountNumber || "",
       iban: payoutIban || vendor.payout?.iban || "",
@@ -1553,7 +1710,8 @@ exports.updateVendorProfile = async (req, res) => {
     // 7. BRANCHES PROCESSING (Duplicates & ID Conflict Fix)
     let parsedBranches = [];
     if (branchData) {
-      const rawData = typeof branchData === "string" ? JSON.parse(branchData) : branchData;
+      const rawData =
+        typeof branchData === "string" ? JSON.parse(branchData) : branchData;
       parsedBranches = Array.isArray(rawData) ? rawData : [rawData];
     }
 
@@ -1562,9 +1720,12 @@ exports.updateVendorProfile = async (req, res) => {
     if (parsedBranches.length > 0) {
       updatedBranches = await Promise.all(
         parsedBranches.map(async (branch) => {
-          const targetBranchName = branch.branchName || `${vendor.businessName} Branch`;
+          const targetBranchName =
+            branch.branchName || `${vendor.businessName} Branch`;
           const targetBranchPhone = branch.phone || vendor.businessPhone;
-          const branchOpeningHours = formatOpeningHours(branch.openingHours || branch.storeHours) || globalOpeningHours;
+          const branchOpeningHours =
+            formatOpeningHours(branch.openingHours || branch.storeHours) ||
+            globalOpeningHours;
 
           const updatePayload = {
             vendorId: vendor._id,
@@ -1583,7 +1744,10 @@ exports.updateVendorProfile = async (req, res) => {
           if (branch.longitude !== undefined && branch.latitude !== undefined) {
             updatePayload.location = {
               type: "Point",
-              coordinates: [Number(branch.longitude) || 0, Number(branch.latitude) || 0],
+              coordinates: [
+                Number(branch.longitude) || 0,
+                Number(branch.latitude) || 0,
+              ],
             };
           }
 
@@ -1591,16 +1755,20 @@ exports.updateVendorProfile = async (req, res) => {
             updatePayload.openingHours = branchOpeningHours;
           }
 
-          const hasValidId = branch._id && mongoose.Types.ObjectId.isValid(branch._id);
+          const hasValidId =
+            branch._id && mongoose.Types.ObjectId.isValid(branch._id);
 
           if (hasValidId) {
             // EXPLICIT UPDATE: Duplicate key error bachane ke liye pehle ID check karke direct update
-            const existingBranch = await VendorBranch.findOne({ _id: branch._id, vendorId: vendor._id });
+            const existingBranch = await VendorBranch.findOne({
+              _id: branch._id,
+              vendorId: vendor._id,
+            });
             if (existingBranch) {
               return await VendorBranch.findByIdAndUpdate(
                 branch._id,
                 { $set: updatePayload },
-                { new: true }
+                { new: true },
               );
             }
           }
@@ -1609,9 +1777,9 @@ exports.updateVendorProfile = async (req, res) => {
           return await VendorBranch.findOneAndUpdate(
             { vendorId: vendor._id, branchName: targetBranchName },
             { $set: updatePayload },
-            { new: true, upsert: true, setDefaultsOnInsert: true }
+            { new: true, upsert: true, setDefaultsOnInsert: true },
           );
-        })
+        }),
       );
     }
 
@@ -1647,7 +1815,7 @@ exports.updateVendorProfile = async (req, res) => {
 };
 
 // =======================
-// UPDATE VENDOR 
+// UPDATE VENDOR
 // =======================
 exports.updateVendor = async (req, res) => {
   try {
@@ -1709,15 +1877,18 @@ exports.updateVendor = async (req, res) => {
 
     // 2. Business Details Update
     vendor.businessName = storeName || businessName || vendor.businessName;
-    vendor.description = businessDescription || description || vendor.description;
+    vendor.description =
+      businessDescription || description || vendor.description;
 
-    if (businessEmail) vendor.businessEmail = String(businessEmail).toLowerCase().trim();
+    if (businessEmail)
+      vendor.businessEmail = String(businessEmail).toLowerCase().trim();
     if (businessPhone) vendor.businessPhone = String(businessPhone).trim();
 
     if (businessType) vendor.businessType = businessType;
     if (category) vendor.category = category;
 
-    if (businessRegistrationNumber) vendor.businessRegistrationNumber = businessRegistrationNumber;
+    if (businessRegistrationNumber)
+      vendor.businessRegistrationNumber = businessRegistrationNumber;
     if (taxNumber) vendor.taxNumber = taxNumber;
     if (foodLicenseNumber) vendor.foodLicenseNumber = foodLicenseNumber;
 
@@ -1768,22 +1939,56 @@ exports.updateVendor = async (req, res) => {
     if (ownerEmail) vendor.ownerEmail = String(ownerEmail).toLowerCase().trim();
 
     // 5. Media Files Processing (Logo, Cover, CNIC, Licenses)
-    vendor.profilePicture = processMediaField(profilePicture, files.profilePicture?.[0], vendor.profilePicture);
-    vendor.logo = processMediaField(logoImage || logo, files.logoImage?.[0] || files.logo?.[0], vendor.logo);
-    vendor.coverImage = processMediaField(bannerImage || coverImage, files.bannerImage?.[0] || files.coverImage?.[0], vendor.coverImage);
+    vendor.profilePicture = processMediaField(
+      profilePicture,
+      files.profilePicture?.[0],
+      vendor.profilePicture,
+    );
+    vendor.logo = processMediaField(
+      logoImage || logo,
+      files.logoImage?.[0] || files.logo?.[0],
+      vendor.logo,
+    );
+    vendor.coverImage = processMediaField(
+      bannerImage || coverImage,
+      files.bannerImage?.[0] || files.coverImage?.[0],
+      vendor.coverImage,
+    );
 
     vendor.cnicNumber = cnicNumber || vendor.cnicNumber || "";
-    vendor.cnicFrontPicture = processMediaField(cnicFrontPicture, files.cnicFrontPicture?.[0], vendor.cnicFrontPicture);
-    vendor.cnicBackPicture = processMediaField(cnicBackPicture, files.cnicBackPicture?.[0], vendor.cnicBackPicture);
+    vendor.cnicFrontPicture = processMediaField(
+      cnicFrontPicture,
+      files.cnicFrontPicture?.[0],
+      vendor.cnicFrontPicture,
+    );
+    vendor.cnicBackPicture = processMediaField(
+      cnicBackPicture,
+      files.cnicBackPicture?.[0],
+      vendor.cnicBackPicture,
+    );
 
-    vendor.incorporationCertificate = processMediaField(incorporationCertificate, files.incorporationCertificate?.[0], vendor.incorporationCertificate);
-    vendor.foodSafetyLicense = processMediaField(foodSafetyLicense, files.foodSafetyLicense?.[0], vendor.foodSafetyLicense);
-    vendor.ntnCertificate = processMediaField(ntnCertificate, files.ntnCertificate?.[0], vendor.ntnCertificate);
+    vendor.incorporationCertificate = processMediaField(
+      incorporationCertificate,
+      files.incorporationCertificate?.[0],
+      vendor.incorporationCertificate,
+    );
+    vendor.foodSafetyLicense = processMediaField(
+      foodSafetyLicense,
+      files.foodSafetyLicense?.[0],
+      vendor.foodSafetyLicense,
+    );
+    vendor.ntnCertificate = processMediaField(
+      ntnCertificate,
+      files.ntnCertificate?.[0],
+      vendor.ntnCertificate,
+    );
 
     // 6. Payout Info
     vendor.payout = {
-      accountHolderName: payoutAccountTitle || vendor.payout?.accountHolderName || "",
-      paymentMethod: payoutPaymentMethod || vendor.payout?.paymentMethod || "bank",
+      accountHolderName:
+        payoutAccountTitle || vendor.payout?.accountHolderName || "",
+      paymentMethod:
+        payoutPaymentMethod || vendor.payout?.paymentMethod || "bank",
       bankName: payoutBankName || vendor.payout?.bankName || "",
       accountNumber: payoutAccountNumber || vendor.payout?.accountNumber || "",
       iban: payoutIban || vendor.payout?.iban || "",
@@ -1797,7 +2002,8 @@ exports.updateVendor = async (req, res) => {
     // 7. BRANCHES PROCESSING (Duplicates & ID Conflict Fix)
     let parsedBranches = [];
     if (branchData) {
-      const rawData = typeof branchData === "string" ? JSON.parse(branchData) : branchData;
+      const rawData =
+        typeof branchData === "string" ? JSON.parse(branchData) : branchData;
       parsedBranches = Array.isArray(rawData) ? rawData : [rawData];
     }
 
@@ -1806,9 +2012,12 @@ exports.updateVendor = async (req, res) => {
     if (parsedBranches.length > 0) {
       updatedBranches = await Promise.all(
         parsedBranches.map(async (branch) => {
-          const targetBranchName = branch.branchName || `${vendor.businessName} Branch`;
+          const targetBranchName =
+            branch.branchName || `${vendor.businessName} Branch`;
           const targetBranchPhone = branch.phone || vendor.businessPhone;
-          const branchOpeningHours = formatOpeningHours(branch.openingHours || branch.storeHours) || globalOpeningHours;
+          const branchOpeningHours =
+            formatOpeningHours(branch.openingHours || branch.storeHours) ||
+            globalOpeningHours;
 
           const updatePayload = {
             vendorId: vendor._id,
@@ -1827,7 +2036,10 @@ exports.updateVendor = async (req, res) => {
           if (branch.longitude !== undefined && branch.latitude !== undefined) {
             updatePayload.location = {
               type: "Point",
-              coordinates: [Number(branch.longitude) || 0, Number(branch.latitude) || 0],
+              coordinates: [
+                Number(branch.longitude) || 0,
+                Number(branch.latitude) || 0,
+              ],
             };
           }
 
@@ -1835,16 +2047,20 @@ exports.updateVendor = async (req, res) => {
             updatePayload.openingHours = branchOpeningHours;
           }
 
-          const hasValidId = branch._id && mongoose.Types.ObjectId.isValid(branch._id);
+          const hasValidId =
+            branch._id && mongoose.Types.ObjectId.isValid(branch._id);
 
           if (hasValidId) {
             // EXPLICIT UPDATE: Duplicate key error bachane ke liye pehle ID check karke direct update
-            const existingBranch = await VendorBranch.findOne({ _id: branch._id, vendorId: vendor._id });
+            const existingBranch = await VendorBranch.findOne({
+              _id: branch._id,
+              vendorId: vendor._id,
+            });
             if (existingBranch) {
               return await VendorBranch.findByIdAndUpdate(
                 branch._id,
                 { $set: updatePayload },
-                { new: true }
+                { new: true },
               );
             }
           }
@@ -1853,9 +2069,9 @@ exports.updateVendor = async (req, res) => {
           return await VendorBranch.findOneAndUpdate(
             { vendorId: vendor._id, branchName: targetBranchName },
             { $set: updatePayload },
-            { new: true, upsert: true, setDefaultsOnInsert: true }
+            { new: true, upsert: true, setDefaultsOnInsert: true },
           );
-        })
+        }),
       );
     }
 
@@ -1897,7 +2113,13 @@ exports.updateVendorStatus = async (req, res) => {
   try {
     const { status } = req.body;
     console.log("Status", status);
-    const allowedStatuses = ["draft", "pending", "approved", "rejected", "suspended"];
+    const allowedStatuses = [
+      "draft",
+      "pending",
+      "approved",
+      "rejected",
+      "suspended",
+    ];
 
     if (!allowedStatuses.includes(status)) {
       return res.status(400).json({
@@ -2010,7 +2232,6 @@ exports.getVendors = async (req, res) => {
   }
 };
 
-
 // =======================
 // Get All Vendors
 // =======================
@@ -2042,7 +2263,9 @@ exports.getAllVendors = async (req, res) => {
 
     // Default: Fetches all vendors matching filters (or all vendors if filters are empty)
     const vendors = await Vendor.find(filter)
-      .select("businessName logo coverImage businessType rating businessDesicription description")
+      .select(
+        "businessName logo coverImage businessType rating businessDesicription description",
+      )
       .sort({ createdAt: -1 });
 
     res.json({
@@ -2386,7 +2609,7 @@ exports.getVendorDashboardOverview = async (req, res) => {
 
     // 1. Fetch Vendor Profile Info
     const vendor = await Vendor.findById(vendorId).select(
-      "businessName logo rating"
+      "businessName logo rating",
     );
 
     if (!vendor) {
@@ -2403,7 +2626,7 @@ exports.getVendorDashboardOverview = async (req, res) => {
 
     if (!vendorBranch) {
       vendorBranch = await VendorBranch.findById(vendorId).select(
-        "isRushMode openingHours"
+        "isRushMode openingHours",
       );
     }
 
@@ -2577,7 +2800,6 @@ exports.getVendorDashboardOverview = async (req, res) => {
     });
   }
 };
-
 
 // ==========================================
 // Vendor Performance

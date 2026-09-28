@@ -74,7 +74,8 @@ const vendorSchema = new mongoose.Schema(
 
     cnicNumber: {
       type: String,
-      required: true,
+      // required: true,
+      unique: true,
       trim: true,
     },
 
