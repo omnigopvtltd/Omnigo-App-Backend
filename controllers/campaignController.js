@@ -251,8 +251,15 @@ exports.getAllCampaigns = async (req, res) => {
 // Get Campaigns By Vendor (With Search, Filtering & Pagination)
 exports.getCampaignsByVendor = async (req, res) => {
   try {
-
     const vendorId = req.user?.id || req.user?._id || req.params?.vendorId;
+
+    if (!vendorId) {
+      return res.status(400).json({
+        success: false,
+        message: "Vendor ID is required",
+      });
+    }
+
     const {
       search,
       isActive,
@@ -262,31 +269,34 @@ exports.getCampaignsByVendor = async (req, res) => {
       limit = 20,
     } = req.query;
 
-    const query = {};
+    // 1. Build Single Unified Filter Query Object
+    const filter = { vendorId };
 
     if (search) {
-      query.$or = [
+      filter.$or = [
         { campaignName: new RegExp(search, "i") },
         { "offerDetails.dealTitle": new RegExp(search, "i") },
       ];
     }
 
-    if (isActive !== undefined) query.isActive = isActive === "true";
-    if (campaignType && campaignType !== "all")
-      query.campaignType = campaignType;
-    if (branchId) query.branchId = branchId;
+    if (isActive !== undefined) filter.isActive = isActive === "true";
+    if (campaignType && campaignType !== "all") {
+      filter.campaignType = campaignType;
+    }
+    if (branchId) filter.branchId = branchId;
 
     const pageNum = Math.max(parseInt(page, 10) || 1, 1);
     const limitNum = Math.max(parseInt(limit, 10) || 20, 1);
     const skip = (pageNum - 1) * limitNum;
 
+    // 2. Fetch Filtered Campaigns & Accurate Total Count
     const [campaigns, total] = await Promise.all([
-      Campaign.find({query, vendorId})
+      Campaign.find(filter) // <--- Correct filter pass query
         .populate("vendorId", "businessName logo rating package")
         .populate(
           "branchId",
-          "branchName address area city phone isOpen isActive",
-        ) // <--- Properly populate Branch details here
+          "branchName address area city phone isOpen isActive"
+        )
         .populate("offerDetails.freeItemId", "name price image")
         .populate("offerDetails.comboItems", "name price image")
         .populate("applicableCategories", "name")
@@ -294,19 +304,12 @@ exports.getCampaignsByVendor = async (req, res) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limitNum)
-        .lean(), // Modifiable JS Objects for safe manipulation
-      Campaign.countDocuments(query),
+        .lean(),
+      Campaign.countDocuments(filter), // <--- Correct total count for pagination
     ]);
 
-    // OPTIONAL: Fetch all branches for the unique vendors present in these campaigns
-    const vendorIds = [
-      ...new Set(
-        campaigns.map((c) => c.vendorId?._id || c.vendorId).filter(Boolean),
-      ),
-    ];
-    const vendorBranches = await VendorBranch.find({
-      vendorId: { $in: vendorIds },
-    }).lean();
+    // 3. Fetch Vendor Branches
+    const vendorBranches = await VendorBranch.find({ vendorId }).lean();
 
     return res.status(200).json({
       success: true,
@@ -315,7 +318,7 @@ exports.getCampaignsByVendor = async (req, res) => {
       page: pageNum,
       totalPages: Math.ceil(total / limitNum) || 1,
       campaigns,
-      vendorBranches, // Passed as a clean separate top-level key instead of array corrupting push
+      vendorBranches,
     });
   } catch (err) {
     console.error("GET CAMPAIGNS ERROR:", err);
