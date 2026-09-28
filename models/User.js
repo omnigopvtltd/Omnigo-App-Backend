@@ -57,12 +57,20 @@ const userSchema = new mongoose.Schema(
     addresses: [
       {
         phone: { type: String },
+        mode: {type: String, enum: ["manual", "auto"], default: "auto"},
         address: { type: String, required: true },
         city: { type: String, required: true },
+        zone: { type: String, required: true },
+        area: { type: String, required: true },
         zipCode: { type: String, required: true },
         country: { type: String, required: true },
+        coordinates: {
+          type: [Number], // [longitude, latitude]
+          default: [0, 0],
+        },
         isDefault: { type: Boolean, default: false },
         isSave: { type: Boolean, default: false },
+        isEnabled:{ type: Boolean, default: true },
       },
     ],
 
