@@ -1702,9 +1702,14 @@ exports.checkServiceability = async (req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 };
+
+
+// ==========================================
+// SAVE MANUAL LOCATION
+// ==========================================
 exports.saveManualLocation = async (req, res) => {
   try {
-    const { userId, zone, area, address } = req.body;
+    const { userId, zone, area, address, zipCode, phone } = req.body;
 
     const user = await User.findById(userId);
     if (!user) {
@@ -1714,7 +1719,6 @@ exports.saveManualLocation = async (req, res) => {
     }
 
     const zoneData = await Zone.findOne({ zone });
-
     if (!zoneData || !zoneData.areas.includes(area)) {
       return res.status(400).json({
         success: false,
@@ -1722,36 +1726,50 @@ exports.saveManualLocation = async (req, res) => {
       });
     }
 
-    user.location = {
-      _id: new mongoose.Types.ObjectId(),
+    const newAddress = {
+      phone: phone || "",
       mode: "manual",
+      address,
+      city: "Chakwal",
       zone,
       area,
-      address,
-      coordinates: { lat: null, lng: null },
-      isEnabled: true,
+      zipCode: zipCode || "48800", // Fallback value taaki required check fail na ho
+      country: "Pakistan",
+      coordinates: [0, 0], // Schema expects Array of Numbers [lng, lat]
+      isDefault: user.addresses.length === 0, // Pehla address ho toh automatically default
+      isSave: true,
+      isEnabled: false,
     };
 
+    user.addresses.push(newAddress);
     await user.save();
 
-    return res.json({
+    return res.status(200).json({
       success: true,
-      message: "Location saved",
-      location: user.location,
+      message: "Location saved successfully",
+      location: user.addresses[user.addresses.length - 1],
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
 };
 
+// ==========================================
+// SAVE AUTO LOCATION
+// ==========================================
 exports.saveAutoLocation = async (req, res) => {
   try {
-    const { userId, zone, area, lat, lng, address } = req.body;
+    // Notice: lang ko handle kiya (Coordinates GeoJSON format: [longitude, latitude])
+    const { userId, zone, area, lat, lang, lng, address, zipCode, phone } = req.body;
 
     const user = await User.findById(userId);
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
 
     const zoneData = await Zone.findOne({ zone });
-
     if (!zoneData || !zoneData.areas.includes(area)) {
       return res.status(400).json({
         success: false,
@@ -1759,22 +1777,32 @@ exports.saveAutoLocation = async (req, res) => {
       });
     }
 
-    user.location = {
-      _id: new mongoose.Types.ObjectId(),
+    // Longitude key check (lang ya lng dono handle kiye hain)
+    const longitude = Number(lng || lang) || 0;
+    const latitude = Number(lat) || 0;
+
+    const newAddress = {
+      phone: phone || "",
       mode: "auto",
+      address,
+      city: "Chakwal",
       zone,
       area,
-      address,
-      coordinates: { lat: Number(lat), lng: Number(lng) },
+      zipCode: zipCode || "48800", // Required field fallback
+      country: "Pakistan",
+      coordinates: [longitude, latitude], // Array format: [lng, lat]
+      isDefault: user.addresses.length === 0,
+      isSave: true,
       isEnabled: true,
     };
 
+    user.addresses.push(newAddress);
     await user.save();
 
-    return res.json({
+    return res.status(200).json({
       success: true,
-      message: "Auto location saved",
-      location: user.location,
+      message: "Auto location saved successfully",
+      location: user.addresses[user.addresses.length - 1],
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
