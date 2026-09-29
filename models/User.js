@@ -58,12 +58,12 @@ const userSchema = new mongoose.Schema(
       {
         phone: { type: String },
         mode: {type: String, enum: ["manual", "auto"], default: "auto"},
-        address: { type: String, required: true },
-        city: { type: String, required: true },
-        zone: { type: String, required: true },
-        area: { type: String, required: true },
-        zipCode: { type: String, required: true },
-        country: { type: String, required: true },
+        address: { type: String },
+        city: { type: String },
+        zone: { type: String },
+        area: { type: String },
+        zipCode: { type: String },
+        country: { type: String },
         coordinates: {
           type: [Number], // [longitude, latitude]
           default: [0, 0],
@@ -79,7 +79,7 @@ const userSchema = new mongoose.Schema(
       categories: {
         type: [
           {
-            name: { type: String, required: true },
+            name: { type: String },
             isActive: { type: Boolean, default: false },
           },
         ],

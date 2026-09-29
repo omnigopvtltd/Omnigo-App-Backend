@@ -9,7 +9,7 @@ const vendorSchema = new mongoose.Schema(
 
     businessName: {
       type: String,
-      required: true,
+      // required: true,
       trim: true,
     },
 
@@ -128,7 +128,7 @@ const vendorSchema = new mongoose.Schema(
       //   "cafe",
       //   "other",
       // ],
-      required: true,
+      // required: true,
       default: "restaurant",
     },
 
