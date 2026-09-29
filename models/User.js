@@ -43,7 +43,7 @@ const userSchema = new mongoose.Schema(
     facebookId: { type: String, default: null },
 
     // VERIFICATION
-    isPhoneVerified: { type: Boolean, default: false },
+    isPhoneVerified: { type: Boolean, default: true },
     isEmailVerified: { type: Boolean, default: true },
     isBlocked: { type: Boolean, default: false },
     lastLogin: { type: Date, default: null },

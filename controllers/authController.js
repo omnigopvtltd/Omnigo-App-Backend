@@ -774,9 +774,13 @@ exports.socialLogin = async (req, res) => {
 
     if (provider === "facebook") {
   // firebase-admin (admin.initializeApp pehle kar lein)
-  const decoded = await admin.auth().verifyIdToken(idToken);
-  sub = decoded.uid;
-  ({ email, name, picture } = decoded);
+  // const decoded = await admin.auth().verifyIdToken(idToken);
+  // sub = decoded.uid;
+   const response = await axios.get(
+      `https://graph.facebook.com/me?fields=id,name,email&access_token=${idToken}`,
+    );
+  // ({ email, name, picture } = decoded);
+   ({ id, name, email, picture } = response.data);
 } else {
   const ticket = await googleClient.verifyIdToken({
     idToken,
@@ -823,7 +827,7 @@ exports.socialLogin = async (req, res) => {
         email: normalizedEmail,
         role: role,
         googleId: sub,
-        profileImage: picture || "",
+        profilePicture: picture || "",
         isEmailVerified: true,
         phone: phone ? String(phone).trim() : "",
       };
