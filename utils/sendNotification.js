@@ -55,7 +55,7 @@ const admin = require("firebase-admin");
 // const Notification = require("../models/Notification");
 const User = require("../models/User");
 
-const sendNotification = async ({ userId, orderId = null, title, message, type = "order_placed", extraData = {} }) => {
+exports.sendNotification = async ({ userId, orderId = null, title, message, type = "order_placed", extraData = {} }) => {
   try {
     // 1. User ka FCM Token Database se nikaalein
     const user = await User.findById(userId);
@@ -110,5 +110,98 @@ const sendNotification = async ({ userId, orderId = null, title, message, type =
   }
 };
 
+/**
+ * Send Chat Notification via Firebase FCM
+ */
+exports.sendChatNotification = async ({ receiverId, senderId, senderName, text, conversationId }) => {
+  try {
+    const User = require("../models/User");
+    const user = await User.findById(receiverId).select("fcmToken");
 
-module.exports = { sendNotification };
+    if (!user || !user.fcmToken) {
+      console.log(`[FCM Skip]: No FCM Token found for Receiver: ${receiverId}`);
+      return;
+    }
+
+    const payload = {
+      token: user.fcmToken,
+      notification: {
+        title: senderName || "New Message Received",
+        body: text || "Sent an attachment 📎",
+      },
+      data: {
+        click_action: "FLUTTER_NOTIFICATION_CLICK",
+        type: "chat",
+        conversationId: String(conversationId),
+        senderId: String(senderId),
+      },
+      android: { priority: "high" },
+      apns: { payload: { aps: { sound: "default" } } },
+    };
+
+    const response = await admin.messaging().send(payload);
+    console.log("FCM Chat Notification Sent Successfully:", response);
+    return response;
+  } catch (error) {
+    console.error("FCM Notification Error:", error.message);
+  }
+};
+
+
+
+
+// const admin = require("../config/firebase");
+
+// /**
+//  * Send Notification to Single Device or Multiple Devices
+//  * @param {string|string[]} fcmTokens - Single token string OR array of tokens
+//  * @param {string} title - Notification Header Title
+//  * @param {string} body - Main Notification Message Text
+//  * @param {object} customData - Extra payload data (e.g. { type: 'chat', senderId: '123' })
+//  */
+// exports.sendNotification = async (fcmTokens, title, body, customData = {}) => {
+//   try {
+//     if (!fcmTokens || (Array.isArray(fcmTokens) && fcmTokens.length === 0)) {
+//       console.warn("FCM Notification Skipped: No FCM Token provided.");
+//       return false;
+//     }
+
+//     // Convert all custom data values to Strings (Firebase FCM Requirement)
+//     const stringifiedData = {};
+//     for (const key in customData) {
+//       stringifiedData[key] = String(customData[key]);
+//     }
+
+//     // MULTICAST (Array of tokens)
+//     if (Array.isArray(fcmTokens)) {
+//       const validTokens = fcmTokens.filter(Boolean);
+//       if (validTokens.length === 0) return false;
+
+//       const message = {
+//         tokens: validTokens,
+//         notification: { title, body },
+//         data: stringifiedData,
+//       };
+
+//       const response = await admin.messaging().sendEachForMulticast(message);
+//       console.log(`FCM Multicast Sent: ${response.successCount} successful, ${response.failureCount} failed.`);
+//       return response;
+//     } 
+    
+//     // SINGLE TOKEN
+//     else {
+//       const message = {
+//         token: fcmTokens,
+//         notification: { title, body },
+//         data: stringifiedData,
+//       };
+
+//       const response = await admin.messaging().send(message);
+//       console.log("FCM Notification Sent Successfully:", response);
+//       return response;
+//     }
+//   } catch (error) {
+//     console.error("FCM Notification Error:", error.message);
+//     return false;
+//   }
+// };

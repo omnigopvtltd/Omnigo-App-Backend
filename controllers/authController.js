@@ -758,7 +758,7 @@ exports.facebookLogin = async (req, res) => {
 // ======================================================
 exports.socialLogin = async (req, res) => {
   try {
-    const { idToken, role = "user", riderProfile, phone } = req.body;
+    const { idToken, role = "user", provider = "google", riderProfile, phone } = req.body;
 
     if (!idToken) {
       return res.status(400).json({
@@ -772,13 +772,26 @@ exports.socialLogin = async (req, res) => {
     //   idToken: idToken,
     // });
 
-    const ticket = await googleClient.verifyIdToken({
-      idToken: idToken,
-      audience: process.env.GOOGLE_CLIENT_ID, // yeh line add karein
-    });
+    if (provider === "facebook") {
+  // firebase-admin (admin.initializeApp pehle kar lein)
+  const decoded = await admin.auth().verifyIdToken(idToken);
+  sub = decoded.uid;
+  ({ email, name, picture } = decoded);
+} else {
+  const ticket = await googleClient.verifyIdToken({
+    idToken,
+    audience: process.env.GOOGLE_CLIENT_ID,
+  });
+  ({ sub, email, name, picture } = ticket.getPayload());
+}
 
-    const payload = ticket.getPayload();
-    const { sub, email, name, picture } = payload;
+    // const ticket = await googleClient.verifyIdToken({
+    //   idToken: idToken,
+    //   audience: process.env.GOOGLE_CLIENT_ID, // yeh line add karein
+    // });
+
+    // const payload = ticket.getPayload();
+    // const { sub, email, name, picture } = payload;
 
     if (!email) {
       return res.status(400).json({
