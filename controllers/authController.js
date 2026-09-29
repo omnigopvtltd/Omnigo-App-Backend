@@ -771,16 +771,36 @@ exports.socialLogin = async (req, res) => {
     // const ticket = await googleClient.verifyIdToken({
     //   idToken: idToken,
     // });
+    let sub, facebookId, email, name, picture;
 
-    if (provider === "facebook") {
-  // firebase-admin (admin.initializeApp pehle kar lein)
-  // const decoded = await admin.auth().verifyIdToken(idToken);
-  // sub = decoded.uid;
-   const response = await axios.get(
-      `https://graph.facebook.com/me?fields=id,name,email&access_token=${idToken}`,
-    );
-  // ({ email, name, picture } = decoded);
-   ({ id, name, email, picture } = response.data);
+if (provider === "facebook") {
+  // 1) Token valid ho aur hamari hi app ka ho
+  const debug = await axios.get("https://graph.facebook.com/debug_token", {
+    params: {
+      input_token: idToken,
+      access_token: `${process.env.FACEBOOK_APP_ID}|${process.env.FACEBOOK_APP_SECRET}`,
+    },
+  });
+  const d = debug.data?.data;
+  if (!d?.is_valid || d.app_id !== process.env.FACEBOOK_APP_ID) {
+    return res.status(401).json({
+      success: false,
+      message: "Invalid Facebook token",
+    });
+  }
+
+  // 2) Profile lein
+  const { data } = await axios.get("https://graph.facebook.com/me", {
+    params: {
+      fields: "id,name,email,picture.type(large)",
+      access_token: idToken,
+    },
+  });
+
+  facebookId = data.id;
+  name = data.name;
+  email = data.email;
+  picture = data.picture?.data?.url;
 } else {
   const ticket = await googleClient.verifyIdToken({
     idToken,
@@ -788,6 +808,24 @@ exports.socialLogin = async (req, res) => {
   });
   ({ sub, email, name, picture } = ticket.getPayload());
 }
+
+
+//     if (provider === "facebook") {
+//   // firebase-admin (admin.initializeApp pehle kar lein)
+//   // const decoded = await admin.auth().verifyIdToken(idToken);
+//   // sub = decoded.uid;
+//    const response = await axios.get(
+//       `https://graph.facebook.com/me?fields=id,name,email&access_token=${idToken}`,
+//     );
+//   // ({ email, name, picture } = decoded);
+//    ({ id, name, email, picture } = response.data);
+// } else {
+//   const ticket = await googleClient.verifyIdToken({
+//     idToken,
+//     audience: process.env.GOOGLE_CLIENT_ID,
+//   });
+//   ({ sub, email, name, picture } = ticket.getPayload());
+// }
 
     // const ticket = await googleClient.verifyIdToken({
     //   idToken: idToken,
@@ -826,7 +864,8 @@ exports.socialLogin = async (req, res) => {
         name: name || `${role}_user`,
         email: normalizedEmail,
         role: role,
-        googleId: sub,
+        facebookId : provider === "facebook" ? facebookId : "",
+        googleId: provider === "google" ? sub : "", 
         profilePicture: picture || "",
         isEmailVerified: true,
         phone: phone ? String(phone).trim() : "",
@@ -851,6 +890,8 @@ exports.socialLogin = async (req, res) => {
       // Existing User update
       if (!user.googleId) {
         user.googleId = sub;
+      } else if (!user.facebookId) {
+        user.facebookId = facebookId;
       }
       user.lastLogin = new Date();
       await user.save();
