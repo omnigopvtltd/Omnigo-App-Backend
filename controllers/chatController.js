@@ -769,11 +769,205 @@
 // };
 
 
-///////////////////////////
+// ///////////////////////////
+// const mongoose = require("mongoose");
+// const User = require("../models/User");
+// const Conversation = require("../models/Conversation");
+// const Message = require("../models/Message");
+
+// /**
+//  * GET /api/chat/contacts
+//  */
+// exports.getContactsController = async (req, res) => {
+//   try {
+//     const { search = "", role } = req.query;
+
+//     const searchFilter = {};
+//     if (search) {
+//       searchFilter.$or = [
+//         { name: { $regex: search, $options: "i" } },
+//         { fullName: { $regex: search, $options: "i" } },
+//         { email: { $regex: search, $options: "i" } },
+//         { phone: { $regex: search, $options: "i" } },
+//       ];
+//     }
+//     if (role) {
+//       searchFilter.role = role === "customer" ? "user" : role;
+//     }
+
+//     const users = await User.find(searchFilter)
+//       .select("_id name fullName email phone role")
+//       .limit(50)
+//       .lean();
+
+//     const formattedContacts = users.map((u) => ({
+//       _id: u._id,
+//       name: u.name || u.fullName || "User",
+//       email: u.email || "",
+//       phone: u.phone || "",
+//       role: u.role === "customer" ? "user" : u.role || "user",
+//     }));
+
+//     return res.status(200).json({ success: true, contacts: formattedContacts });
+//   } catch (error) {
+//     console.error("GET CONTACTS ERROR:", error);
+//     return res.status(500).json({ success: false, error: "Failed to fetch user directory" });
+//   }
+// };
+
+// /**
+//  * POST /api/chat/conversations
+//  */
+// exports.getOrCreateConversation = async (req, res) => {
+//   try {
+//     const { type, userId, riderId, vendorId, adminId, orderId } = req.body;
+
+//     if (!type) {
+//       return res.status(400).json({ success: false, message: "Type parameter is required" });
+//     }
+
+//     const query = { type };
+//     if (userId) query.userId = userId;
+//     if (riderId) query.riderId = riderId;
+//     if (vendorId) query.vendorId = vendorId;
+//     if (adminId) query.adminId = adminId;
+//     if (orderId) query.orderId = orderId;
+
+//     let conversation = await Conversation.findOne(query)
+//       .populate("userId", "name fullName email phone")
+//       .populate("riderId", "name fullName email phone")
+//       .populate("vendorId", "name fullName email phone")
+//       .populate("adminId", "name fullName email phone");
+
+//     if (!conversation) {
+//       conversation = await Conversation.create({
+//         type,
+//         userId: userId || null,
+//         riderId: riderId || null,
+//         vendorId: vendorId || null,
+//         adminId: adminId || null,
+//         orderId: orderId || null,
+//         lastMessage: { text: "", senderId: null, senderRole: null, sentAt: new Date() },
+//       });
+
+//       conversation = await Conversation.findById(conversation._id)
+//         .populate("userId", "name fullName email phone")
+//         .populate("riderId", "name fullName email phone")
+//         .populate("vendorId", "name fullName email phone")
+//         .populate("adminId", "name fullName email phone");
+//     }
+
+//     return res.status(200).json({ success: true, conversation });
+//   } catch (error) {
+//     console.error("GET OR CREATE CONVO ERROR:", error);
+//     return res.status(500).json({ success: false, error: "Failed to find or create conversation" });
+//   }
+// };
+
+// /**
+//  * GET /api/chat/conversations
+//  * NOTE: req.query.userId fallback is left in for now (useful while testing
+//  * without auth wired up everywhere), but once your JWT middleware is
+//  * confirmed working on this route, remove the `|| req.query.userId` fallback
+//  * — as-is, anyone can view anyone's conversation list by passing ?userId=.
+//  */
+// exports.getConversations = async (req, res) => {
+//   try {
+//     const currentUserId = req.user?._id || req.user?.id || req.query.userId;
+//     const currentUserRole = req.user?.role || req.query.role || "user";
+
+//     let filter = {};
+//     if (currentUserId && currentUserRole !== "admin") {
+//       filter.$or = [
+//         { userId: currentUserId },
+//         { riderId: currentUserId },
+//         { vendorId: currentUserId },
+//         { adminId: currentUserId },
+//       ];
+//     }
+
+//     const conversations = await Conversation.find(filter)
+//       .populate("userId", "name fullName email phone")
+//       .populate("riderId", "name fullName email phone")
+//       .populate("vendorId", "name fullName email phone")
+//       .populate("adminId", "name fullName email phone")
+//       .sort({ "lastMessage.sentAt": -1, updatedAt: -1 });
+
+//     return res.status(200).json({ success: true, conversations });
+//   } catch (error) {
+//     console.error("GET CONVERSATIONS ERROR:", error);
+//     return res.status(500).json({ success: false, error: "Failed to fetch conversations" });
+//   }
+// };
+
+// /**
+//  * GET /api/chat/conversations/:id/messages
+//  * FIXED: now excludes soft-deleted messages.
+//  */
+// exports.getMessages = async (req, res) => {
+//   try {
+//     const { id: conversationId } = req.params;
+
+//     if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+//       return res.status(400).json({ success: false, message: "Invalid Conversation ID" });
+//     }
+
+//     const messages = await Message.find({ conversationId, isDeleted: false }).sort({ createdAt: 1 });
+//     return res.status(200).json({ success: true, messages });
+//   } catch (error) {
+//     console.error("GET MESSAGES ERROR:", error);
+//     return res.status(500).json({ success: false, error: "Failed to fetch messages" });
+//   }
+// };
+
+// /**
+//  * PATCH /api/chat/conversations/:id/read
+//  * FIXED: previously had the unreadCount reset commented out, so badges
+//  * never went back to 0. Restored — and now actually validates `role`
+//  * again instead of skipping the check silently.
+//  */
+// exports.markConversationRead = async (req, res) => {
+//   try {
+//     const { id: conversationId } = req.params;
+//     let role = req.body.role || req.user?.role || "user";
+//     if (role === "customer") role = "user";
+
+//     if (!["user", "rider", "vendor", "admin"].includes(role)) {
+//       return res.status(400).json({ success: false, message: "Invalid role specified" });
+//     }
+
+//     await Message.updateMany({ conversationId, isRead: false }, { $set: { isRead: true } });
+//     await Conversation.findByIdAndUpdate(conversationId, {
+//       $set: { [`unreadCount.${role}`]: 0 },
+//     });
+
+//     return res.status(200).json({ success: true, message: "Marked as read" });
+//   } catch (error) {
+//     console.error("MARK READ ERROR:", error);
+//     return res.status(500).json({ success: false, error: "Failed to mark conversation read" });
+//   }
+// };
+
+/**
+ * NOTE ON sendMessage:
+ * There is intentionally NO REST sendMessage exported here anymore.
+ * Sending now happens exclusively through the Socket.IO "sendMessage"
+ * event in chatSocket.js — having two separate code paths that could
+ * each create a message (with two different payload shapes, as before)
+ * is what caused the duplicate/mismatch risk. If you need a REST
+ * fallback for environments where sockets aren't available, wire it to
+ * call the exact same logic as chatSocket.js's sendMessage handler
+ * (best done by extracting that handler's body into a shared function
+ * both files import — say the word and I'll set that up).
+ */
+
+
+//////////////////////////////////////////////////////////////////////////////////////
 const mongoose = require("mongoose");
 const User = require("../models/User");
 const Conversation = require("../models/Conversation");
 const Message = require("../models/Message");
+const { sendChatNotification } = require("../utils/sendNotification");
 
 /**
  * GET /api/chat/contacts
@@ -785,10 +979,10 @@ exports.getContactsController = async (req, res) => {
     const searchFilter = {};
     if (search) {
       searchFilter.$or = [
-        { name: { $regex: search, $options: "i" } },
-        { fullName: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } },
-        { phone: { $regex: search, $options: "i" } },
+        { name: { $regex: search,$options: "i" } },
+        { fullName: { $regex: search,$options: "i" } },
+        { email: { $regex: search,$options: "i" } },
+        { phone: { $regex: search,$options: "i" } },
       ];
     }
     if (role) {
@@ -866,10 +1060,6 @@ exports.getOrCreateConversation = async (req, res) => {
 
 /**
  * GET /api/chat/conversations
- * NOTE: req.query.userId fallback is left in for now (useful while testing
- * without auth wired up everywhere), but once your JWT middleware is
- * confirmed working on this route, remove the `|| req.query.userId` fallback
- * — as-is, anyone can view anyone's conversation list by passing ?userId=.
  */
 exports.getConversations = async (req, res) => {
   try {
@@ -902,7 +1092,6 @@ exports.getConversations = async (req, res) => {
 
 /**
  * GET /api/chat/conversations/:id/messages
- * FIXED: now excludes soft-deleted messages.
  */
 exports.getMessages = async (req, res) => {
   try {
@@ -921,10 +1110,83 @@ exports.getMessages = async (req, res) => {
 };
 
 /**
+ * POST /api/chat/conversations/:id/messages (NEW REST MESSAGE PIPELINE)
+ */
+exports.sendMessage = async (req, res) => {
+  try {
+    const { id: conversationId } = req.params;
+    const {
+      senderId,
+      senderRole,
+      receiverId,
+      receiverRole = "user",
+      text = "",
+      attachments = [],
+    } = req.body;
+
+    if (!conversationId || !senderId || !senderRole || !receiverId) {
+      return res.status(400).json({
+        success: false,
+        message: "conversationId, senderId, senderRole, and receiverId are required",
+      });
+    }
+
+    if (!text.trim() && attachments.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Message must contain text or attachments",
+      });
+    }
+
+    // 1. Message MongoDB main save karein
+    const newMessage = await Message.create({
+      conversationId,
+      senderId,
+      senderRole,
+      text,
+      attachments,
+    });
+
+    // 2. Conversation Metadata & Unread Count update
+    const targetRoleKey = ["user", "rider", "vendor", "admin"].includes(receiverRole)
+      ? receiverRole
+      : "user";
+
+    await Conversation.findByIdAndUpdate(conversationId, {
+      lastMessage: {
+        text,
+        senderId,
+        senderRole,
+        sentAt: newMessage.createdAt,
+      },
+      $inc: { [`unreadCount.${targetRoleKey}`]: 1 },
+    });
+
+    // 3. Sender ki details for Notification
+    const sender = await User.findById(senderId).select("name fullName");
+    const senderName = sender?.name || sender?.fullName || "User";
+
+    // 4. Send Instant Push Notification via Firebase FCM
+    sendChatNotification({
+      receiverId,
+      senderId,
+      senderName,
+      text,
+      conversationId,
+    }).catch((err) => console.error("Async FCM Error:", err.message));
+
+    return res.status(201).json({
+      success: true,
+      message: newMessage,
+    });
+  } catch (error) {
+    console.error("SEND MESSAGE REST ERROR:", error);
+    return res.status(500).json({ success: false, error: "Failed to send message" });
+  }
+};
+
+/**
  * PATCH /api/chat/conversations/:id/read
- * FIXED: previously had the unreadCount reset commented out, so badges
- * never went back to 0. Restored — and now actually validates `role`
- * again instead of skipping the check silently.
  */
 exports.markConversationRead = async (req, res) => {
   try {
@@ -947,16 +1209,3 @@ exports.markConversationRead = async (req, res) => {
     return res.status(500).json({ success: false, error: "Failed to mark conversation read" });
   }
 };
-
-/**
- * NOTE ON sendMessage:
- * There is intentionally NO REST sendMessage exported here anymore.
- * Sending now happens exclusively through the Socket.IO "sendMessage"
- * event in chatSocket.js — having two separate code paths that could
- * each create a message (with two different payload shapes, as before)
- * is what caused the duplicate/mismatch risk. If you need a REST
- * fallback for environments where sockets aren't available, wire it to
- * call the exact same logic as chatSocket.js's sendMessage handler
- * (best done by extracting that handler's body into a shared function
- * both files import — say the word and I'll set that up).
- */
