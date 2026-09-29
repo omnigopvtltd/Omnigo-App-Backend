@@ -1219,11 +1219,11 @@ exports.login = async (req, res) => {
 //   }
 // };
 // ======================================================
-// VENDOR GOOGLE SOCIAL LOGIN (FIXED)
+// VENDOR SOCIAL LOGIN (GOOGLE & FACEBOOK SUPPORTED)
 // ======================================================
 exports.vendorSocialLogin = async (req, res) => {
   try {
-    const { idToken } = req.body;
+    const { idToken, provider = "google" } = req.body;
 
     if (!idToken) {
       return res.status(400).json({
@@ -1232,31 +1232,44 @@ exports.vendorSocialLogin = async (req, res) => {
       });
     }
 
-    // 1. Verify Google ID Token
-    let payload;
+    let sub, email, name, picture;
+
+    // 1. Social Provider Token Verification
     try {
-      const ticket = await googleClient.verifyIdToken({
-        idToken: idToken,
-        audience: process.env.GOOGLE_CLIENT_ID,
-      });
-      payload = ticket.getPayload();
-    } catch (googleErr) {
-      console.error("Google Token Verification Failed:", googleErr.message);
+      if (provider === "facebook") {
+        const response = await axios.get(
+          `https://graph.facebook.com/me?fields=id,name,email,picture.type(large)&access_token=${idToken}`
+        );
+        id = response.data.id;
+        sub = id;
+        name = response.data.name;
+        email = response.data.email;
+        picture = response.data.picture?.data?.url || "";
+      } else {
+        // Google Provider Verification
+        const ticket = await googleClient.verifyIdToken({
+          idToken: idToken,
+          audience: process.env.GOOGLE_CLIENT_ID,
+        });
+        const payload = ticket.getPayload();
+        sub = payload.sub;
+        email = payload.email;
+        name = payload.name;
+        picture = payload.picture || "";
+      }
+    } catch (authErr) {
+      console.error(`${provider.toUpperCase()} Token Verification Failed:`, authErr.message);
       return res.status(401).json({
         success: false,
-        message: "Invalid or expired Google token",
-        error: googleErr.message,
+        message: `Invalid or expired ${provider} token`,
+        error: authErr.message,
       });
     }
-
-    console.log(payload);
-
-    const { sub, email, name, picture } = payload;
 
     if (!email) {
       return res.status(400).json({
         success: false,
-        message: "Email permission is required from Google account",
+        message: `Email permission is required from ${provider} account`,
       });
     }
 
@@ -1274,22 +1287,26 @@ exports.vendorSocialLogin = async (req, res) => {
         businessEmail: normalizedEmail,
         ownerName: name || "",
         ownerEmail: normalizedEmail,
-        googleId: sub,
-        profilePicture: picture || "",
+        googleId: provider === "google" ? sub : undefined,
+        facebookId: provider === "facebook" ? sub : undefined,
+        profilePicture: picture,
         isEmailVerified: true,
 
         // Dummy values to satisfy Mongoose 'required' & 'unique' schema
         password: "SOCIAL_LOGIN_NOPASSWORD",
-        businessPhone: dummyPhone, // Empty string throws unique index error if duplicated
+        businessPhone: dummyPhone,
         cnicNumber: `PENDING_${Date.now()}`,
       };
 
       vendor = await Vendor.create(newVendorData);
     } else {
-      // Existing Vendor - Link Google ID & update login date
-      if (!vendor.googleId) {
+      // Existing Vendor - Link ID & update login date
+      if (provider === "google" && !vendor.googleId) {
         vendor.googleId = sub;
+      } else if (provider === "facebook" && !vendor.facebookId) {
+        vendor.facebookId = sub;
       }
+
       vendor.lastLogin = new Date();
       await vendor.save();
     }
@@ -1298,23 +1315,18 @@ exports.vendorSocialLogin = async (req, res) => {
     if (vendor.isBlocked) {
       return res.status(403).json({
         success: false,
-        message:
-          "Your vendor account has been blocked. Please contact support.",
+        message: "Your vendor account has been blocked. Please contact support.",
       });
     }
 
-    console.log(vendor);
-
     // 3. Generate Auth JWT Token
     const token = generateToken(vendor);
-    console.log(token);
     const vendorResponse = vendor.toObject();
     delete vendorResponse.password;
 
-    console.log(vendorResponse);
     return res.status(200).json({
       success: true,
-      message: "Vendor Google login successful",
+      message: `Vendor ${provider} social login successful`,
       token,
       data: vendorResponse,
     });
