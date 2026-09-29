@@ -41,7 +41,7 @@ const sendVendorResponse = (res, message, payload, statusCode = 200) => {
   // Extract vendor object whether passed directly or nested inside payload
   const vendorObj = payload.vendor || payload;
   const branchObj = payload.branch || null;
-  const tempPassword = payload.tempPassword || null;
+  // const tempPassword = payload.tempPassword || null;
 
   // Generate token from the actual vendor object
   const token = generateToken(vendorObj);
@@ -101,9 +101,9 @@ const sendVendorResponse = (res, message, payload, statusCode = 200) => {
     responseBody.branch = branchObj;
   }
 
-  if (tempPassword) {
-    responseBody.tempPassword = tempPassword;
-  }
+  // if (tempPassword) {
+  //   responseBody.tempPassword = tempPassword;
+  // }
 
   return res.status(statusCode).json(responseBody);
 };
@@ -1040,7 +1040,7 @@ exports.register = async (req, res) => {
     }
 
     const vendorResponse = vendor.toObject();
-    delete vendorResponse.password;
+    // delete vendorResponse.password;
 
     return sendVendorResponse(
       res,
@@ -1048,7 +1048,7 @@ exports.register = async (req, res) => {
       {
         vendor: vendorResponse,
         branches: createdBranches, // Array of created branches
-        tempPassword: rawAutoPassword,
+        // tempPassword: rawAutoPassword,
       },
       201,
     );
