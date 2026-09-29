@@ -888,7 +888,7 @@ exports.register = async (req, res) => {
       businessEmail: businessEmail
         ? String(businessEmail).toLowerCase().trim()
         : "",
-      password: hash,
+      // password: hash,
 
       isPhoneVerified: false,
       isEmailVerified: false,
@@ -2392,217 +2392,6 @@ exports.getVendorProfile = async (req, res) => {
   }
 };
 
-// ====================================
-// Get All Vendor Home Screen Details
-// =====================================
-// exports.getVendorHomeScreenDetails = async (req, res) => {
-//   try {
-//     // Determine vendorId from query, params, or decoded JWT auth token
-//     const vendorId = req.params.vendorId || req.user?.id;
-
-//     if (!vendorId) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Vendor ID is required",
-//       });
-//     }
-
-//     // 1. Fetch Vendor Profile details
-//     const vendor = await Vendor.findById(vendorId).select(
-//       "name email phone vendorProfile.businessName vendorProfile.logo vendorProfile.coverImage verificationStatus isProfileCompleted",
-//     );
-
-//     if (!vendor) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Vendor not found",
-//       });
-//     }
-
-//     // 2. Fetch all Operational Branches associated with this Vendor
-//     const branches = await VendorBranch.find({ vendorId }).select(
-//       "branchName phone address city area isOpen isActive location openingHours",
-//     );
-
-//     return res.status(200).json({
-//       success: true,
-//       vendor: {
-//         id: vendor._id,
-//         name: vendor.name,
-//         businessName: vendor.vendorProfile?.businessName || vendor.name,
-//         logo: vendor.vendorProfile?.logo || null,
-//         coverImage: vendor.vendorProfile?.coverImage || null,
-//         verificationStatus: vendor.verificationStatus,
-//         isProfileCompleted: vendor.isProfileCompleted,
-//       },
-//       branches,
-//       activeBranchCount: branches.filter((b) => b.isActive).length,
-//     });
-//   } catch (err) {
-//     return res.status(500).json({
-//       success: false,
-//       message: err.message,
-//     });
-//   }
-// };
-
-// exports.getVendorDashboardOverview = async (req, res) => {
-//   try {
-//     const vendorId = req.user?.id || req.user?._id;
-
-//     if (!vendorId) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Vendor authentication token missing",
-//       });
-//     }
-
-//     // Convert string vendorId to Mongoose ObjectId for Aggregation queries
-//     const vendorObjectId = new mongoose.Types.ObjectId(vendorId);
-
-//     // 1. Calculate Start & End Date based on timeframe filter
-//     const { timeframe = "weekly" } = req.query;
-//     const now = new Date();
-//     let startDate = new Date();
-
-//     if (timeframe === "daily") {
-//       startDate.setHours(0, 0, 0, 0);
-//     } else if (timeframe === "weekly") {
-//       startDate.setDate(now.getDate() - 7);
-//     } else if (timeframe === "monthly") {
-//       startDate.setMonth(now.getMonth() - 1);
-//     } else if (timeframe === "yearly") {
-//       startDate.setFullYear(now.getFullYear() - 1);
-//     }
-
-//     // 2. Fetch Vendor Profile Info (Correct Schema Fields)
-//     const vendor = await Vendor.findById(vendorId).select(
-//       "businessName logo rating",
-//     );
-
-//     if (!vendor) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Vendor account not found",
-//       });
-//     }
-
-//     // 3. Fetch Vendor Branch Info (for isRushMode and openingHours)
-//     let vendorBranch = await VendorBranch.findOne({
-//       vendorId: vendorId,
-//     }).select("isRushMode openingHours");
-
-//     // Fallback if Branch ID was passed directly
-//     if (!vendorBranch) {
-//       vendorBranch = await VendorBranch.findById(vendorId).select(
-//         "isRushMode openingHours",
-//       );
-//     }
-
-//     // Extract timings string (e.g., "10:00 - 23:00") from monday or default object
-//     const openTime = vendorBranch?.openingHours?.monday?.open || "10:00";
-//     const closeTime = vendorBranch?.openingHours?.monday?.close || "23:00";
-
-//     // 4. Aggregate Orders & Revenue Metrics
-//     const matchStage = {
-//       vendorId: vendorObjectId,
-//       createdAt: { $gte: startDate, $lte: now },
-//     };
-
-//     const orderStats = await Order.aggregate([
-//       { $match: matchStage },
-//       {
-//         $group: {
-//           _id: null,
-//           totalOrders: { $sum: 1 },
-//           completedOrders: {
-//             $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] },
-//           },
-//           cancelledOrders: {
-//             $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0] },
-//           },
-//           totalRevenue: {
-//             $sum: {
-//               $cond: [{ $eq: ["$status", "completed"] }, "$totalAmount", 0],
-//             },
-//           },
-//         },
-//       },
-//     ]);
-
-//     const stats = orderStats[0] || {
-//       totalOrders: 0,
-//       completedOrders: 0,
-//       cancelledOrders: 0,
-//       totalRevenue: 0,
-//     };
-
-//     // 5. Aggregate Chart Data (Group by Day / Date)
-//     const chartData = await Order.aggregate([
-//       {
-//         $match: {
-//           vendorId: vendorObjectId,
-//           status: "completed",
-//           createdAt: { $gte: startDate, $lte: now },
-//         },
-//       },
-//       {
-//         $group: {
-//           _id: { $dayOfWeek: "$createdAt" }, // 1 = Sun, 2 = Mon, etc.
-//           total: { $sum: "$totalAmount" },
-//         },
-//       },
-//       { $sort: { _id: 1 } },
-//     ]);
-
-//     // 6. Build Clean & Synchronized Response
-//     return res.status(200).json({
-//       success: true,
-//       message: "Vendor overview retrieved successfully",
-//       data: {
-//         vendor: {
-//           id: vendor._id,
-//           name: vendor.businessName || "",
-//           logo: vendor.logo || "",
-//           timings: {
-//             openTime,
-//             closeTime,
-//           },
-//           isRushMode: vendorBranch ? Boolean(vendorBranch.isRushMode) : false,
-//           rating: vendor.rating || 0.0,
-//         },
-//         filter: timeframe,
-//         revenue: {
-//           totalAmount: stats.totalRevenue,
-//           currency: "pkr",
-//           peakDay: {
-//             day: "Saturday",
-//             amount: 4086,
-//             note: "up from 4,086 last week",
-//           },
-//           percentageChange: 20,
-//           chartData: chartData,
-//         },
-//         orders: {
-//           total: stats.totalOrders,
-//           completed: stats.completedOrders,
-//           cancelled: stats.cancelledOrders,
-//           statusNote:
-//             stats.cancelledOrders === 0
-//               ? `No order is cancelled this ${timeframe === "weekly" ? "week" : "period"}.`
-//               : `${stats.cancelledOrders} order(s) cancelled.`,
-//         },
-//       },
-//     });
-//   } catch (error) {
-//     console.error("Dashboard Overview Error:", error);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Server error fetching vendor overview",
-//       error: error.message,
-//     });
-//   }
-// };
 
 exports.getVendorDashboardOverview = async (req, res) => {
   try {
@@ -2615,13 +2404,13 @@ exports.getVendorDashboardOverview = async (req, res) => {
       });
     }
 
+    const vendorObjectId = new mongoose.Types.ObjectId(vendorId);
     const targetVendorIdStr = vendorId.toString();
-
     const { timeframe = "weekly" } = req.query;
 
-    // 1. Fetch Vendor Profile Info
+    // 1. Fetch Vendor Info
     const vendor = await Vendor.findById(vendorId).select(
-      "businessName logo rating",
+      "businessName logo rating"
     );
 
     if (!vendor) {
@@ -2633,57 +2422,97 @@ exports.getVendorDashboardOverview = async (req, res) => {
 
     // 2. Fetch Vendor Branch Info
     let vendorBranch = await VendorBranch.findOne({
-      vendorId: vendorId,
+      vendorId: vendorObjectId,
     }).select("isRushMode openingHours");
 
     if (!vendorBranch) {
       vendorBranch = await VendorBranch.findById(vendorId).select(
-        "isRushMode openingHours",
+        "isRushMode openingHours"
       );
     }
 
     const openTime = vendorBranch?.openingHours?.monday?.open || "10:00";
     const closeTime = vendorBranch?.openingHours?.monday?.close || "23:00";
 
-    // 3. Aggregate Metrics with Robust Type Conversion ($toString)
+    // Matching Match Condition: Top level vendorId OR item level vendorId / branchId
+    const vendorMatchQuery = {
+      $or: [
+        { vendorId: vendorObjectId },
+        { vendor: vendorObjectId },
+        { branchId: vendorObjectId },
+        { "items.vendorId": vendorObjectId },
+        {
+          $expr: {$gt: [
+              {
+                $size: {$filter: {
+                    input: "$items",
+                    as: "item",
+                    cond: {
+                      $or: [
+                        { $eq: [{ $toString: "$$item.vendorId" }, targetVendorIdStr] },
+                        { $eq: [{ $toString: "$vendorId" }, targetVendorIdStr] }
+                      ]
+                    },
+                  },
+                },
+              },
+              0,
+            ],
+          },
+        },
+      ],
+    };
+
+    // 3. Aggregate Orders Metrics
     const orderStats = await Order.aggregate([
-      { $unwind: "$items" },
-      {
-        $match: {
-          $expr: {
-            $eq: [{ $toString: "$items.vendorId" }, targetVendorIdStr],
-          },
-        },
-      },
-      {
-        $group: {
-          _id: "$_id",
-          status: { $first: "$status" },
-          createdAt: { $first: "$createdAt" },
-          totalAmount: {
-            $first: { $ifNull: ["$totalAmount", "$subtotal"] },
-          },
-        },
-      },
+      { $match: vendorMatchQuery },
       {
         $group: {
           _id: null,
           totalOrders: { $sum: 1 },
           completedOrders: {
-            $sum: {
-              $cond: [
-                { $in: ["$status", ["completed", "delivered", "pending"]] },
+            $sum: {$cond: [
+                { $in: ["$status", ["completed", "delivered", "complete"]] },
                 1,
                 0,
               ],
             },
           },
+          preparingOrders: {
+            $sum: {$cond: [
+                {
+                  $in: [
+                    "$status",
+                    [
+                      "preparing",
+                      "confirmed",
+                      "on_the_way",
+                      "ongoing",
+                      "arrived_at_vendor",
+                      "picked_up",
+                      "ready",
+                    ],
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
+          pendingOrders: {
+            $sum: {$cond: [{ $eq: ["$status", "pending"] }, 1, 0],
+            },
+          },
           cancelledOrders: {
-            $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0] },
+            $sum: {$cond: [{ $eq: ["$status", "cancelled"] }, 1, 0],
+            },
           },
           totalRevenue: {
-            $sum: {
-              $cond: [{ $ne: ["$status", "cancelled"] }, "$totalAmount", 0],
+            $sum: {$cond: [
+                { $ne: ["$status", "cancelled"] },
+                { $ifNull: ["$totalAmount", "$subtotal"] },
+                0,
+              ],
             },
           },
         },
@@ -2693,34 +2522,25 @@ exports.getVendorDashboardOverview = async (req, res) => {
     const stats = orderStats[0] || {
       totalOrders: 0,
       completedOrders: 0,
+      preparingOrders: 0,
+      pendingOrders: 0,
       cancelledOrders: 0,
       totalRevenue: 0,
     };
 
-    // 4. Aggregate Chart Data
+    // 4. Day-Wise Chart Revenue Aggregation
     const rawChartData = await Order.aggregate([
-      { $unwind: "$items" },
       {
         $match: {
           status: { $ne: "cancelled" },
-          $expr: {
-            $eq: [{ $toString: "$items.vendorId" }, targetVendorIdStr],
-          },
+          ...vendorMatchQuery,
         },
       },
       {
         $group: {
-          _id: "$_id",
-          createdAt: { $first: "$createdAt" },
-          totalAmount: {
-            $first: { $ifNull: ["$totalAmount", "$subtotal"] },
-          },
-        },
-      },
-      {
-        $group: {
-          _id: { $dayOfWeek: "$createdAt" }, // 1 = Sun, 2 = Mon ... 7 = Sat
-          total: { $sum: "$totalAmount" },
+          _id: { $dayOfWeek: "$createdAt" }, // 1 = Sun ... 7 = Sat
+          total: { $sum: {$ifNull: ["$totalAmount", "$subtotal"] } },
+          orderCount: { $sum: 1 },
         },
       },
     ]);
@@ -2736,13 +2556,13 @@ exports.getVendorDashboardOverview = async (req, res) => {
     };
 
     const fullWeekChart = [
-      { label: "Mon", amount: 0 },
-      { label: "Tue", amount: 0 },
-      { label: "Wed", amount: 0 },
-      { label: "Thu", amount: 0 },
-      { label: "Fri", amount: 0 },
-      { label: "Sat", amount: 0 },
-      { label: "Sun", amount: 0 },
+      { label: "Mon", amount: 0, orders: 0 },
+      { label: "Tue", amount: 0, orders: 0 },
+      { label: "Wed", amount: 0, orders: 0 },
+      { label: "Thu", amount: 0, orders: 0 },
+      { label: "Fri", amount: 0, orders: 0 },
+      { label: "Sat", amount: 0, orders: 0 },
+      { label: "Sun", amount: 0, orders: 0 },
     ];
 
     let maxSalesAmount = 0;
@@ -2754,6 +2574,7 @@ exports.getVendorDashboardOverview = async (req, res) => {
 
       if (chartItem) {
         chartItem.amount = dbItem.total || 0;
+        chartItem.orders = dbItem.orderCount || 0;
         if (dbItem.total > maxSalesAmount) {
           maxSalesAmount = dbItem.total;
           peakDayName = dayName;
@@ -2761,7 +2582,54 @@ exports.getVendorDashboardOverview = async (req, res) => {
       }
     });
 
-    // 5. Response Payload
+    // 5. Aggregate Deals/Campaigns Analytics with itemId fallback
+    const dealsAndCampaignsStats = await Order.aggregate([
+      {
+        $match: {
+          status: { $ne: "cancelled" },
+          ...vendorMatchQuery,
+        },
+      },
+      { $unwind: "$items" },
+      {
+        $match: {$or: [
+            { "items.category": { $regex: /deal|campaign|combo|offer/i } },
+            { "items.orderFrom": { $regex: /deal|campaign|combo|offer/i } },
+            { "items.name": { $regex: /deal|combo|special|offer/i } },
+          ],
+        },
+      },
+      {
+        $group: {
+          _id: {
+            itemId: { $ifNull: ["$items.itemId", "$items.productId"] },
+            name: "$items.name",
+          },
+          title: { $first: "$items.name" },
+          category: { $first: { $ifNull: ["$items.category", "Deals"] } },
+          totalSoldUnits: { $sum: { $ifNull: ["$items.quantity", 1] } },
+          totalRevenueGenerated: {
+            $sum: {$ifNull: [
+                "$items.total",
+                { $multiply: [{ $ifNull: ["$items.price", 0] }, { $ifNull: ["$items.quantity", 1] }] },
+              ],
+            },
+          },
+        },
+      },
+      { $sort: { totalSoldUnits: -1 } },       {$limit: 10 },
+    ]);
+
+    const overallDealsSold = dealsAndCampaignsStats.reduce(
+      (acc, curr) => acc + curr.totalSoldUnits,
+      0
+    );
+    const overallDealsRevenue = dealsAndCampaignsStats.reduce(
+      (acc, curr) => acc + curr.totalRevenueGenerated,
+      0
+    );
+
+    // 6. Response Payload
     return res.status(200).json({
       success: true,
       message: "Vendor overview retrieved successfully",
@@ -2775,31 +2643,38 @@ exports.getVendorDashboardOverview = async (req, res) => {
             closeTime,
           },
           isRushMode: vendorBranch ? Boolean(vendorBranch.isRushMode) : false,
-          rating: vendor.rating || 0.0,
+          rating: vendor.rating?.average || 0.0,
+          totalRatingsCount: vendor.rating?.count || 0,
         },
         filter: timeframe,
         revenue: {
           totalAmount: stats.totalRevenue,
           currency: "pkr",
           peakDay: {
-            day: peakDayName !== "N/A" ? peakDayName : "Wednesday",
+            day: peakDayName,
             amount: maxSalesAmount,
             note:
               maxSalesAmount > 0
-                ? `Highest revenue on ${peakDayName}`
-                : "No peak revenue recorded",
+                ? `Highest revenue recorded on ${peakDayName}`
+                : "No revenue recorded for this period",
           },
-          percentageChange: 20,
           chartData: fullWeekChart,
         },
         orders: {
           total: stats.totalOrders,
           completed: stats.completedOrders,
+          preparing: stats.preparingOrders,
+          pending: stats.pendingOrders,
           cancelled: stats.cancelledOrders,
           statusNote:
             stats.cancelledOrders === 0
-              ? `No order is cancelled this ${timeframe === "weekly" ? "week" : "period"}.`
+              ? `No orders cancelled in this ${timeframe}.`
               : `${stats.cancelledOrders} order(s) cancelled.`,
+        },
+        dealsAndCampaigns: {
+          totalDealsSoldUnits: overallDealsSold,
+          totalDealsRevenue: overallDealsRevenue,
+          topSoldDeals: dealsAndCampaignsStats,
         },
       },
     });
