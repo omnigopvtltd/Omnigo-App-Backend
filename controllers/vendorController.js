@@ -2405,10 +2405,9 @@ exports.getVendorDashboardOverview = async (req, res) => {
     }
 
     const vendorObjectId = new mongoose.Types.ObjectId(vendorId);
-    const targetVendorIdStr = vendorId.toString();
     const { timeframe = "weekly" } = req.query;
 
-    // 1. Fetch Vendor Info
+    // 1. Vendor Info
     const vendor = await Vendor.findById(vendorId).select(
       "businessName logo rating"
     );
@@ -2420,7 +2419,7 @@ exports.getVendorDashboardOverview = async (req, res) => {
       });
     }
 
-    // 2. Fetch Vendor Branch Info
+    // 2. Vendor Branch Info
     let vendorBranch = await VendorBranch.findOne({
       vendorId: vendorObjectId,
     }).select("isRushMode openingHours");
@@ -2431,48 +2430,51 @@ exports.getVendorDashboardOverview = async (req, res) => {
       );
     }
 
-    const openTime = vendorBranch?.openingHours?.monday?.open || "10:00";
-    const closeTime = vendorBranch?.openingHours?.monday?.close || "23:00";
+    const openTime = vendorBranch?.openingHours?.monday?.open || "11:00";
+    const closeTime = vendorBranch?.openingHours?.monday?.close || "12:00";
 
-    // Matching Match Condition: Top level vendorId OR item level vendorId / branchId
-    const vendorMatchQuery = {
-      $or: [
-        { vendorId: vendorObjectId },
-        { vendor: vendorObjectId },
-        { branchId: vendorObjectId },
-        { "items.vendorId": vendorObjectId },
-        {
-          $expr: {$gt: [
-              {
-                $size: {$filter: {
-                    input: "$items",
-                    as: "item",
-                    cond: {
-                      $or: [
-                        { $eq: [{ $toString: "$$item.vendorId" }, targetVendorIdStr] },
-                        { $eq: [{ $toString: "$vendorId" }, targetVendorIdStr] }
-                      ]
-                    },
-                  },
-                },
-              },
-              0,
-            ],
-          },
-        },
-      ],
-    };
-
-    // 3. Aggregate Orders Metrics
+    // 3. Aggregate Orders Metrics via Lookup with Products
     const orderStats = await Order.aggregate([
-      { $match: vendorMatchQuery },
+      // Unwind items to inspect productId
+      { $unwind: "$items" },
+      // Lookup product details to match vendorId
+      {
+        $lookup: {
+          from: "products",
+          localField: "items.productId",
+          foreignField: "_id",
+          as: "productDetails",
+        },
+      },
+      { $unwind: "$productDetails" },
+      // Match orders where product belongs to this vendor
+      {
+        $match: {$or: [
+            { "productDetails.vendorId": vendorObjectId },
+            { "productDetails.vendor": vendorObjectId },
+            { "items.vendorId": vendorObjectId },
+            { vendorId: vendorObjectId }
+          ],
+        },
+      },
+      // Group back to unique order level
+      {
+        $group: {
+          _id: "$_id",
+          status: { $first: "$status" },
+          totalAmount: { $first: "$totalAmount" },
+          subtotal: { $first: "$subtotal" },
+          createdAt: { $first: "$createdAt" },
+        },
+      },
+      // Group metrics for dashboard
       {
         $group: {
           _id: null,
           totalOrders: { $sum: 1 },
-          completedOrders: {
+          deliveredOrders: {
             $sum: {$cond: [
-                { $in: ["$status", ["completed", "delivered", "complete"]] },
+                { $in: ["$status", ["completed", "delivered", "complete", "assigned"]] },
                 1,
                 0,
               ],
@@ -2521,26 +2523,48 @@ exports.getVendorDashboardOverview = async (req, res) => {
 
     const stats = orderStats[0] || {
       totalOrders: 0,
-      completedOrders: 0,
+      deliveredOrders: 0,
       preparingOrders: 0,
       pendingOrders: 0,
       cancelledOrders: 0,
       totalRevenue: 0,
     };
 
-    // 4. Day-Wise Chart Revenue Aggregation
+    // 4. Weekly Chart Data
     const rawChartData = await Order.aggregate([
+      { $unwind: "$items" },
+      {
+        $lookup: {
+          from: "products",
+          localField: "items.productId",
+          foreignField: "_id",
+          as: "productDetails",
+        },
+      },
+      { $unwind: "$productDetails" },
       {
         $match: {
           status: { $ne: "cancelled" },
-          ...vendorMatchQuery,
+          $or: [
+            { "productDetails.vendorId": vendorObjectId },
+            { "productDetails.vendor": vendorObjectId },
+            { "items.vendorId": vendorObjectId },
+            { vendorId: vendorObjectId }
+          ],
         },
       },
       {
         $group: {
-          _id: { $dayOfWeek: "$createdAt" }, // 1 = Sun ... 7 = Sat
+          _id: "$_id",
+          totalAmount: { $first: "$totalAmount" },
+          subtotal: { $first: "$subtotal" },
+          createdAt: { $first: "$createdAt" },
+        },
+      },
+      {
+        $group: {
+          _id: { $dayOfWeek: "$createdAt" },
           total: { $sum: {$ifNull: ["$totalAmount", "$subtotal"] } },
-          orderCount: { $sum: 1 },
         },
       },
     ]);
@@ -2556,13 +2580,13 @@ exports.getVendorDashboardOverview = async (req, res) => {
     };
 
     const fullWeekChart = [
-      { label: "Mon", amount: 0, orders: 0 },
-      { label: "Tue", amount: 0, orders: 0 },
-      { label: "Wed", amount: 0, orders: 0 },
-      { label: "Thu", amount: 0, orders: 0 },
-      { label: "Fri", amount: 0, orders: 0 },
-      { label: "Sat", amount: 0, orders: 0 },
-      { label: "Sun", amount: 0, orders: 0 },
+      { label: "Mon", amount: 0 },
+      { label: "Tue", amount: 0 },
+      { label: "Wed", amount: 0 },
+      { label: "Thu", amount: 0 },
+      { label: "Fri", amount: 0 },
+      { label: "Sat", amount: 0 },
+      { label: "Sun", amount: 0 },
     ];
 
     let maxSalesAmount = 0;
@@ -2574,7 +2598,6 @@ exports.getVendorDashboardOverview = async (req, res) => {
 
       if (chartItem) {
         chartItem.amount = dbItem.total || 0;
-        chartItem.orders = dbItem.orderCount || 0;
         if (dbItem.total > maxSalesAmount) {
           maxSalesAmount = dbItem.total;
           peakDayName = dayName;
@@ -2582,54 +2605,7 @@ exports.getVendorDashboardOverview = async (req, res) => {
       }
     });
 
-    // 5. Aggregate Deals/Campaigns Analytics with itemId fallback
-    const dealsAndCampaignsStats = await Order.aggregate([
-      {
-        $match: {
-          status: { $ne: "cancelled" },
-          ...vendorMatchQuery,
-        },
-      },
-      { $unwind: "$items" },
-      {
-        $match: {$or: [
-            { "items.category": { $regex: /deal|campaign|combo|offer/i } },
-            { "items.orderFrom": { $regex: /deal|campaign|combo|offer/i } },
-            { "items.name": { $regex: /deal|combo|special|offer/i } },
-          ],
-        },
-      },
-      {
-        $group: {
-          _id: {
-            itemId: { $ifNull: ["$items.itemId", "$items.productId"] },
-            name: "$items.name",
-          },
-          title: { $first: "$items.name" },
-          category: { $first: { $ifNull: ["$items.category", "Deals"] } },
-          totalSoldUnits: { $sum: { $ifNull: ["$items.quantity", 1] } },
-          totalRevenueGenerated: {
-            $sum: {$ifNull: [
-                "$items.total",
-                { $multiply: [{ $ifNull: ["$items.price", 0] }, { $ifNull: ["$items.quantity", 1] }] },
-              ],
-            },
-          },
-        },
-      },
-      { $sort: { totalSoldUnits: -1 } },       {$limit: 10 },
-    ]);
-
-    const overallDealsSold = dealsAndCampaignsStats.reduce(
-      (acc, curr) => acc + curr.totalSoldUnits,
-      0
-    );
-    const overallDealsRevenue = dealsAndCampaignsStats.reduce(
-      (acc, curr) => acc + curr.totalRevenueGenerated,
-      0
-    );
-
-    // 6. Response Payload
+    // 5. Response
     return res.status(200).json({
       success: true,
       message: "Vendor overview retrieved successfully",
@@ -2638,10 +2614,7 @@ exports.getVendorDashboardOverview = async (req, res) => {
           id: vendor._id,
           name: vendor.businessName || "",
           logo: vendor.logo || "",
-          timings: {
-            openTime,
-            closeTime,
-          },
+          timings: { openTime, closeTime },
           isRushMode: vendorBranch ? Boolean(vendorBranch.isRushMode) : false,
           rating: vendor.rating?.average || 0.0,
           totalRatingsCount: vendor.rating?.count || 0,
@@ -2658,11 +2631,12 @@ exports.getVendorDashboardOverview = async (req, res) => {
                 ? `Highest revenue recorded on ${peakDayName}`
                 : "No revenue recorded for this period",
           },
+          percentageChange: 0,
           chartData: fullWeekChart,
         },
         orders: {
           total: stats.totalOrders,
-          completed: stats.completedOrders,
+          completed: stats.deliveredOrders,
           preparing: stats.preparingOrders,
           pending: stats.pendingOrders,
           cancelled: stats.cancelledOrders,
@@ -2672,9 +2646,9 @@ exports.getVendorDashboardOverview = async (req, res) => {
               : `${stats.cancelledOrders} order(s) cancelled.`,
         },
         dealsAndCampaigns: {
-          totalDealsSoldUnits: overallDealsSold,
-          totalDealsRevenue: overallDealsRevenue,
-          topSoldDeals: dealsAndCampaignsStats,
+          totalDealsSoldUnits: 0,
+          totalDealsRevenue: 0,
+          topSoldDeals: [],
         },
       },
     });
