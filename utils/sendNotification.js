@@ -50,19 +50,26 @@ require("../config/firebase");
 
 // module.exports = {sendNotification, getNotification};
 
-
 const admin = require("firebase-admin");
-// const Notification = require("../models/Notification");
+const Notification = require("../models/Notification");
 const User = require("../models/User");
-
-exports.sendNotification = async ({ userId, orderId = null, title, message, type = "order_placed", extraData = {} }) => {
+const { getMessaging } = require("firebase-admin/messaging");
+/**
+ * General System & Order Push Notification
+ */
+exports.sendNotification = async ({
+  userId,
+  orderId = null,
+  title,
+  message,
+  type = "order_placed",
+  extraData = {},
+}) => {
   try {
-    // 1. User ka FCM Token Database se nikaalein
     const user = await User.findById(userId);
-    
-    // 2. Database me notification history entry save karein
+
     const newNotification = await Notification.create({
-      userId,
+      recipient: userId,
       orderId,
       title,
       message,
@@ -74,7 +81,6 @@ exports.sendNotification = async ({ userId, orderId = null, title, message, type
       return newNotification;
     }
 
-    // 3. FCM Payload Construct karein
     const fcmPayload = {
       token: user.fcmToken,
       notification: {
@@ -96,12 +102,7 @@ exports.sendNotification = async ({ userId, orderId = null, title, message, type
       },
     };
 
-
-
-
-
-    // 4. Firebase Messaging se send karein
-    const response = await admin.messaging().send(fcmPayload);
+    const response = await getMessaging().send(fcmPayload);
     console.log("🔥 Notification sent successfully:", response);
 
     return newNotification;
@@ -111,12 +112,19 @@ exports.sendNotification = async ({ userId, orderId = null, title, message, type
 };
 
 /**
- * Send Chat Notification via Firebase FCM
+ * Send Chat Notification via Firebase FCM (Dynamic Token from User Model)
  */
-exports.sendChatNotification = async ({ receiverId, senderId, senderName, text, conversationId }) => {
+exports.sendChatNotification = async ({
+  receiverId,
+  senderId,
+  senderName,
+  text,
+  conversationId,
+}) => {
   try {
-    const User = require("../models/User");
+    // console.log('Try notification:');
     const user = await User.findById(receiverId).select("fcmToken");
+    // console.log('Try notification user:', user);
 
     if (!user || !user.fcmToken) {
       console.log(`[FCM Skip]: No FCM Token found for Receiver: ${receiverId}`);
@@ -139,69 +147,99 @@ exports.sendChatNotification = async ({ receiverId, senderId, senderName, text, 
       apns: { payload: { aps: { sound: "default" } } },
     };
 
-    const response = await admin.messaging().send(payload);
-    console.log("FCM Chat Notification Sent Successfully:", response);
+    const response = await getMessaging().send(payload);
+    // console.log("FCM Chat Notification Sent Successfully:", response);
     return response;
   } catch (error) {
     console.error("FCM Notification Error:", error.message);
   }
 };
 
+// GET /notifications
+exports.getNotifications = async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
 
+    const recipientModel = req.user?.role
+      ? req.user.role.charAt(0).toUpperCase() + req.user.role.slice(1)
+      : "User";
 
+    const { page = 1, limit = 30 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
 
-// const admin = require("../config/firebase");
+    const [notifications, unreadCount] = await Promise.all([
+      Notification.find({
+        recipient: userId,
+        recipientModel: recipientModel,
+      })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
 
-// /**
-//  * Send Notification to Single Device or Multiple Devices
-//  * @param {string|string[]} fcmTokens - Single token string OR array of tokens
-//  * @param {string} title - Notification Header Title
-//  * @param {string} body - Main Notification Message Text
-//  * @param {object} customData - Extra payload data (e.g. { type: 'chat', senderId: '123' })
-//  */
-// exports.sendNotification = async (fcmTokens, title, body, customData = {}) => {
-//   try {
-//     if (!fcmTokens || (Array.isArray(fcmTokens) && fcmTokens.length === 0)) {
-//       console.warn("FCM Notification Skipped: No FCM Token provided.");
-//       return false;
-//     }
+      Notification.countDocuments({
+        recipient: userId,
+        recipientModel: recipientModel,
+        isRead: false,
+      }),
+    ]);
 
-//     // Convert all custom data values to Strings (Firebase FCM Requirement)
-//     const stringifiedData = {};
-//     for (const key in customData) {
-//       stringifiedData[key] = String(customData[key]);
-//     }
+    return res.status(200).json({
+      success: true,
+      recipientModel,
+      unreadCount,
+      count: notifications.length,
+      notifications,
+    });
+  } catch (err) {
+    console.error("GET NOTIFICATIONS ERROR:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
 
-//     // MULTICAST (Array of tokens)
-//     if (Array.isArray(fcmTokens)) {
-//       const validTokens = fcmTokens.filter(Boolean);
-//       if (validTokens.length === 0) return false;
+// PATCH /update/notifications/read/:notificationId
+exports.markNotificationsRead = async (req, res) => {
+  try {
+    const { notificationId } = req.params;
+    const userId = req.user?.id || req.user?._id;
 
-//       const message = {
-//         tokens: validTokens,
-//         notification: { title, body },
-//         data: stringifiedData,
-//       };
+    const notification = await Notification.findOneAndUpdate(
+      { _id: notificationId, recipient: userId },
+      { isRead: true },
+      { new: true }
+    );
 
-//       const response = await admin.messaging().sendEachForMulticast(message);
-//       console.log(`FCM Multicast Sent: ${response.successCount} successful, ${response.failureCount} failed.`);
-//       return response;
-//     } 
-    
-//     // SINGLE TOKEN
-//     else {
-//       const message = {
-//         token: fcmTokens,
-//         notification: { title, body },
-//         data: stringifiedData,
-//       };
+    if (!notification) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Notification not found" });
+    }
 
-//       const response = await admin.messaging().send(message);
-//       console.log("FCM Notification Sent Successfully:", response);
-//       return response;
-//     }
-//   } catch (error) {
-//     console.error("FCM Notification Error:", error.message);
-//     return false;
-//   }
-// };
+    return res.status(200).json({
+      success: true,
+      message: "Notification marked as read",
+      notification,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// PATCH /update/notifications/read-all
+exports.markAllNotificationsRead = async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+
+    await Notification.updateMany(
+      { recipient: userId, isRead: false },
+      { $set: { isRead: true } }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "All notifications marked as read",
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};

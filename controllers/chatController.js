@@ -8,7 +8,7 @@
 // //   try {
 // //     // 1. Database se Receiver (Rider) ka FCM Token nikalen (Jo uske phone se save hua tha)
 // //     const user = await User.findById(receiverId);
-// //     const fcmToken = user?.fcmToken; 
+// //     const fcmToken = user?.fcmToken;
 
 // //     if (!fcmToken) {
 // //       console.log("User target belongs to no registered FCM token.");
@@ -251,7 +251,6 @@
 
 // // };
 // /////////////////////////////////////////////////////////
-
 
 // // const Conversation = require("../models/Conversation");
 // // const Message = require("../models/Message");
@@ -768,7 +767,6 @@
 //   }
 // };
 
-
 // ///////////////////////////
 // const mongoose = require("mongoose");
 // const User = require("../models/User");
@@ -961,13 +959,18 @@
  * both files import — say the word and I'll set that up).
  */
 
-
-//////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////
 const mongoose = require("mongoose");
 const User = require("../models/User");
 const Conversation = require("../models/Conversation");
 const Message = require("../models/Message");
 const { sendChatNotification } = require("../utils/sendNotification");
+const admin = require("firebase-admin");
+const app = require("../config/firebase"); // App instance require karein (sahi path set karein)
+const { getFirestore } = require("firebase-admin/firestore");
+
+// App instance pass karein taaki Firestore ko sahi credentials milein
+const db = getFirestore(app);
 
 /**
  * GET /api/chat/contacts
@@ -979,10 +982,10 @@ exports.getContactsController = async (req, res) => {
     const searchFilter = {};
     if (search) {
       searchFilter.$or = [
-        { name: { $regex: search,$options: "i" } },
-        { fullName: { $regex: search,$options: "i" } },
-        { email: { $regex: search,$options: "i" } },
-        { phone: { $regex: search,$options: "i" } },
+        { name: { $regex: search, $options: "i" } },
+        { fullName: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { phone: { $regex: search, $options: "i" } },
       ];
     }
     if (role) {
@@ -1005,7 +1008,9 @@ exports.getContactsController = async (req, res) => {
     return res.status(200).json({ success: true, contacts: formattedContacts });
   } catch (error) {
     console.error("GET CONTACTS ERROR:", error);
-    return res.status(500).json({ success: false, error: "Failed to fetch user directory" });
+    return res
+      .status(500)
+      .json({ success: false, error: "Failed to fetch user directory" });
   }
 };
 
@@ -1017,7 +1022,9 @@ exports.getOrCreateConversation = async (req, res) => {
     const { type, userId, riderId, vendorId, adminId, orderId } = req.body;
 
     if (!type) {
-      return res.status(400).json({ success: false, message: "Type parameter is required" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Type parameter is required" });
     }
 
     const query = { type };
@@ -1041,7 +1048,12 @@ exports.getOrCreateConversation = async (req, res) => {
         vendorId: vendorId || null,
         adminId: adminId || null,
         orderId: orderId || null,
-        lastMessage: { text: "", senderId: null, senderRole: null, sentAt: new Date() },
+        lastMessage: {
+          text: "",
+          senderId: null,
+          senderRole: null,
+          sentAt: new Date(),
+        },
       });
 
       conversation = await Conversation.findById(conversation._id)
@@ -1054,7 +1066,9 @@ exports.getOrCreateConversation = async (req, res) => {
     return res.status(200).json({ success: true, conversation });
   } catch (error) {
     console.error("GET OR CREATE CONVO ERROR:", error);
-    return res.status(500).json({ success: false, error: "Failed to find or create conversation" });
+    return res
+      .status(500)
+      .json({ success: false, error: "Failed to find or create conversation" });
   }
 };
 
@@ -1086,7 +1100,9 @@ exports.getConversations = async (req, res) => {
     return res.status(200).json({ success: true, conversations });
   } catch (error) {
     console.error("GET CONVERSATIONS ERROR:", error);
-    return res.status(500).json({ success: false, error: "Failed to fetch conversations" });
+    return res
+      .status(500)
+      .json({ success: false, error: "Failed to fetch conversations" });
   }
 };
 
@@ -1098,19 +1114,27 @@ exports.getMessages = async (req, res) => {
     const { id: conversationId } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(conversationId)) {
-      return res.status(400).json({ success: false, message: "Invalid Conversation ID" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid Conversation ID" });
     }
 
-    const messages = await Message.find({ conversationId, isDeleted: false }).sort({ createdAt: 1 });
+    const messages = await Message.find({
+      conversationId,
+      isDeleted: false,
+    }).sort({ createdAt: 1 });
+
     return res.status(200).json({ success: true, messages });
   } catch (error) {
     console.error("GET MESSAGES ERROR:", error);
-    return res.status(500).json({ success: false, error: "Failed to fetch messages" });
+    return res
+      .status(500)
+      .json({ success: false, error: "Failed to fetch messages" });
   }
 };
 
 /**
- * POST /api/chat/conversations/:id/messages (NEW REST MESSAGE PIPELINE)
+ * POST /api/chat/conversations/:id/messages
  */
 exports.sendMessage = async (req, res) => {
   try {
@@ -1127,7 +1151,8 @@ exports.sendMessage = async (req, res) => {
     if (!conversationId || !senderId || !senderRole || !receiverId) {
       return res.status(400).json({
         success: false,
-        message: "conversationId, senderId, senderRole, and receiverId are required",
+        message:
+          "conversationId, senderId, senderRole, and receiverId are required",
       });
     }
 
@@ -1138,7 +1163,13 @@ exports.sendMessage = async (req, res) => {
       });
     }
 
-    // 1. Message MongoDB main save karein
+    const targetRoleKey = ["user", "rider", "vendor", "admin"].includes(
+      receiverRole,
+    )
+      ? receiverRole
+      : "user";
+
+    // 1. Save Message in MongoDB
     const newMessage = await Message.create({
       conversationId,
       senderId,
@@ -1147,11 +1178,7 @@ exports.sendMessage = async (req, res) => {
       attachments,
     });
 
-    // 2. Conversation Metadata & Unread Count update
-    const targetRoleKey = ["user", "rider", "vendor", "admin"].includes(receiverRole)
-      ? receiverRole
-      : "user";
-
+    // 2. Update Conversation Metadata in MongoDB
     await Conversation.findByIdAndUpdate(conversationId, {
       lastMessage: {
         text,
@@ -1162,11 +1189,44 @@ exports.sendMessage = async (req, res) => {
       $inc: { [`unreadCount.${targetRoleKey}`]: 1 },
     });
 
-    // 3. Sender ki details for Notification
+    // 3. Write to Firestore Live Sub-collection for Flutter Listeners
+    await db
+      .collection("conversations")
+      .doc(conversationId)
+      .collection("messages")
+      .doc(newMessage._id.toString())
+      .set({
+        senderId,
+        senderRole,
+        receiverId,
+        receiverRole: targetRoleKey,
+        text,
+        attachments,
+        createdAt: newMessage.createdAt,
+        isRead: false,
+      });
+
+    // 4. Update Main Conversation doc in Firestore
+    await db
+      .collection("conversations")
+      .doc(conversationId)
+      .set(
+        {
+          lastMessage: {
+            text,
+            senderId,
+            senderRole,
+            sentAt: newMessage.createdAt,
+          },
+          updatedAt: newMessage.createdAt,
+        },
+        { merge: true },
+      );
+
+    // 5. FCM Push Notification
     const sender = await User.findById(senderId).select("name fullName");
     const senderName = sender?.name || sender?.fullName || "User";
-
-    // 4. Send Instant Push Notification via Firebase FCM
+    // console.log("Sending Notification:");
     sendChatNotification({
       receiverId,
       senderId,
@@ -1174,6 +1234,7 @@ exports.sendMessage = async (req, res) => {
       text,
       conversationId,
     }).catch((err) => console.error("Async FCM Error:", err.message));
+    // console.log("Successfully sent notification:");
 
     return res.status(201).json({
       success: true,
@@ -1181,7 +1242,9 @@ exports.sendMessage = async (req, res) => {
     });
   } catch (error) {
     console.error("SEND MESSAGE REST ERROR:", error);
-    return res.status(500).json({ success: false, error: "Failed to send message" });
+    return res
+      .status(500)
+      .json({ success: false, error: "Failed to send message" });
   }
 };
 
@@ -1195,17 +1258,43 @@ exports.markConversationRead = async (req, res) => {
     if (role === "customer") role = "user";
 
     if (!["user", "rider", "vendor", "admin"].includes(role)) {
-      return res.status(400).json({ success: false, message: "Invalid role specified" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid role specified" });
     }
 
-    await Message.updateMany({ conversationId, isRead: false }, { $set: { isRead: true } });
+    // 1. Mark MongoDB Messages as read
+    await Message.updateMany(
+      { conversationId, isRead: false },
+      { $set: { isRead: true } },
+    );
+
+    // 2. Clear Unread Count in MongoDB
     await Conversation.findByIdAndUpdate(conversationId, {
       $set: { [`unreadCount.${role}`]: 0 },
     });
 
+    // 3. Sync Read status to Firestore
+    const unreadMessagesSnapshot = await db
+      .collection("conversations")
+      .doc(conversationId)
+      .collection("messages")
+      .where("isRead", "==", false)
+      .get();
+
+    if (!unreadMessagesSnapshot.empty) {
+      const batch = db.batch();
+      unreadMessagesSnapshot.docs.forEach((doc) => {
+        batch.update(doc.ref, { isRead: true });
+      });
+      await batch.commit();
+    }
+
     return res.status(200).json({ success: true, message: "Marked as read" });
   } catch (error) {
     console.error("MARK READ ERROR:", error);
-    return res.status(500).json({ success: false, error: "Failed to mark conversation read" });
+    return res
+      .status(500)
+      .json({ success: false, error: "Failed to mark conversation read" });
   }
 };
