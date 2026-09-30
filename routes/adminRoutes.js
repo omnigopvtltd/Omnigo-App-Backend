@@ -4,13 +4,14 @@ const auth = require("../middleware/authMiddleware");
 const role = require("../middleware/rolemiddleware");
 const {
   globalSearch,
-  getNotifications,
-  markAllNotificationsRead,
+  // getNotifications,
+  // markAllNotificationsRead,
   getProfile,
   updateProfile,
-  markNotificationsRead,
+  // markNotificationsRead,
   createAndSendNotification,
 } = require("../controllers/adminController");
+const { getNotifications, markNotificationsRead, markAllNotificationsRead } = require("../utils/sendNotification");
 
 router.get("/search", auth, role("admin"), globalSearch);
 router.post("/send-notifications", createAndSendNotification);
