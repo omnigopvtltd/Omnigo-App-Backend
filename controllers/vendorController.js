@@ -1232,31 +1232,46 @@ exports.vendorSocialLogin = async (req, res) => {
       });
     }
 
-    let sub, email, name, picture;
+   let sub, facebookId, email, name, picture;
 
     // 1. Social Provider Token Verification
-    try {
+    try {  
       if (provider === "facebook") {
-        const response = await axios.get(
-          `https://graph.facebook.com/me?fields=id,name,email,picture.type(large)&access_token=${idToken}`
-        );
-        id = response.data.id;
-        sub = id;
-        name = response.data.name;
-        email = response.data.email;
-        picture = response.data.picture?.data?.url || "";
+        // 1) Token valid ho aur hamari hi app ka ho
+        const debug = await axios.get("https://graph.facebook.com/debug_token", {
+          params: {
+            input_token: idToken,
+            access_token: `${process.env.FACEBOOK_APP_ID}|${process.env.FACEBOOK_APP_SECRET}`,
+          },
+        });
+        const d = debug.data?.data;
+        if (!d?.is_valid || d.app_id !== process.env.FACEBOOK_APP_ID) {
+          return res.status(401).json({
+            success: false,
+            message: "Invalid Facebook token",
+          });
+        }
+      
+        // 2) Profile lein
+        const { data } = await axios.get("https://graph.facebook.com/me", {
+          params: {
+            fields: "id,name,email,picture.type(large)",
+            access_token: idToken,
+          },
+        });
+      
+        facebookId = data.id;
+        name = data.name;
+        email = data.email;
+        picture = data.picture?.data?.url;
       } else {
-        // Google Provider Verification
         const ticket = await googleClient.verifyIdToken({
-          idToken: idToken,
+          idToken,
           audience: process.env.GOOGLE_CLIENT_ID,
         });
-        const payload = ticket.getPayload();
-        sub = payload.sub;
-        email = payload.email;
-        name = payload.name;
-        picture = payload.picture || "";
+        ({ sub, email, name, picture } = ticket.getPayload());
       }
+      
     } catch (authErr) {
       console.error(`${provider.toUpperCase()} Token Verification Failed:`, authErr.message);
       return res.status(401).json({
@@ -1287,8 +1302,8 @@ exports.vendorSocialLogin = async (req, res) => {
         businessEmail: normalizedEmail,
         ownerName: name || "",
         ownerEmail: normalizedEmail,
-        googleId: provider === "google" ? sub : undefined,
-        facebookId: provider === "facebook" ? sub : undefined,
+       facebookId : provider === "facebook" ? facebookId : null,
+        googleId: provider === "google" ? sub : null,
         profilePicture: picture,
         isEmailVerified: true,
 
@@ -1304,7 +1319,7 @@ exports.vendorSocialLogin = async (req, res) => {
       if (provider === "google" && !vendor.googleId) {
         vendor.googleId = sub;
       } else if (provider === "facebook" && !vendor.facebookId) {
-        vendor.facebookId = sub;
+       vendor.facebookId = facebookId;
       }
 
       vendor.lastLogin = new Date();
