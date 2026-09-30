@@ -1310,7 +1310,7 @@ exports.vendorSocialLogin = async (req, res) => {
         // Dummy values to satisfy Mongoose 'required' & 'unique' schema
         password: "SOCIAL_LOGIN_NOPASSWORD",
         businessPhone: dummyPhone,
-        cnicNumber: `PENDING_${Date.now()}`,
+        cnicNumber: `PENDING_VERIFICATION`,
       };
 
       vendor = await Vendor.create(newVendorData);
