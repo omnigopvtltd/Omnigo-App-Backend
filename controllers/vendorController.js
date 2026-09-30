@@ -1295,22 +1295,22 @@ exports.vendorSocialLogin = async (req, res) => {
 
     if (!vendor) {
       // Create New Vendor Entry with Required Schema Fallbacks
-      const dummyPhone = `+92${Math.floor(1000000000 + Math.random() * 9000000000)}`;
+      // const dummyPhone = `+92${Math.floor(1000000000 + Math.random() * 9000000000)}`;
 
       const newVendorData = {
         businessName: name || "New Vendor Business",
         businessEmail: normalizedEmail,
-        ownerName: name || "",
-        ownerEmail: normalizedEmail,
+        // ownerName: name || "",
+        // ownerEmail: normalizedEmail,
        facebookId : provider === "facebook" ? facebookId : null,
         googleId: provider === "google" ? sub : null,
         profilePicture: picture,
         isEmailVerified: true,
 
         // Dummy values to satisfy Mongoose 'required' & 'unique' schema
-        password: "SOCIAL_LOGIN_NOPASSWORD",
-        businessPhone: dummyPhone,
-        cnicNumber: `PENDING_VERIFICATION`,
+        // password: "SOCIAL_LOGIN_NOPASSWORD",
+        // businessPhone: "",
+        // cnicNumber: "",
       };
 
       vendor = await Vendor.create(newVendorData);
