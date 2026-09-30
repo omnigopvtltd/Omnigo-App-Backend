@@ -74,6 +74,16 @@ const userSchema = new mongoose.Schema(
       },
     ],
 
+    feedbackSkipCount: {
+        type: Number,
+        default: 0,
+      },
+      isFeedbackBlocked: {
+        type: Boolean,
+        default: false,
+      },
+      
+
     // RIDER PROFILE & LIVE TRACKING
     riderProfile: {
       categories: {
@@ -161,15 +171,6 @@ const userSchema = new mongoose.Schema(
         },
       ],
       // Add these fields to your existing User Schema
-      feedbackSkipCount: {
-        type: Number,
-        default: 0,
-      },
-      isFeedbackBlocked: {
-        type: Boolean,
-        default: false,
-      },
-      
       autoAcceptOrders: {
         type: Boolean,
         default: false,
