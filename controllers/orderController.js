@@ -9,7 +9,7 @@ const { processRiderBikeInstallment } = require("../helpers/bikeInstallment");
 const Cart = require("../models/Cart");
 const WalletTransaction = require("../models/WalletTransaction");
 const Vendor = require("../models/Vendor");
-const { createAndSendNotification } = require("./adminController");
+const { createAndSendNotification } = require("../utils/sendNotification");
 
 exports.createOrder = async (req, res) => {
   try {

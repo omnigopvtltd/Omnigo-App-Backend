@@ -15,7 +15,7 @@ const { body, validationResult } = require("express-validator");
 const Order = require("../models/Order");
 const Deal = require("../models/Deal");
 const Product = require("../models/Product");
-const { createAndSendNotification } = require("./adminController");
+const { createAndSendNotification } = require("../utils/sendNotification");
 const Campaign = require("../models/Campaign");
 
 // ======================================================
