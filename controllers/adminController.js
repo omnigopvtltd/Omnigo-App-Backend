@@ -79,54 +79,55 @@ exports.globalSearch = async (req, res) => {
 //   }
 // };
 
-exports.createAndSendNotification = async (app, {
-  recipientId,
-  recipientModel = "User", // "User", "Vendor", "Rider", "Admin"
-  title,
-  message,
-  type = "system",
-  data = {},
-  link = "",
-}) => {
-  try {
-    // 1. Validation check for required fields
-    if (!recipientId || !title || !message) {
-      console.error("NOTIFICATION FAILED: Missing recipientId, title, or message");
-      return null;
-    }
+//////////////////////////////////////////////////////
+// exports.createAndSendNotification = async (app, {
+//   recipientId,
+//   recipientModel = "User", // "User", "Vendor", "Rider", "Admin"
+//   title,
+//   message,
+//   type = "system",
+//   data = {},
+//   link = "",
+// }) => {
+//   try {
+//     // 1. Validation check for required fields
+//     if (!recipientId || !title || !message) {
+//       console.error("NOTIFICATION FAILED: Missing recipientId, title, or message");
+//       return null;
+//     }
 
-    // 2. Express res.type method collision guard
-    const safeType = typeof type === "string" ? type : "system";
+//     // 2. Express res.type method collision guard
+//     const safeType = typeof type === "string" ? type : "system";
 
-    // 3. Save Real Notification in Database
-    const newNotification = await Notification.create({
-      recipient: recipientId,
-      recipientModel,
-      title,
-      message,
-      type: safeType,
-      data,
-      link,
-    });
-    //  const response = await getMessaging().send(message);
+//     // 3. Save Real Notification in Database
+//     const newNotification = await Notification.create({
+//       recipient: recipientId,
+//       recipientModel,
+//       title,
+//       message,
+//       type: safeType,
+//       data,
+//       link,
+//     });
+//     //  const response = await getMessaging().send(message);
 
-    // 4. Emit Socket IO Real-Time Event
-    const io = app?.get ? app.get("io") : null;
-    if (io) {
-      const roomName = `${recipientModel.toLowerCase()}:${recipientId}`;
-      io.to(roomName).emit("newNotification", {
-        notification: newNotification,
-        unreadCountIncrement: 1,
-      });
-    }
+//     // 4. Emit Socket IO Real-Time Event
+//     const io = app?.get ? app.get("io") : null;
+//     if (io) {
+//       const roomName = `${recipientModel.toLowerCase()}:${recipientId}`;
+//       io.to(roomName).emit("newNotification", {
+//         notification: newNotification,
+//         unreadCountIncrement: 1,
+//       });
+//     }
 
-    console.log("Notification Sent Successfully:", newNotification._id);
-    return newNotification;
-  } catch (error) {
-    console.error("CREATE REAL NOTIFICATION ERROR:", error);
-    return null;
-  }
-};
+//     console.log("Notification Sent Successfully:", newNotification._id);
+//     return newNotification;
+//   } catch (error) {
+//     console.error("CREATE REAL NOTIFICATION ERROR:", error);
+//     return null;
+//   }
+// };
 
 // How to use this in your Controllers:
 // Order Confirm (Notify Customer):
@@ -161,95 +162,97 @@ exports.createAndSendNotification = async (app, {
 // });
 
 // Get notifications separately for User, Rider, Vendor, or Admin
-exports.getNotifications = async (req, res) => {
-  try {
-    const userId = req.user?.id || req.user?._id;
+
+////////////////////////////////////
+// exports.getNotifications = async (req, res) => {
+//   try {
+//     const userId = req.user?.id || req.user?._id;
     
-    // Auto-detect recipient role (defaulting to User if not passed)
-    const recipientModel = req.user?.role 
-      ? req.user.role.charAt(0).toUpperCase() + req.user.role.slice(1)
-      : "User";
+//     // Auto-detect recipient role (defaulting to User if not passed)
+//     const recipientModel = req.user?.role 
+//       ? req.user.role.charAt(0).toUpperCase() + req.user.role.slice(1)
+//       : "User";
 
-    const { page = 1, limit = 30 } = req.query;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+//     const { page = 1, limit = 30 } = req.query;
+//     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    // Fetch Notifications matching current recipient & role
-    const [notifications, unreadCount] = await Promise.all([
-      Notification.find({
-        recipient: userId,
-        recipientModel: recipientModel,
-      })
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(parseInt(limit))
-        .lean(),
+//     // Fetch Notifications matching current recipient & role
+//     const [notifications, unreadCount] = await Promise.all([
+//       Notification.find({
+//         recipient: userId,
+//         recipientModel: recipientModel,
+//       })
+//         .sort({ createdAt: -1 })
+//         .skip(skip)
+//         .limit(parseInt(limit))
+//         .lean(),
 
-      Notification.countDocuments({
-        recipient: userId,
-        recipientModel: recipientModel,
-        isRead: false,
-      }),
-    ]);
+//       Notification.countDocuments({
+//         recipient: userId,
+//         recipientModel: recipientModel,
+//         isRead: false,
+//       }),
+//     ]);
 
-    return res.status(200).json({
-      success: true,
-      recipientModel,
-      unreadCount,
-      count: notifications.length,
-      notifications,
-    });
-  } catch (err) {
-    console.error("GET NOTIFICATIONS ERROR:", err);
-    return res.status(500).json({ success: false, message: err.message });
-  }
-};
+//     return res.status(200).json({
+//       success: true,
+//       recipientModel,
+//       unreadCount,
+//       count: notifications.length,
+//       notifications,
+//     });
+//   } catch (err) {
+//     console.error("GET NOTIFICATIONS ERROR:", err);
+//     return res.status(500).json({ success: false, message: err.message });
+//   }
+// };
 
 // Mark single notification as read
-exports.markNotificationsRead = async (req, res) => {
-  try {
-    const { notificationId } = req.params;
-    const userId = req.user?.id || req.user?._id;
+// exports.markNotificationsRead = async (req, res) => {
+//   try {
+//     const { notificationId } = req.params;
+//     const userId = req.user?.id || req.user?._id;
 
-    const notification = await Notification.findOneAndUpdate(
-      { _id: notificationId, recipient: userId },
-      { isRead: true },
-      { new: true }
-    );
+//     const notification = await Notification.findOneAndUpdate(
+//       { _id: notificationId, recipient: userId },
+//       { isRead: true },
+//       { new: true }
+//     );
 
-    if (!notification) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Notification not found" });
-    }
+//     if (!notification) {
+//       return res
+//         .status(404)
+//         .json({ success: false, message: "Notification not found" });
+//     }
 
-    return res.status(200).json({
-      success: true,
-      message: "Notification marked as read",
-      notification,
-    });
-  } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
-  }
-};
+//     return res.status(200).json({
+//       success: true,
+//       message: "Notification marked as read",
+//       notification,
+//     });
+//   } catch (err) {
+//     return res.status(500).json({ success: false, message: err.message });
+//   }
+// };
 
 // Mark ALL notifications as read
-exports.markAllNotificationsRead = async (req, res) => {
-  try {
-    const userId = req.user?.id || req.user?._id;
+// exports.markAllNotificationsRead = async (req, res) => {
+//   try {
+//     const userId = req.user?.id || req.user?._id;
 
-    await Notification.updateMany(
-      { recipient: userId, isRead: false },
-      { $set: { isRead: true } }
-    );
+//     await Notification.updateMany(
+//       { recipient: userId, isRead: false },
+//       { $set: { isRead: true } }
+//     );
 
-    return res.status(200).json({
-      success: true,
-      message: "All notifications marked as read",
-    });
-  } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
-  }
-};
+//     return res.status(200).json({
+//       success: true,
+//       message: "All notifications marked as read",
+//     });
+//   } catch (err) {
+//     return res.status(500).json({ success: false, message: err.message });
+//   }
+// };
 
 // // PATCH /api/notifications/read/:id
 // exports.markNotificationsRead = async (req, res) => {
