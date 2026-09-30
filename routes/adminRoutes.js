@@ -9,12 +9,12 @@ const {
   getProfile,
   updateProfile,
   // markNotificationsRead,
-  createAndSendNotification,
+  // createAndSendNotification,
 } = require("../controllers/adminController");
 const { getNotifications, markNotificationsRead, markAllNotificationsRead } = require("../utils/sendNotification");
 
 router.get("/search", auth, role("admin"), globalSearch);
-router.post("/send-notifications", createAndSendNotification);
+// router.post("/send-notifications", createAndSendNotification);
 router.get("/notifications", auth, getNotifications);
 router.patch("/update/notifications/read/:id", auth, markNotificationsRead);
 router.patch("/update/notifications/read-all", auth, markAllNotificationsRead);
