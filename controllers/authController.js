@@ -611,7 +611,7 @@ exports.signup = async (req, res) => {
     await sendNotification({
       userId: user?._id,
       role: "user",
-      type: "signup"
+      type: "signup",
     });
 
     return sendResponse(res, "Signup successful", userResponse);
@@ -683,9 +683,9 @@ exports.login = async (req, res) => {
     const userResponse = user.toObject();
     delete userResponse.password;
 
-    console.log(user)
+    console.log(user);
     // Send Notification
-     await sendNotification({
+    await sendNotification({
       userId: user?._id,
       role: "user",
       type: "login",
@@ -726,6 +726,13 @@ exports.googleLogin = async (req, res) => {
       });
     }
 
+    //  Send Notification
+    await sendNotification({
+      userId: user?._id,
+      role: "user",
+      type: "login",
+    });
+
     return sendResponse(res, "Google login success", user);
   } catch (err) {
     return res.status(401).json({
@@ -759,6 +766,13 @@ exports.facebookLogin = async (req, res) => {
       });
     }
 
+    // Send Notification
+    await sendNotification({
+      userId: user?._id,
+      role: "user",
+      type: "login",
+    });
+
     return sendResponse(res, "Facebook login success", user);
   } catch (err) {
     return res.status(401).json({
@@ -770,7 +784,6 @@ exports.facebookLogin = async (req, res) => {
 
 // ======================================================
 // FIREBASE SOCIAL LOGIN (GOOGLE / FACEBOOK)
-// Handles Google & Facebook for Customer, Rider & Admin
 // ======================================================
 exports.socialLogin = async (req, res) => {
   try {
@@ -1276,6 +1289,17 @@ exports.updateRiderStatus = async (req, res) => {
     }
 
     const statusText = isBlocked ? "blocked" : "unblocked";
+
+    await sendNotification({
+  userId: updatedRider?._id,
+  role: "rider",
+  // orderId: order._id,
+  type: "order_preparing",
+  extraData: {
+    screen: "OrderTracking",
+    status: "preparing",
+  },
+});
 
     return res.status(200).json({
       success: true,
