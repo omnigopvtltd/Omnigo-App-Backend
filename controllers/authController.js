@@ -939,7 +939,6 @@ exports.socialLogin = async (req, res) => {
 
     await sendNotification({
       userId: user?._id,
-      role: "user",
       type: "login",
     });
 
@@ -1291,15 +1290,13 @@ exports.updateRiderStatus = async (req, res) => {
     const statusText = isBlocked ? "blocked" : "unblocked";
 
     await sendNotification({
-  userId: updatedRider?._id,
-  role: "rider",
-  // orderId: order._id,
-  type: "order_preparing",
-  extraData: {
-    screen: "OrderTracking",
-    status: "preparing",
-  },
-});
+      userId: updatedRider?._id,
+      role: "rider",
+      type: `${statusText}`,
+      extraData: {
+        reason: "Rider is blocked by admin. Please contact to support.",
+      },
+    });
 
     return res.status(200).json({
       success: true,
