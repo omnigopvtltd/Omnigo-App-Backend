@@ -15,7 +15,7 @@ const { body, validationResult } = require("express-validator");
 const Order = require("../models/Order");
 const Deal = require("../models/Deal");
 const Product = require("../models/Product");
-const { createAndSendNotification, sendNotificationToVendor } = require("../utils/sendNotification");
+const { sendNotification, sendNotificationToVendor } = require("../utils/sendNotification");
 const Campaign = require("../models/Campaign");
 
 // ======================================================
@@ -1106,9 +1106,9 @@ exports.login = async (req, res) => {
     const vendorResponse = vendor.toObject();
     delete vendorResponse.password;
 
-    await createAndSendNotification(req.app, {
-      recipientId: `${vendor._id}`, // Must be valid ObjectId string
-      recipientModel: "Vendor",
+    await sendNotificationToVendor(req.app, {
+      vendorId: `${vendor._id}`, // Must be valid ObjectId string
+      role: "Vendor",
       title: "Succesfully Logged In",
       message: "You have successfully logged in.",
       type: "system", // Explicitly handle string
