@@ -60,6 +60,7 @@ const Vendor = require("../models/Vendor");
  */
 exports.sendNotification = async ({
   userId,
+  role,
   orderId = null,
   title,
   message,
@@ -89,6 +90,7 @@ exports.sendNotification = async ({
         title: title,
         body: message,
       },
+      role: role || "user",
       data: {
         type: type,
         orderId: orderId ? orderId.toString() : "",
@@ -118,6 +120,7 @@ exports.sendNotification = async ({
  */
 exports.sendNotificationToVendor = async ({
   vendorId,
+  role,
   orderId = null,
   title,
   message,
@@ -134,6 +137,7 @@ exports.sendNotificationToVendor = async ({
       message,
       type,
       extraData,
+      role,
     });
 
     if (!vendor || !vendor.fcmToken) {
@@ -147,6 +151,7 @@ exports.sendNotificationToVendor = async ({
         title: title,
         body: message,
       },
+      role: role || "vendor",
       data: {
         type: type,
         orderId: orderId ? orderId.toString() : "",

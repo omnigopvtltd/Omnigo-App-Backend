@@ -4,12 +4,12 @@ const Product = require("../models/Product");
 const Restaurant = require("../models/Restaurant");
 const RiderSessionParticipation = require("../models/RiderSessionParticipation");
 // const Settings = require("../models/Settings"); // Ensured import for handleOrderAssignment
-const sendNotification = require("../utils/sendNotification");
+// const sendNotification = require("../utils/sendNotification");
 const { processRiderBikeInstallment } = require("../helpers/bikeInstallment");
 const Cart = require("../models/Cart");
 const WalletTransaction = require("../models/WalletTransaction");
 const Vendor = require("../models/Vendor");
-const { createAndSendNotification } = require("../utils/sendNotification");
+const { sendNotification, sendNotificationToVendor } = require("../utils/sendNotification");
 
 exports.createOrder = async (req, res) => {
   try {
@@ -144,9 +144,9 @@ exports.createOrder = async (req, res) => {
     // Step 4: Database Notification Save + Socket IO Emit for ALL Vendors
     if (vendorIds.length > 0) {
       const vendorNotifications = vendorIds.map((vId) =>
-        createAndSendNotification(req.app, {
-          recipientId: vId,
-          recipientModel: "Vendor",
+        sendNotificationToVendor(req.app, {
+          vendorId: vId,
+          role: "Vendor",
           title: "New Order Received!",
           message: `You have received a new order #${order.orderNumber}.`,
           type: "new_order",
@@ -319,9 +319,9 @@ exports.cancelOrder = async (req, res) => {
 
     // FCM Push Notification
     const customer = await User.findById(order.userId);
-    createAndSendNotification(req.app, {
-      recipientId: order.stops[0]?.vendorId,
-      recipientModel: "Vendor",
+    sendNotification(req.app, {
+      vendorId: order.stops[0]?.vendorId,
+     role: "Vendor",
       title: "Order Cancelled",
       message: `Order#${order.orderNumber} has been cancelled.`,
       type: "cancelled_order",
@@ -445,9 +445,9 @@ exports.cancelRiderOrder = async (req, res) => {
     order.isAssigned = false;
     order.status = "confirmed";
 
-    createAndSendNotification(req.app, {
-      recipientId: order.riderId,
-      recipientModel: "Rider",
+    sendNotification(req.app, {
+      userId: order.riderId,
+      role: "rider",
       title: "Order Cancelled",
       message: `You have cancelled Order#${order.orderNumber}.`,
       type: "cancelled_order",
@@ -458,7 +458,7 @@ exports.cancelRiderOrder = async (req, res) => {
         // itemCount: order.items?.length || 0,
         screenToOpen: "RiderOrderDetails",
       },
-      link: `/rider/orders/cancel/${order._id}`,
+      // link: `/rider/orders/cancel/${order._id}`,
     });
     await order.save();
 
@@ -559,9 +559,9 @@ exports.confirmOrder = async (req, res) => {
       });
     }
 
-    // createAndSendNotification(req.app, {
+    // sendNotification(req.app, {
     //       recipientId: order.userId,
-    //       recipientModel: "User",
+    //      role: "User",
     //       title: "Order Confirmed!",
     //       message: `Your order #${order.orderNumber} has been confirmed.`,
     //       type: "confirmed_order",
@@ -590,7 +590,7 @@ exports.confirmOrder = async (req, res) => {
       userId: order.userId,
       orderId: order._id,
       title: "Order Update",
-      message: `Your order status is now: ${status}`,
+      message: `Your order status is now: ${order.status}`,
       type: "order_confirmed",
     });
 
@@ -695,9 +695,9 @@ exports.readyOrder = async (req, res) => {
       });
     }
 
-    createAndSendNotification(req.app, {
-      recipientId: order?.riderId,
-      recipientModel: "Rider",
+    sendNotification(req.app, {
+      userId: order?.riderId,
+     role: "rider",
       title: "Order Ready For Pickup",
       message: `Order #${order.orderNumber} is raedy. Please pickup order now.`,
       type: "ready_order",
@@ -708,7 +708,7 @@ exports.readyOrder = async (req, res) => {
         itemCount: order.items?.length || 0,
         screenToOpen: "RiderOrderDetails",
       },
-      link: `/rider/orders/ready/${order._id}`,
+      // link: `/rider/orders/ready/${order._id}`,
     });
     // 5. Send FCM Push Notification to Customer
     // const customer = await User.findById(order.userId);
@@ -829,9 +829,9 @@ exports.cancelOrderByVendor = async (req, res) => {
       }
     }
 
-    createAndSendNotification(req.app, {
-      recipientId: order.userId,
-      recipientModel: "User",
+    sendNotification(req.app, {
+      userId: order.userId,
+      role: "user",
       title: "Order Cancelled!",
       message: `Order #${order.orderNumber} Cancelled. Reason: ${order.cancellationReason}`,
       type: "cancelled_order",
@@ -842,7 +842,7 @@ exports.cancelOrderByVendor = async (req, res) => {
         itemCount: order.items?.length || 0,
         screenToOpen: "UserOrderDetails",
       },
-      link: `/user/orders/cancel/${order._id}`,
+      // link: `/user/orders/cancel/${order._id}`,
     });
     // Send FCM Push Notification to Customer
     // const customer = await User.findById(order.userId);
@@ -1130,20 +1130,20 @@ exports.acceptOrder = async (req, res) => {
     }
 
     // FCM Push Notification
-    const customer = await User.findById(order.userId);
-    if (customer?.fcmToken) {
-      await sendNotification(
-        customer.fcmToken,
-        "Order Accepted",
-        `Rider ${rider.name} has accepted your order #${order.orderNumber}`,
-        {
-          riderId: rider._id.toString(),
-          riderName: rider.name || "",
-          riderEmail: rider.email || "",
-          riderPhone: rider.phone || "",
-        },
-      );
-    }
+    // const customer = await User.findById(order.userId);
+    // if (customer?.fcmToken) {
+    //   await sendNotification(
+    //     customer.fcmToken,
+    //     "Order Accepted",
+    //     `Rider ${rider.name} has accepted your order #${order.orderNumber}`,
+    //     {
+    //       riderId: rider._id.toString(),
+    //       riderName: rider.name || "",
+    //       riderEmail: rider.email || "",
+    //       riderPhone: rider.phone || "",
+    //     },
+    //   );
+    // }
 
     return res.status(200).json({
       success: true,
