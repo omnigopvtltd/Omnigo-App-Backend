@@ -55,20 +55,28 @@ const Notification = require("../models/Notification");
 const User = require("../models/User");
 const { getMessaging } = require("firebase-admin/messaging");
 const Vendor = require("../models/Vendor");
-/**
- * General System & Order Push Notification
- */
+
+const notificationMessages = require("../utils/notificationMessages");
+
 exports.sendNotification = async ({
   userId,
   role,
   orderId = null,
+  type = "order_placed",
   title,
   message,
-  type = "order_placed",
   extraData = {},
 }) => {
   try {
     const user = await User.findById(userId);
+
+    const template = notificationMessages[type];
+
+    title = title || template?.title || "OmniGo";
+    message =
+      message ||
+      template?.message ||
+      "You have a new notification from OmniGo.";
 
     const newNotification = await Notification.create({
       recipient: userId,
@@ -76,59 +84,85 @@ exports.sendNotification = async ({
       title,
       message,
       type,
-      role,
+      role: role || "user",
+      extraData,
     });
 
-    if (!user || !user.fcmToken) {
-      console.log(`User ${userId} does not have an FCM Token. Saved in DB only.`);
+    if (!user?.fcmToken) {
+      console.log(
+        `User ${userId} does not have an FCM token. Saved in DB only.`,
+      );
+
       return newNotification;
     }
 
     const fcmPayload = {
       token: user.fcmToken,
+
       notification: {
-        title: title,
+        title,
         body: message,
       },
-      role: role || "user",
+
       data: {
-        type: type,
+        type,
         orderId: orderId ? orderId.toString() : "",
         notificationId: newNotification._id.toString(),
-        ...extraData,
+        ...Object.fromEntries(
+          Object.entries(extraData).map(([key, value]) => [
+            key,
+            String(value),
+          ]),
+        ),
       },
+
       android: {
         priority: "high",
+
         notification: {
           sound: "default",
-          channelId: type === "chat" ? "chat_channel" : "order_channel",
+
+          channelId:
+            type === "chat"
+              ? "chat_channel"
+              : type.includes("deal") ||
+                type === "flash_deal"
+                ? "promotion_channel"
+                : "order_channel",
         },
       },
     };
 
     const response = await getMessaging().send(fcmPayload);
-    console.log("🔥 Notification sent successfully:", response);
+
+    console.log("🔥 Notification sent:", response);
 
     return newNotification;
   } catch (error) {
-    console.error("❌ Error sending push notification:", error);
+    console.error("❌ Notification error:", error);
+    return null;
   }
 };
 
-/**
- * General System & Order Push Notification
- */
 exports.sendNotificationToVendor = async ({
   vendorId,
   role,
   orderId = null,
+  type = "order_placed",
   title,
   message,
-  type = "order_placed",
   extraData = {},
 }) => {
   try {
     const vendor = await Vendor.findById(vendorId);
+
+    const template = notificationMessages[type];
+
+    title = title || template?.title || "OmniGo";
+    message =
+      message ||
+      template?.message ||
+      "You have a new notification from OmniGo.";
 
     const newNotification = await Notification.create({
       recipient: vendorId,
@@ -136,45 +170,190 @@ exports.sendNotificationToVendor = async ({
       title,
       message,
       type,
+      role: role || "vendor",
       extraData,
-      role,
     });
 
-    if (!vendor || !vendor.fcmToken) {
-      console.log(`Vendor ${vendorId} does not have an FCM Token. Saved in DB only.`);
+    if (!vendor?.fcmToken) {
+      console.log(
+        `Vendor ${vendorId} does not have an FCM token. Saved in DB only.`,
+      );
+
       return newNotification;
     }
 
     const fcmPayload = {
       token: vendor.fcmToken,
+
       notification: {
-        title: title,
+        title,
         body: message,
       },
-      role: role || "vendor",
+
       data: {
-        type: type,
+        type,
         orderId: orderId ? orderId.toString() : "",
         notificationId: newNotification._id.toString(),
-        ...extraData,
+        ...Object.fromEntries(
+          Object.entries(extraData).map(([key, value]) => [
+            key,
+            String(value),
+          ]),
+        ),
       },
+
       android: {
         priority: "high",
+
         notification: {
           sound: "default",
-          channelId: type === "chat" ? "chat_channel" : "order_channel",
+
+          channelId:
+            type === "chat"
+              ? "chat_channel"
+              : type.includes("deal") ||
+                type === "flash_deal"
+                ? "promotion_channel"
+                : "order_channel",
         },
       },
     };
 
     const response = await getMessaging().send(fcmPayload);
-    console.log("🔥 Notification sent successfully:", response);
+
+    console.log("🔥 Notification sent:", response);
 
     return newNotification;
   } catch (error) {
-    console.error("❌ Error sending push notification:", error);
+    console.error("❌ Notification error:", error);
+    return null;
   }
 };
+
+/**
+ * General System & Order Push Notification
+ */
+// exports.sendNotification = async ({
+//   userId,
+//   role,
+//   orderId = null,
+//   title,
+//   message,
+//   type = "order_placed",
+//   extraData = {},
+// }) => {
+//   try {
+//     const user = await User.findById(userId);
+
+//     const newNotification = await Notification.create({
+//       recipient: userId,
+//       orderId,
+//       title,
+//       message,
+//       type,
+//       role,
+//     });
+
+//     if (!user || !user.fcmToken) {
+//       console.log(`User ${userId} does not have an FCM Token. Saved in DB only.`);
+//       return newNotification;
+//     }
+
+//     const fcmPayload = {
+//       token: user.fcmToken,
+//       notification: {
+//         title: title,
+//         body: message,
+//       },
+//       role: role || "user",
+//       data: {
+//         type: type,
+//         orderId: orderId ? orderId.toString() : "",
+//         notificationId: newNotification._id.toString(),
+//         ...extraData,
+//       },
+//       android: {
+//         priority: "high",
+//         notification: {
+//           sound: "default",
+//           channelId: type === "chat" ? "chat_channel" : "order_channel",
+//         },
+//       },
+//     };
+
+//     const response = await getMessaging().send(fcmPayload);
+//     console.log("🔥 Notification sent successfully:", response);
+
+//     return newNotification;
+//   } catch (error) {
+//     console.error("❌ Error sending push notification:", error);
+//   }
+// };
+
+
+
+/**
+ * General System & Order Push Notification
+ */
+// exports.sendNotificationToVendor = async ({
+//   vendorId,
+//   role,
+//   orderId = null,
+//   title,
+//   message,
+//   type = "order_placed",
+//   extraData = {},
+// }) => {
+//   try {
+//     const vendor = await Vendor.findById(vendorId);
+
+//     const newNotification = await Notification.create({
+//       recipient: vendorId,
+//       orderId,
+//       title,
+//       message,
+//       type,
+//       extraData,
+//       role,
+//     });
+
+//     if (!vendor || !vendor.fcmToken) {
+//       console.log(`Vendor ${vendorId} does not have an FCM Token. Saved in DB only.`);
+//       return newNotification;
+//     }
+
+//     const fcmPayload = {
+//       token: vendor.fcmToken,
+//       notification: {
+//         title: title,
+//         body: message,
+//       },
+//       role: role || "vendor",
+//       data: {
+//         type: type,
+//         orderId: orderId ? orderId.toString() : "",
+//         notificationId: newNotification._id.toString(),
+//         ...extraData,
+//       },
+//       android: {
+//         priority: "high",
+//         notification: {
+//           sound: "default",
+//           channelId: type === "chat" ? "chat_channel" : "order_channel",
+//         },
+//       },
+//     };
+
+//     const response = await getMessaging().send(fcmPayload);
+//     console.log("🔥 Notification sent successfully:", response);
+
+//     return newNotification;
+//   } catch (error) {
+//     console.error("❌ Error sending push notification:", error);
+//   }
+// };
+
+
 
 /**
  * Send Chat Notification via Firebase FCM (Dynamic Token from User Model)

@@ -15,6 +15,7 @@ const Order = require("../models/Order");
 const Product = require("../models/Product");
 const Cart = require("../models/Cart");
 const admin = require("../config/firebase");
+const { sendNotification } = require("../utils/sendNotification");
 
 // ======================================================
 // GOOGLE CLIENT
@@ -606,6 +607,13 @@ exports.signup = async (req, res) => {
     const userResponse = user.toObject();
     delete userResponse.password;
 
+    // Send  Notification
+    await sendNotification({
+      userId: user?._id,
+      role: "user",
+      type: "signup"
+    });
+
     return sendResponse(res, "Signup successful", userResponse);
   } catch (err) {
     console.error("SIGNUP ERROR:", err);
@@ -674,6 +682,14 @@ exports.login = async (req, res) => {
 
     const userResponse = user.toObject();
     delete userResponse.password;
+
+    console.log(user)
+    // Send Notification
+     await sendNotification({
+      userId: user?._id,
+      role: "user",
+      type: "login",
+    });
 
     return sendResponse(res, "Login successful", userResponse);
   } catch (err) {
@@ -758,7 +774,13 @@ exports.facebookLogin = async (req, res) => {
 // ======================================================
 exports.socialLogin = async (req, res) => {
   try {
-    const { idToken, role = "user", provider = "google", riderProfile, phone } = req.body;
+    const {
+      idToken,
+      role = "user",
+      provider = "google",
+      riderProfile,
+      phone,
+    } = req.body;
 
     if (!idToken) {
       return res.status(400).json({
@@ -773,59 +795,58 @@ exports.socialLogin = async (req, res) => {
     // });
     let sub, facebookId, email, name, picture;
 
-if (provider === "facebook") {
-  // 1) Token valid ho aur hamari hi app ka ho
-  const debug = await axios.get("https://graph.facebook.com/debug_token", {
-    params: {
-      input_token: idToken,
-      access_token: `${process.env.FACEBOOK_APP_ID}|${process.env.FACEBOOK_APP_SECRET}`,
-    },
-  });
-  const d = debug.data?.data;
-  if (!d?.is_valid || d.app_id !== process.env.FACEBOOK_APP_ID) {
-    return res.status(401).json({
-      success: false,
-      message: "Invalid Facebook token",
-    });
-  }
+    if (provider === "facebook") {
+      // 1) Token valid ho aur hamari hi app ka ho
+      const debug = await axios.get("https://graph.facebook.com/debug_token", {
+        params: {
+          input_token: idToken,
+          access_token: `${process.env.FACEBOOK_APP_ID}|${process.env.FACEBOOK_APP_SECRET}`,
+        },
+      });
+      const d = debug.data?.data;
+      if (!d?.is_valid || d.app_id !== process.env.FACEBOOK_APP_ID) {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid Facebook token",
+        });
+      }
 
-  // 2) Profile lein
-  const { data } = await axios.get("https://graph.facebook.com/me", {
-    params: {
-      fields: "id,name,email,picture.type(large)",
-      access_token: idToken,
-    },
-  });
+      // 2) Profile lein
+      const { data } = await axios.get("https://graph.facebook.com/me", {
+        params: {
+          fields: "id,name,email,picture.type(large)",
+          access_token: idToken,
+        },
+      });
 
-  facebookId = data.id;
-  name = data.name;
-  email = data.email;
-  picture = data.picture?.data?.url;
-} else {
-  const ticket = await googleClient.verifyIdToken({
-    idToken,
-    audience: process.env.GOOGLE_CLIENT_ID,
-  });
-  ({ sub, email, name, picture } = ticket.getPayload());
-}
+      facebookId = data.id;
+      name = data.name;
+      email = data.email;
+      picture = data.picture?.data?.url;
+    } else {
+      const ticket = await googleClient.verifyIdToken({
+        idToken,
+        audience: process.env.GOOGLE_CLIENT_ID,
+      });
+      ({ sub, email, name, picture } = ticket.getPayload());
+    }
 
-
-//     if (provider === "facebook") {
-//   // firebase-admin (admin.initializeApp pehle kar lein)
-//   // const decoded = await admin.auth().verifyIdToken(idToken);
-//   // sub = decoded.uid;
-//    const response = await axios.get(
-//       `https://graph.facebook.com/me?fields=id,name,email&access_token=${idToken}`,
-//     );
-//   // ({ email, name, picture } = decoded);
-//    ({ id, name, email, picture } = response.data);
-// } else {
-//   const ticket = await googleClient.verifyIdToken({
-//     idToken,
-//     audience: process.env.GOOGLE_CLIENT_ID,
-//   });
-//   ({ sub, email, name, picture } = ticket.getPayload());
-// }
+    //     if (provider === "facebook") {
+    //   // firebase-admin (admin.initializeApp pehle kar lein)
+    //   // const decoded = await admin.auth().verifyIdToken(idToken);
+    //   // sub = decoded.uid;
+    //    const response = await axios.get(
+    //       `https://graph.facebook.com/me?fields=id,name,email&access_token=${idToken}`,
+    //     );
+    //   // ({ email, name, picture } = decoded);
+    //    ({ id, name, email, picture } = response.data);
+    // } else {
+    //   const ticket = await googleClient.verifyIdToken({
+    //     idToken,
+    //     audience: process.env.GOOGLE_CLIENT_ID,
+    //   });
+    //   ({ sub, email, name, picture } = ticket.getPayload());
+    // }
 
     // const ticket = await googleClient.verifyIdToken({
     //   idToken: idToken,
@@ -864,8 +885,8 @@ if (provider === "facebook") {
         name: name || `${role}_user`,
         email: normalizedEmail,
         role: role,
-        facebookId : provider === "facebook" ? facebookId : null,
-        googleId: provider === "google" ? sub : null, 
+        facebookId: provider === "facebook" ? facebookId : null,
+        googleId: provider === "google" ? sub : null,
         profilePicture: picture || "",
         isEmailVerified: true,
         phone: phone ? String(phone).trim() : "",
@@ -902,6 +923,12 @@ if (provider === "facebook") {
 
     const userResponse = user.toObject();
     delete userResponse.password;
+
+    await sendNotification({
+      userId: user?._id,
+      role: "user",
+      type: "login",
+    });
 
     return res.status(200).json({
       success: true,
@@ -1761,7 +1788,6 @@ exports.checkServiceability = async (req, res) => {
   }
 };
 
-
 // ==========================================
 // SAVE MANUAL LOCATION
 // ==========================================
@@ -1818,7 +1844,8 @@ exports.saveManualLocation = async (req, res) => {
 exports.saveAutoLocation = async (req, res) => {
   try {
     // Notice: lang ko handle kiya (Coordinates GeoJSON format: [longitude, latitude])
-    const { userId, zone, area, lat, lang, lng, address, zipCode, phone } = req.body;
+    const { userId, zone, area, lat, lang, lng, address, zipCode, phone } =
+      req.body;
 
     const user = await User.findById(userId);
     if (!user) {

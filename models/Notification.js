@@ -10,7 +10,7 @@ const notificationSchema = new mongoose.Schema(
       default: null,
     },
 
-    userId: {
+    vendorId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Vendor",
       // required: true,
@@ -33,7 +33,7 @@ const notificationSchema = new mongoose.Schema(
     // notification message
     message: {
       type: String,
-      required: true,
+      // required: true,
     },
 
     // notification type

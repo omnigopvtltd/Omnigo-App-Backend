@@ -15,7 +15,10 @@ const { body, validationResult } = require("express-validator");
 const Order = require("../models/Order");
 const Deal = require("../models/Deal");
 const Product = require("../models/Product");
-const { sendNotification, sendNotificationToVendor } = require("../utils/sendNotification");
+const {
+  sendNotification,
+  sendNotificationToVendor,
+} = require("../utils/sendNotification");
 const Campaign = require("../models/Campaign");
 
 // ======================================================
@@ -1032,7 +1035,7 @@ exports.register = async (req, res) => {
       await sendNotification({
         topic: "riders",
         title: "New Partner Onboarded 🚀",
-        body: `${vendor.businessName} joined Omnigo. Get ready for new pickup orders!`,
+        message: `${vendor.businessName} joined Omnigo. Get ready for new pickup orders!`,
         data: { type: "NEW_VENDOR_RIDER", vendorId: String(vendor._id) },
       });
     } catch (notifErr) {
@@ -1232,18 +1235,21 @@ exports.vendorSocialLogin = async (req, res) => {
       });
     }
 
-   let sub, facebookId, email, name, picture;
+    let sub, facebookId, email, name, picture;
 
     // 1. Social Provider Token Verification
-    try {  
+    try {
       if (provider === "facebook") {
         // 1) Token valid ho aur hamari hi app ka ho
-        const debug = await axios.get("https://graph.facebook.com/debug_token", {
-          params: {
-            input_token: idToken,
-            access_token: `${process.env.FACEBOOK_APP_ID}|${process.env.FACEBOOK_APP_SECRET}`,
+        const debug = await axios.get(
+          "https://graph.facebook.com/debug_token",
+          {
+            params: {
+              input_token: idToken,
+              access_token: `${process.env.FACEBOOK_APP_ID}|${process.env.FACEBOOK_APP_SECRET}`,
+            },
           },
-        });
+        );
         const d = debug.data?.data;
         if (!d?.is_valid || d.app_id !== process.env.FACEBOOK_APP_ID) {
           return res.status(401).json({
@@ -1251,7 +1257,7 @@ exports.vendorSocialLogin = async (req, res) => {
             message: "Invalid Facebook token",
           });
         }
-      
+
         // 2) Profile lein
         const { data } = await axios.get("https://graph.facebook.com/me", {
           params: {
@@ -1259,7 +1265,7 @@ exports.vendorSocialLogin = async (req, res) => {
             access_token: idToken,
           },
         });
-      
+
         facebookId = data.id;
         name = data.name;
         email = data.email;
@@ -1271,9 +1277,11 @@ exports.vendorSocialLogin = async (req, res) => {
         });
         ({ sub, email, name, picture } = ticket.getPayload());
       }
-      
     } catch (authErr) {
-      console.error(`${provider.toUpperCase()} Token Verification Failed:`, authErr.message);
+      console.error(
+        `${provider.toUpperCase()} Token Verification Failed:`,
+        authErr.message,
+      );
       return res.status(401).json({
         success: false,
         message: `Invalid or expired ${provider} token`,
@@ -1288,10 +1296,22 @@ exports.vendorSocialLogin = async (req, res) => {
       });
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
+    // const normalizedEmail = email.toLowerCase().trim();
 
     // 2. Search Vendor in Vendor Collection
-    let vendor = await Vendor.findOne({ businessEmail: normalizedEmail });
+    // let vendor = await Vendor.findOne({ businessEmail: normalizedEmail });
+
+    let vendor;
+
+    if (provider === "google") {
+      vendor = await Vendor.findOne({
+        $or: [{ googleId: sub }, { businessEmail: normalizedEmail }],
+      });
+    } else if (provider === "facebook") {
+      vendor = await Vendor.findOne({
+        $or: [{ facebookId: facebookId }, { businessEmail: normalizedEmail }],
+      });
+    }
 
     if (!vendor) {
       // Create New Vendor Entry with Required Schema Fallbacks
@@ -1302,7 +1322,7 @@ exports.vendorSocialLogin = async (req, res) => {
         businessEmail: normalizedEmail,
         // ownerName: name || "",
         // ownerEmail: normalizedEmail,
-       facebookId : provider === "facebook" ? facebookId : null,
+        facebookId: provider === "facebook" ? facebookId : null,
         googleId: provider === "google" ? sub : null,
         profilePicture: picture,
         isEmailVerified: true,
@@ -1319,7 +1339,7 @@ exports.vendorSocialLogin = async (req, res) => {
       if (provider === "google" && !vendor.googleId) {
         vendor.googleId = sub;
       } else if (provider === "facebook" && !vendor.facebookId) {
-       vendor.facebookId = facebookId;
+        vendor.facebookId = facebookId;
       }
 
       vendor.lastLogin = new Date();
@@ -1330,7 +1350,8 @@ exports.vendorSocialLogin = async (req, res) => {
     if (vendor.isBlocked) {
       return res.status(403).json({
         success: false,
-        message: "Your vendor account has been blocked. Please contact support.",
+        message:
+          "Your vendor account has been blocked. Please contact support.",
       });
     }
 
@@ -2407,7 +2428,6 @@ exports.getVendorProfile = async (req, res) => {
   }
 };
 
-
 exports.getVendorDashboardOverview = async (req, res) => {
   try {
     const vendorId = req.user?.id || req.user?._id;
@@ -2424,7 +2444,7 @@ exports.getVendorDashboardOverview = async (req, res) => {
 
     // 1. Vendor Info
     const vendor = await Vendor.findById(vendorId).select(
-      "businessName logo rating"
+      "businessName logo rating",
     );
 
     if (!vendor) {
@@ -2441,7 +2461,7 @@ exports.getVendorDashboardOverview = async (req, res) => {
 
     if (!vendorBranch) {
       vendorBranch = await VendorBranch.findById(vendorId).select(
-        "isRushMode openingHours"
+        "isRushMode openingHours",
       );
     }
 
@@ -2464,11 +2484,12 @@ exports.getVendorDashboardOverview = async (req, res) => {
       { $unwind: "$productDetails" },
       // Match orders where product belongs to this vendor
       {
-        $match: {$or: [
+        $match: {
+          $or: [
             { "productDetails.vendorId": vendorObjectId },
             { "productDetails.vendor": vendorObjectId },
             { "items.vendorId": vendorObjectId },
-            { vendorId: vendorObjectId }
+            { vendorId: vendorObjectId },
           ],
         },
       },
@@ -2488,15 +2509,22 @@ exports.getVendorDashboardOverview = async (req, res) => {
           _id: null,
           totalOrders: { $sum: 1 },
           deliveredOrders: {
-            $sum: {$cond: [
-                { $in: ["$status", ["completed", "delivered", "complete", "assigned"]] },
+            $sum: {
+              $cond: [
+                {
+                  $in: [
+                    "$status",
+                    ["completed", "delivered", "complete", "assigned"],
+                  ],
+                },
                 1,
                 0,
               ],
             },
           },
           preparingOrders: {
-            $sum: {$cond: [
+            $sum: {
+              $cond: [
                 {
                   $in: [
                     "$status",
@@ -2517,15 +2545,14 @@ exports.getVendorDashboardOverview = async (req, res) => {
             },
           },
           pendingOrders: {
-            $sum: {$cond: [{ $eq: ["$status", "pending"] }, 1, 0],
-            },
+            $sum: { $cond: [{ $eq: ["$status", "pending"] }, 1, 0] },
           },
           cancelledOrders: {
-            $sum: {$cond: [{ $eq: ["$status", "cancelled"] }, 1, 0],
-            },
+            $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0] },
           },
           totalRevenue: {
-            $sum: {$cond: [
+            $sum: {
+              $cond: [
                 { $ne: ["$status", "cancelled"] },
                 { $ifNull: ["$totalAmount", "$subtotal"] },
                 0,
@@ -2564,7 +2591,7 @@ exports.getVendorDashboardOverview = async (req, res) => {
             { "productDetails.vendorId": vendorObjectId },
             { "productDetails.vendor": vendorObjectId },
             { "items.vendorId": vendorObjectId },
-            { vendorId: vendorObjectId }
+            { vendorId: vendorObjectId },
           ],
         },
       },
@@ -2579,7 +2606,7 @@ exports.getVendorDashboardOverview = async (req, res) => {
       {
         $group: {
           _id: { $dayOfWeek: "$createdAt" },
-          total: { $sum: {$ifNull: ["$totalAmount", "$subtotal"] } },
+          total: { $sum: { $ifNull: ["$totalAmount", "$subtotal"] } },
         },
       },
     ]);
