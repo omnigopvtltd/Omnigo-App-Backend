@@ -15,7 +15,7 @@ const { body, validationResult } = require("express-validator");
 const Order = require("../models/Order");
 const Deal = require("../models/Deal");
 const Product = require("../models/Product");
-const { createAndSendNotification } = require("../utils/sendNotification");
+const { createAndSendNotification, sendNotificationToVendor } = require("../utils/sendNotification");
 const Campaign = require("../models/Campaign");
 
 // ======================================================
@@ -531,7 +531,7 @@ const processMediaField = (bodyField, fileField, existingFieldValue) => {
 //     // 3. Send Push Notifications via FCM (If FCM Service is configured)
 //     try {
 //       // Send FCM to Users
-//       await sendFCMNotificationToTopic({
+//       await sendNotificationToVendor({
 //         topic: "users",
 //         title: `New ${vendor.businessType} On Omnigo!`,
 //         body: `${vendor.businessName} is now available near you. Order now!`,
@@ -539,7 +539,7 @@ const processMediaField = (bodyField, fileField, existingFieldValue) => {
 //       });
 
 //       // Send FCM to Riders
-//       await sendFCMNotificationToTopic({
+//       await sendNotificationToVendor({
 //         topic: "riders",
 //         title: "New Partner Onboarded 🚀",
 //         body: `${vendor.businessName} joined Omnigo. Get ready for new pickup orders!`,
@@ -774,19 +774,19 @@ exports.signup = async (req, res) => {
     }
 
     try {
-      await sendFCMNotificationToTopic({
-        topic: "users",
-        title: `New ${vendor.businessType} On Omnigo!`,
-        body: `${vendor.businessName} is now available near you. Order now!`,
+      await sendNotificationToVendor({
+        vendorId: `${vendor._id}`,
+        title: `You are successfully Login`,
+        message: `${vendor.businessName} is now available near you. Order now!`,
         data: { type: "NEW_VENDOR", vendorId: String(vendor._id) },
       });
 
-      await sendFCMNotificationToTopic({
-        topic: "riders",
-        title: "New Partner Onboarded 🚀",
-        body: `${vendor.businessName} joined Omnigo. Get ready for new pickup orders!`,
-        data: { type: "NEW_VENDOR_RIDER", vendorId: String(vendor._id) },
-      });
+      // await sendNotificationToVendor({
+      //   topic: "riders",
+      //   title: "New Partner Onboarded 🚀",
+      //   body: `${vendor.businessName} joined Omnigo. Get ready for new pickup orders!`,
+      //   data: { type: "NEW_VENDOR_RIDER", vendorId: String(vendor._id) },
+      // });
     } catch (notifErr) {
       console.error("FCM Notification Error (Non-blocking):", notifErr.message);
     }
@@ -1022,14 +1022,14 @@ exports.register = async (req, res) => {
     }
 
     try {
-      await sendFCMNotificationToTopic({
-        topic: "users",
-        title: `New ${vendor.businessType} On Omnigo!`,
-        body: `${vendor.businessName} is now available near you. Order now!`,
+      await sendNotification({
+        role: "user",
+        title: `New ${vendor.businessType} joined Omnigo`,
+        message: `${vendor.businessName} is now available near you. Order now!`,
         data: { type: "NEW_VENDOR", vendorId: String(vendor._id) },
       });
 
-      await sendFCMNotificationToTopic({
+      await sendNotification({
         topic: "riders",
         title: "New Partner Onboarded 🚀",
         body: `${vendor.businessName} joined Omnigo. Get ready for new pickup orders!`,

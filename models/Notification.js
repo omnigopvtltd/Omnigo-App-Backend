@@ -6,7 +6,15 @@ const notificationSchema = new mongoose.Schema(
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: true,
+      // required: true,
+      default: null,
+    },
+
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Vendor",
+      // required: true,
+      default: null,
     },
 
     // kis order ki notification hai
@@ -31,14 +39,26 @@ const notificationSchema = new mongoose.Schema(
     // notification type
     type: {
       type: String,
-      enum: [
-        "order_placed",
-        "order_confirmed",
-        "rider_assigned",
-        "order_delivered",
-        "order_cancelled",
-      ],
-      default: "order_placed",
+      // enum: [
+      //   "order_placed",
+      //   "order_confirmed",
+      //   "rider_assigned",
+      //   "order_delivered",
+      //   "order_cancelled",
+      // ],
+      default: "system",
+    },
+
+    role: {
+      type: String,
+      // enum: [
+      //   "order_placed",
+      //   "order_confirmed",
+      //   "rider_assigned",
+      //   "order_delivered",
+      //   "order_cancelled",
+      // ],
+      default: "user",
     },
 
     // read/unread
