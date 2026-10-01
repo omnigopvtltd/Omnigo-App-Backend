@@ -79,7 +79,7 @@ exports.sendNotification = async ({
       "You have a new notification from OmniGo.";
 
     const newNotification = await Notification.create({
-      recipient: userId,
+      userId,
       orderId,
       title,
       message,

@@ -1296,7 +1296,7 @@ exports.vendorSocialLogin = async (req, res) => {
       });
     }
 
-    // const normalizedEmail = email.toLowerCase().trim();
+    const normalizedEmail = email.toLowerCase().trim();
 
     // 2. Search Vendor in Vendor Collection
     // let vendor = await Vendor.findOne({ businessEmail: normalizedEmail });
