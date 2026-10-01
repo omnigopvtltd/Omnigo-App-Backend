@@ -815,6 +815,8 @@ exports.signup = async (req, res) => {
 
 exports.register = async (req, res) => {
   try {
+
+    const vendorId = req.user.id || req.user._id;
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ success: false, errors: errors.array() });
@@ -870,15 +872,13 @@ exports.register = async (req, res) => {
       });
     }
     // 1. Check existing vendor
-    // const existingVendor = await Vendor.findOne({
-    //   businessPhone: normalizedPhone,
-    // });
-    // if (existingVendor) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: "Phone number already registered to a vendor",
-    //   });
-    // }
+    const existingVendor = await Vendor.findById(vendorId);
+    if (!existingVendor) {
+      return res.status(400).json({
+        success: false,
+        message: "Vendor Not Found",
+      });
+    }
 
     // // 2. AUTO-GENERATE RANDOM PASSWORD
     // const rawAutoPassword = generateRandomPassword(6);
@@ -952,7 +952,11 @@ exports.register = async (req, res) => {
     };
 
     // 4. Save Vendor to MongoDB
-    const vendor = await Vendor.create(vendorData);
+    const vendor = await Vendor.findByIdAndUpdate(
+      req.user?.id,
+      vendorData,
+      { new: true },
+    );
 
     // 5. CREATE OPERATIONAL BRANCHES (Handles Single & Multiple Branches)
     let createdBranches = [];

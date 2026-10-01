@@ -76,6 +76,7 @@ router.post(
     { name: "ntnCertificate", maxCount: 1 },
   ]),
   validateSignup,
+  auth,
   register,
 );
 router.post("/login", login);
