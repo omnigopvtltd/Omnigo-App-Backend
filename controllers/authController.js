@@ -845,7 +845,7 @@ if (provider === "facebook") {
     const normalizedEmail = email.toLowerCase().trim();
 
     // 2. Check if user already exists
-    let user = await User.findOne({ email: normalizedEmail });
+    let user = await User.findOne({ email: normalizedEmail, role: role });
 
     if (!user) {
       // Admin check
