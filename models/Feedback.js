@@ -12,11 +12,13 @@ const feedbackSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-    vendorId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Vendor",
-      required: true,
-    },
+    vendorId: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Vendor",
+        // required: true,
+      },
+    ],
     products: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -35,7 +37,7 @@ const feedbackSchema = new mongoose.Schema(
       maxLength: 250,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 module.exports = mongoose.model("Feedback", feedbackSchema);
