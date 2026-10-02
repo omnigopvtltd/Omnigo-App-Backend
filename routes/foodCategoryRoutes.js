@@ -14,11 +14,13 @@ const {
   getSubCategoryById,
   createSubCategory,
   updateSubCategory,
-  deleteSubCategory
+  deleteSubCategory,
+  getAllCategoriesWithSubCategories,
 } = require("../controllers/foodCategoryController");
 
 // Category Routes
 router.get("/", auth, getAllCategories);
+router.get("/with-subcategories", auth, getAllCategoriesWithSubCategories);
 router.post("/create", auth, createCategory);
 router.put("/reorder", auth, reorderCategories);
 
