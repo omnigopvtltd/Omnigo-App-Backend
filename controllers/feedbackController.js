@@ -82,24 +82,54 @@ exports.submitFeedback = async (req, res) => {
 
     const order = await Order.findById(orderId);
     if (!order) {
-      return res.status(404).json({ success: false, message: "Order not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
     }
 
     // Extract product IDs from order items
     const productIds = order.items.map((item) => item.productId);
 
-    // 1. Create Feedback Document
+    if (!productIds || productIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Order has no valid products.",
+      });
+    }
+
+    // Fetch all products to extract unique Vendor IDs
+    const products = await Product.find({ _id: { $in: productIds } }).select("vendorId");
+
+    // Collect Unique Vendor IDs (filters out null/undefined)
+    const vendorIds = [
+      ...new Set(
+        products
+          .map((prod) => prod.vendorId?.toString())
+          .filter((vId) => Boolean(vId))
+      ),
+    ];
+
+    if (vendorIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Vendor IDs could not be resolved from the order items.",
+      });
+    }
+
+    // 1. Create Feedback Document (Supports single string or array based on schema)
     const newFeedback = await Feedback.create({
       orderId,
       userId,
-      vendorId: order.vendorId,
+      vendorId: vendorIds.length === 1 ? vendorIds[0] : vendorIds, // Array if multiple, string if single
       products: productIds,
       rating: Number(rating),
       comment: comment || "",
     });
 
-    // 2. Update Vendor Average Rating
-    await updateAverageRating(Vendor, order.vendorId);
+    // 2. Update Average Rating for ALL unique vendors involved in order
+    for (const vId of vendorIds) {
+      await updateAverageRating(Vendor, vId);
+    }
 
     // 3. Update Product Average Ratings for all items in order
     for (const pId of productIds) {
@@ -136,7 +166,7 @@ exports.skipFeedback = async (req, res) => {
     const user = await User.findByIdAndUpdate(
       userId,
       { $inc: { feedbackSkipCount: 1 } },
-      { new: true }
+      { new: true },
     );
 
     // Mark current order as skipped
