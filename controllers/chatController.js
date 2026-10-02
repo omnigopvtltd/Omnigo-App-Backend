@@ -973,6 +973,41 @@ const { getFirestore } = require("firebase-admin/firestore");
 const db = getFirestore(app);
 
 /**
+ * Helper function to fetch sender details based on role
+ */
+const getSenderDetails = async (senderId, senderRole) => {
+  let sender = null;
+  let senderName = "User";
+
+  switch (senderRole?.toLowerCase()) {
+    case "vendor":
+      sender = await Vendor.findById(senderId).select(
+        "businessName ownerName name",
+      );
+      senderName =
+        sender?.businessName || sender?.ownerName || sender?.name || "Vendor";
+      break;
+
+
+    case "admin":
+      sender = await User.findById(senderId).select(
+        "name fullName",
+      );
+      senderName =
+        sender?.name || sender?.fullName || "Omnigo Admin";
+      break;
+
+    case "user":
+    default:
+      sender = await User.findById(senderId).select("name fullName");
+      senderName = sender?.name || sender?.fullName || "User";
+      break;
+  }
+
+  return senderName;
+};
+
+/**
  * GET /api/chat/contacts
  */
 exports.getContactsController = async (req, res) => {
@@ -1169,11 +1204,21 @@ exports.sendMessage = async (req, res) => {
       ? receiverRole
       : "user";
 
+    // Dynamic Sender Model determination
+    const modelMapping = {
+      user: "User",
+      admin: "User",
+      rider: "User",
+      vendor: "Vendor",
+    };
+    const senderModel = modelMapping[senderRole.toLowerCase()] || "User";
+
     // 1. Save Message in MongoDB
     const newMessage = await Message.create({
       conversationId,
       senderId,
       senderRole,
+      senderModel,
       text,
       attachments,
     });
@@ -1223,9 +1268,11 @@ exports.sendMessage = async (req, res) => {
         { merge: true },
       );
 
-    // 5. FCM Push Notification
-    const sender = await User.findById(senderId).select("name fullName");
-    const senderName = sender?.name || sender?.fullName || "User";
+    // FCM Push Notification
+    // Dynamic Sender Name Resolution & FCM Push Notification
+    // const sender = await User.findById(senderId).select("name fullName");
+    // const senderName = sender?.name || sender?.fullName || "User";
+    const senderName = await getSenderDetails(senderId, senderRole);
     // console.log("Sending Notification:");
     sendChatNotification({
       receiverId,

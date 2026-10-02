@@ -284,6 +284,16 @@ exports.globalSearch = async (req, res) => {
 //   }
 // };
 
+// GET /api/
+exports.getAdmin = async (req, res) => {
+  try {
+    // const { id } = req.params;
+    const user = await User.findOne({role: "admin"}).select("-password");
+    return res.json({ success: true, user });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
 // GET /api/profile
 exports.getProfile = async (req, res) => {
   try {

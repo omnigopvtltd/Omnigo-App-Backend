@@ -608,11 +608,11 @@ exports.signup = async (req, res) => {
     delete userResponse.password;
 
     // Send  Notification
-    await sendNotification({
-      userId: user?._id,
-      role: "user",
-      type: "signup",
-    });
+    // await sendNotification({
+    //   userId: user?._id,
+    //   role: "user",
+    //   type: "signup",
+    // });
 
     return sendResponse(res, "Signup successful", userResponse);
   } catch (err) {
@@ -685,11 +685,11 @@ exports.login = async (req, res) => {
 
     console.log(user);
     // Send Notification
-    await sendNotification({
-      userId: user?._id,
-      role: "user",
-      type: "login",
-    });
+    // await sendNotification({
+    //   userId: user?._id,
+    //   role: "user",
+    //   type: "login",
+    // });
 
     return sendResponse(res, "Login successful", userResponse);
   } catch (err) {
@@ -727,11 +727,11 @@ exports.googleLogin = async (req, res) => {
     }
 
     //  Send Notification
-    await sendNotification({
-      userId: user?._id,
-      role: "user",
-      type: "login",
-    });
+    // await sendNotification({
+    //   userId: user?._id,
+    //   role: "user",
+    //   type: "login",
+    // });
 
     return sendResponse(res, "Google login success", user);
   } catch (err) {
@@ -767,11 +767,11 @@ exports.facebookLogin = async (req, res) => {
     }
 
     // Send Notification
-    await sendNotification({
-      userId: user?._id,
-      role: "user",
-      type: "login",
-    });
+    // await sendNotification({
+    //   userId: user?._id,
+    //   role: "user",
+    //   type: "login",
+    // });
 
     return sendResponse(res, "Facebook login success", user);
   } catch (err) {
@@ -937,10 +937,10 @@ exports.socialLogin = async (req, res) => {
     const userResponse = user.toObject();
     delete userResponse.password;
 
-    await sendNotification({
-      userId: user?._id,
-      type: "login",
-    });
+    // await sendNotification({
+    //   userId: user?._id,
+    //   type: "login",
+    // });
 
     return res.status(200).json({
       success: true,
