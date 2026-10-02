@@ -40,10 +40,12 @@ exports.checkPendingFeedback = async (req, res) => {
     // Find the latest completed order that hasn't been reviewed or skipped
     const pendingOrder = await Order.findOne({
       userId,
-      status: "completed",
+      status: { $in: ["completed", "delivered"] },
       isReviewed: false,
       isSkipped: false,
     }).sort({ createdAt: -1 });
+
+    console.log(pendingOrder);
 
     if (!pendingOrder) {
       return res.status(200).json({

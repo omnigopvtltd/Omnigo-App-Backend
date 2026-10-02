@@ -79,6 +79,7 @@ app.use("/api/riders/orders", require("./routes/riderOrderFlowRoutes"));
 const paymentRoutes = require("./routes/paymentRoutes");
 app.use("/api/payments", paymentRoutes);
 app.use("/api/finance", financeRoutes);
+app.use("/api/transactions", require("./routes/transactionRoutes"));
 // ================= Tracking  =================
 // const trackingRoutes = require("./routes/trackingRoutes");
 // const { getNotification } = require("./utils/sendNotification");
