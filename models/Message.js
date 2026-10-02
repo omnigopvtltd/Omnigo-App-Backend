@@ -55,18 +55,24 @@ const messageSchema = new mongoose.Schema(
     },
     senderId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
       required: true,
+      refPath: "senderModel", // Dynamic collection lookup
     },
     senderRole: {
       type: String,
       enum: ["user", "rider", "vendor", "admin", "ai"],
       required: true,
     },
+    senderModel: {
+      type: String,
+      required: true,
+      enum: ["User", "Rider", "Vendor", "Admin"],
+      default: "User",
+    },
 
     text: { type: String, default: "" },
-    attachments: [{ type: String }], // Array of image/file URLs
-    readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    attachments: [{ type: String }],
+    readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "senderModel" }],
     isRead: { type: Boolean, default: false },
     isDeleted: { type: Boolean, default: false },
   },

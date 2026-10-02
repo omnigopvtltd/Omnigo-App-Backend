@@ -404,17 +404,18 @@ exports.getNotifications = async (req, res) => {
   try {
     const userId = req.user?.id || req.user?._id;
 
-    const recipientModel = req.user?.role
-      ? req.user.role.charAt(0).toUpperCase() + req.user.role.slice(1)
-      : "User";
+    console.log(userId)
+    const recipientModel = req.user?.role || "user";
+    console.log(recipientModel)
 
     const { page = 1, limit = 30 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
+    // const id = role == "vendor" ? vendorId = userId : userId;
     const [notifications, unreadCount] = await Promise.all([
       Notification.find({
-        recipient: userId,
-        recipientModel: recipientModel,
+        userId,
+        role: recipientModel,
       })
         .sort({ createdAt: -1 })
         .skip(skip)
