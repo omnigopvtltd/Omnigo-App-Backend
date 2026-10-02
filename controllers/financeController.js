@@ -613,11 +613,11 @@ console.log(request);
 // =====================================
 exports.getTransactions = async (req, res) => {
   try {
-    const { userId, restaurantId, type, source, page = 1, limit = 30 } = req.query;
+    const { userId, vendorId, type, source, page = 1, limit = 30 } = req.query;
     const query = {};
 
     if (userId) query.userId = userId;
-    if (restaurantId) query.restaurantId = restaurantId;
+    if (vendorId) query.vendorId = vendorId;
     if (type && type !== "all") query.type = type;
     if (source && source !== "all") query.source = source;
 
@@ -628,7 +628,7 @@ exports.getTransactions = async (req, res) => {
     const [transactions, total] = await Promise.all([
       WalletTransaction.find(query)
         .populate("userId", "name email phone")
-        .populate("restaurantId", "name logo")
+        .populate("vendorId", "bsuinessName logo")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limitNum),

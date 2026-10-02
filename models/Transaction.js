@@ -7,12 +7,14 @@ const transactionSchema = new mongoose.Schema(
     paymentMethod: { type: String, enum: ["JAZZCASH", "EASYPAISA", "BANK_TRANSFER"], required: true },
     amount: { type: Number, required: true },
     status: { type: String, enum: ["PENDING", "COMPLETED", "FAILED", "REJECTED"], default: "PENDING" },
+    source: { type: String }, // e.g., "MOBILE_APP", "ADMIN_PANEL"
     accountDetails: {
       accountTitle: String,
       accountNumber: String,
       bankName: String,
       iban: String,
     },
+    transactionSlip: { type: String, required: true },
     transactionRef: String, // Gateway Ref ID
     adminNote: String,
   },

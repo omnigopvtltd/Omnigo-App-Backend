@@ -328,6 +328,18 @@ const orderSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    riderFloatSettled: {
+      type: Boolean,
+      default: false,
+    },
+    isReviewed: {
+      type: Boolean,
+      default: false,
+    },
+    isSkipped: {
+      type: Boolean,
+      default: false,
+    },
     sessionParticipationId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "RiderSessionParticipation",
