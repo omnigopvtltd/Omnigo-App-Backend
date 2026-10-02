@@ -40,6 +40,52 @@ exports.getAllCategories = async (req, res) => {
     });
   }
 };
+// ==========================================
+// CATEGORY CONTROLLERS
+// ==========================================
+
+exports.getAllCategoriesWithSubCategories = async (req, res) => {
+  try {
+    const { categorySlug } = req.query;
+
+    const query = {};
+
+    if (categorySlug === "grocery") {
+      query.categorySlug = { $in: ["grocery", "pharmacy", "stationary"] };
+    } else if (categorySlug) {
+      query.categorySlug = categorySlug;
+    }
+
+    // 1. Select required fields from MongoDB
+    const categories = await FoodCategory.find(query)
+      .sort({
+        sortOrder: 1,
+        createdAt: -1,
+      })
+      .select("_id categoryName subCategories._id subCategories.name");
+
+    // 2. Clean & format response payload to return ONLY id and name
+    const formattedCategories = categories.map((cat) => ({
+      _id: cat._id,
+      categoryName: cat.categoryName,
+      subCategories: (cat.subCategories || []).map((sub) => ({
+        _id: sub._id,
+        name: sub.name,
+      })),
+    }));
+
+    return res.status(200).json({
+      success: true,
+      count: formattedCategories.length,
+      data: formattedCategories,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
 
 exports.getCategoryById = async (req, res) => {
   try {
