@@ -18,7 +18,7 @@ exports.createTransaction = async (req, res) => {
     } = req.body;
 
     // Extract image path if uploaded via req.file (Multer)
-    let transactionSlip = req.file ? `https://api.omnigoapp.com/uploads/transactions/${req.file.filename}` : req.body.transactionSlip;
+    let transactionSlip = req.file ? `https://api.omnigoapp.com/uploads/${req.file.filename}` : req.body.transactionSlip;
 
     if (!type || !paymentMethod || !amount) {
       return res.status(400).json({
@@ -73,11 +73,11 @@ exports.createTransaction = async (req, res) => {
 // ========================================================
 exports.getTransactions = async (req, res) => {
   try {
-    const { userId, vendorId, type, status, source, page = 1, limit = 30 } = req.query;
+    const { userId, type, status, source, page = 1, limit = 30 } = req.query;
     const query = {};
 
     if (userId) query.userId = userId;
-    if (vendorId) query.vendorId = vendorId;
+    // if (vendorId) query.vendorId = vendorId;
     if (type && type !== "all") query.type = type;
     if (status && status !== "all") query.status = status;
     if (source && source !== "all") query.source = source;
@@ -89,7 +89,7 @@ exports.getTransactions = async (req, res) => {
     const [transactions, total] = await Promise.all([
       Transaction.find(query)
         .populate("userId", "name email phone")
-        .populate("vendorId", "businessName logo")
+        // .populate("vendorId", "businessName logo")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limitNum),
@@ -183,14 +183,14 @@ exports.updateTransactionStatus = async (req, res) => {
     const { status, adminNote, transactionRef } = req.body;
 
     const validStatuses = ["PENDING", "COMPLETED", "FAILED", "REJECTED"];
-    if (!status || !validStatuses.includes(status)) {
+    if (!status || !validStatuses.includes(status.toUpperCase())) {
       return res.status(400).json({
         success: false,
         message: `Invalid status. Valid values are: ${validStatuses.join(", ")}`,
       });
     }
 
-    const updateFields = { status };
+    const updateFields = { status: status.toUpperCase() };
     if (adminNote) updateFields.adminNote = adminNote;
     if (transactionRef) updateFields.transactionRef = transactionRef;
 
