@@ -96,6 +96,7 @@ app.use("/api/restaurantReviews", require("./routes/restaurantReviewsRoutes"));
 app.use("/api/onboarding", require("./routes/onboardingRoutes"));
 app.use("/api/wishlist", wishlistRoutes);
 app.use("/api/feedback", feedbackRoutes);
+app.use("/api/app-feedback", require("./routes/appFeedbackRoutes"));
 app.use("/api/chat", chatRoutes);
 app.use("/api/coupons", couponRoutes);
 app.use("/api/campaigns", campaignRoutes);
