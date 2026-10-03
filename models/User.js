@@ -57,7 +57,7 @@ const userSchema = new mongoose.Schema(
     addresses: [
       {
         phone: { type: String },
-        mode: {type: String, enum: ["manual", "auto"], default: "auto"},
+        mode: { type: String, enum: ["manual", "auto"], default: "auto" },
         address: { type: String },
         city: { type: String },
         zone: { type: String },
@@ -70,19 +70,22 @@ const userSchema = new mongoose.Schema(
         },
         isDefault: { type: Boolean, default: false },
         isSave: { type: Boolean, default: false },
-        isEnabled:{ type: Boolean, default: true },
+        isEnabled: { type: Boolean, default: true },
       },
     ],
 
     feedbackSkipCount: {
-        type: Number,
-        default: 0,
-      },
-      isFeedbackBlocked: {
-        type: Boolean,
-        default: false,
-      },
-      
+      type: Number,
+      default: 0,
+    },
+    isFeedbackBlocked: {
+      type: Boolean,
+      default: false,
+    },
+
+    appFeedbackCount: { type: Number, default: 0 }, // Kitne orders se count track ho raha hai
+    appFeedbackSkipCount: { type: Number, default: 0 }, // Skip tracking (Max 3)
+    hasSubmittedAppFeedback: { type: Boolean, default: false }, // Final feedback de chuka hai ya nahi
 
     // RIDER PROFILE & LIVE TRACKING
     riderProfile: {

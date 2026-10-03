@@ -16,10 +16,15 @@ function isFullyVerified(rider) {
 exports.acceptOrderWithWallet = async (req, res) => {
   try {
     const rider = await User.findOne({ _id: req.user.id, role: "rider" });
-    if (!rider) return res.status(404).json({ success: false, message: "Rider not found" });
+    if (!rider)
+      return res
+        .status(404)
+        .json({ success: false, message: "Rider not found" });
 
     if (rider.isBlocked) {
-      return res.status(403).json({ success: false, message: "Your account is blocked" });
+      return res
+        .status(403)
+        .json({ success: false, message: "Your account is blocked" });
     }
     if (!isFullyVerified(rider)) {
       return res.status(403).json({
@@ -34,7 +39,12 @@ exports.acceptOrderWithWallet = async (req, res) => {
       isAssigned: false,
     });
     if (!order) {
-      return res.status(404).json({ success: false, message: "Order already assigned or not found" });
+      return res
+        .status(404)
+        .json({
+          success: false,
+          message: "Order already assigned or not found",
+        });
     }
 
     const floatAmount = order.subtotal || 0;
@@ -166,7 +176,6 @@ exports.acceptOrderWithWallet = async (req, res) => {
 //       );
 //     }
 
-
 //     return res.status(200).json({
 //       success: true,
 //       message: "Order delivered — wallet credited",
@@ -194,13 +203,25 @@ exports.completeOrderDelivery = async (req, res) => {
     const order = await Order.findOne({
       _id: req.params.id,
       $or: [{ riderId: riderId }, { driverId: riderId }],
-      status: { $in: ["on_the_way", "ongoing", "ready", "arrived_at_vendor", "assigned", "picked_up"] },
+      status: {
+        $in: [
+          "on_the_way",
+          "ongoing",
+          "ready",
+          "arrived_at_vendor",
+          "assigned",
+          "picked_up",
+        ],
+      },
     });
 
     if (!order) {
       return res
         .status(404)
-        .json({ success: false, message: "Active order not found for this rider" });
+        .json({
+          success: false,
+          message: "Active order not found for this rider",
+        });
     }
 
     const rider = await User.findById(riderId);
@@ -212,20 +233,20 @@ exports.completeOrderDelivery = async (req, res) => {
 
     // 2. Wallet & Financial Calculations
     const payout = (order.riderFloatAmount || 0) + (order.deliveryFee || 0);
-    const newBalance = (rider.wallet?.balance || 0) + payout;
+    // const newBalance = (rider.wallet?.balance || 0) + payout;
 
-    rider.wallet = { balance: newBalance };
-    await rider.save();
+    // rider.wallet = { balance: newBalance };
+    // await rider.save();
 
-    await WalletTransaction.create({
-      userId: rider._id,
-      type: "credit",
-      amount: payout,
-      reason: `Payment collected + delivery fee for ${order.orderNumber}`,
-      balanceAfter: newBalance,
-      source: "order_earning",
-      orderId: order._id,
-    });
+    // await WalletTransaction.create({
+    //   userId: rider._id,
+    //   type: "credit",
+    //   amount: payout,
+    //   reason: `Payment collected + delivery fee for ${order.orderNumber}`,
+    //   balanceAfter: newBalance,
+    //   source: "order_earning",
+    //   orderId: order._id,
+    // });
 
     // 3. VENDOR STATUS UPDATE (Complete all vendor stops)
     if (order.stops && order.stops.length > 0) {
@@ -245,7 +266,7 @@ exports.completeOrderDelivery = async (req, res) => {
     if (order.sessionParticipationId) {
       sessionResult = await advanceSessionProgress(
         order.sessionParticipationId,
-        order._id
+        order._id,
       );
     }
 
@@ -289,13 +310,23 @@ exports.completeOrderDelivery = async (req, res) => {
           riderName: rider.name || "",
           riderEmail: rider.email || "",
           riderPhone: rider.phone || "",
-        }
+        },
       );
     }
 
+    await User.findOneAndUpdate(
+      {
+        _id: order.userId,
+        hasSubmittedAppFeedback: false,
+        appFeedbackSkipCount: { $lt: 3 },
+      },
+      { $inc: { appFeedbackCount: 1 } },
+    );
+
     return res.status(200).json({
       success: true,
-      message: "Order delivered successfully — wallet credited & vendors updated",
+      message:
+        "Order delivered successfully — wallet credited & vendors updated",
       order,
       walletBalance: newBalance,
       session: sessionResult,
@@ -309,8 +340,8 @@ exports.completeOrderDelivery = async (req, res) => {
 // Shared with riderSessionController's internal logic — kept here to avoid a
 // circular require, since order delivery is what drives session progress.
 async function advanceSessionProgress(participationId, orderId) {
-  
-  const participation = await RiderSessionParticipation.findById(participationId);
+  const participation =
+    await RiderSessionParticipation.findById(participationId);
   if (!participation || participation.status !== "in_progress") return null;
 
   participation.ordersCompleted += 1;
@@ -322,7 +353,8 @@ async function advanceSessionProgress(participationId, orderId) {
 
     const rider = await User.findById(participation.riderId);
     if (rider) {
-      const newBalance = (rider.wallet?.balance || 0) + participation.bonusAmount;
+      const newBalance =
+        (rider.wallet?.balance || 0) + participation.bonusAmount;
       rider.wallet = { balance: newBalance };
       await rider.save();
 
