@@ -33,7 +33,8 @@ const {
   updateVendorStatus,
   deleteVendor,
   getVendors,
-  vendorSocialLogin
+  vendorSocialLogin,
+  deleteAccount,
 } = require("../controllers/vendorController");
 const { saveFcmToken } = require("../controllers/vendorController");
 const upload = require("../middleware/upload");
@@ -89,7 +90,8 @@ router.post("/send-otp", sendOTP);
 router.post("/verify-otp", verifyOTP);
 
 router.post("/forgot-password", forgotPassword);
-router.post("/reset-password", resetPassword);
+ router.post("/reset-password", resetPassword);
+ router.delete("/delete-account", auth, deleteAccount);
 
 router.post("/save-fcm-token", auth, saveFcmToken);
 router.put(

@@ -10,6 +10,7 @@ const Cart = require("../models/Cart");
 const WalletTransaction = require("../models/WalletTransaction");
 const Vendor = require("../models/Vendor");
 const { sendNotification, sendNotificationToVendor } = require("../utils/sendNotification");
+const { default: mongoose } = require("mongoose");
 
 exports.createOrder = async (req, res) => {
   try {
@@ -1882,7 +1883,17 @@ exports.trackOrder = async (req, res) => {
     const order = await Order.findById(req.params.id)
       .populate("riderId", "name phone location")
       .populate("stops.vendorId", "name address location contact")
-      .populate("userId", "name email phone");
+      .populate("userId", "name email phone")
+
+const productIds = order?.items?.map((item) => item.productId) || [];
+productIds.forEach((productId) => {
+  if (!mongoose.Types.ObjectId.isValid(productId)) {
+    console.warn(`Invalid productId detected: ${productId}`);
+  }
+});
+
+const products = await Product.find({ _id: { $in: productIds } }).select("vendorId");
+const vendors = await Vendor.find({ _id: { $in: products.map((p) => p.vendorId) } }).select("businessName logo address contact location status");
 
     if (!order) {
       return res
@@ -1918,6 +1929,9 @@ exports.trackOrder = async (req, res) => {
               location: order.riderId.location || null,
             }
           : null,
+
+        // Rider Details Object
+        vendors: vendors.length > 0 ? vendors : [],
 
         routingMetrics: order.routingMetrics,
         timeline: {

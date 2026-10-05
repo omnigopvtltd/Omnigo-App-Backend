@@ -3675,3 +3675,55 @@ exports.getVendorCategories = async (req, res) => {
     });
   }
 };
+
+
+// ======================================================
+// ACCOUNT DELETE
+// ======================================================
+exports.deleteAccount = async (req, res) => {
+  try {
+    const vendorId = req.user.id;
+    // const userRole = req.user.role;
+
+    const vendor = await Vendor.findByIdAndDelete(vendorId);
+
+    // if (user) {
+    //   if (user.fcmToken) {
+    //     user.fcmToken = null;
+    //   }
+
+    //   if (userRole === "rider" && user.riderProfile) {
+
+    //     // await RiderSessionParticipation.deleteMany({riderId: userId});
+    //     user.riderProfile.isOnline = false;
+    //     user.riderProfile.isBusy = false;
+    //   }
+
+    //   // Clear refresh tokens if you store them in DB/Schema
+    //   if (user.refreshToken) {
+    //     user.refreshToken = null;
+    //   }
+
+    //   await user.save();
+    // }
+
+    // 2. Clear HTTP-Only authentication cookie (if cookies are used)
+    // res.clearCookie("token", {
+    //   httpOnly: true,
+    //   secure: process.env.NODE_ENV === "production",
+    //   sameSite: "strict",
+    // });
+
+    return res.status(200).json({
+      success: true,
+      message: `${vendor ? vendor.businessName : "Vendor"} account deleted successfully`,
+      data: vendorId,
+    });
+  } catch (err) {
+    console.error("ACCOUNT DELETE ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error during account deletion",
+    });
+  }
+};
