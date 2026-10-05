@@ -16,6 +16,7 @@ const Product = require("../models/Product");
 const Cart = require("../models/Cart");
 const admin = require("../config/firebase");
 const { sendNotification } = require("../utils/sendNotification");
+const RiderSessionParticipation = require("../models/RiderSessionParticipation");
 
 // ======================================================
 // GOOGLE CLIENT
@@ -1050,7 +1051,6 @@ exports.enableCurrentLocation = async (req, res) => {
     return res.status(500).json({ message: err.message });
   }
 };
-
 
 // ======================================================
 // MANUAL LOCATION
@@ -2961,6 +2961,57 @@ exports.completeVendorProfile = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: err.message,
+    });
+  }
+};
+
+// ======================================================
+// ACCOUNT DELETE
+// ======================================================
+exports.deleteAccount = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    const user = await User.findByIdAndDelete(userId);
+
+    // if (user) {
+    //   if (user.fcmToken) {
+    //     user.fcmToken = null;
+    //   }
+
+    //   if (userRole === "rider" && user.riderProfile) {
+
+    //     // await RiderSessionParticipation.deleteMany({riderId: userId});
+    //     user.riderProfile.isOnline = false;
+    //     user.riderProfile.isBusy = false;
+    //   }
+
+    //   // Clear refresh tokens if you store them in DB/Schema
+    //   if (user.refreshToken) {
+    //     user.refreshToken = null;
+    //   }
+
+    //   await user.save();
+    // }
+
+    // 2. Clear HTTP-Only authentication cookie (if cookies are used)
+    // res.clearCookie("token", {
+    //   httpOnly: true,
+    //   secure: process.env.NODE_ENV === "production",
+    //   sameSite: "strict",
+    // });
+
+    return res.status(200).json({
+      success: true,
+      message: `${userRole ? userRole.toUpperCase() : "User"} account deleted successfully`,
+      data: userId,
+    });
+  } catch (err) {
+    console.error("ACCOUNT DELETE ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error during account deletion",
     });
   }
 };

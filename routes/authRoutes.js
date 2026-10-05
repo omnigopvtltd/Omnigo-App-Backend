@@ -71,6 +71,7 @@ const {
   getUser,
   updateFcmToken,
  socialLogin,
+ deleteAccount,
 } = require("../controllers/authController");
 const { getRiderById } = require("../controllers/riderController");
 const upload = require("../middleware/upload");
@@ -83,6 +84,7 @@ const role= require("../middleware/rolemiddleware");
 router.post("/signup", validateSignup, signup);
 router.post("/login", login);
 router.post("/logout", auth, logout);
+router.delete("/delete-account", auth, deleteAccount);
 router.post("/update-fcm-token", auth, updateFcmToken);
 
 // SOCIAL LOGIN
