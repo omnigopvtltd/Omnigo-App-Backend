@@ -23,6 +23,7 @@ const {
   getOmnigoMartProducts,
   getOmnigoMartProductsCategries,
 } = require("../controllers/productController");
+const upload = require("../middleware/upload");
 
 router.get("/", auth, getAllProducts);
 router.get("/omnigo-mart-products", auth, getOmnigoMartProducts);
