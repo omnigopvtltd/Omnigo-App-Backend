@@ -32,7 +32,9 @@ router.get("/product-by-type", auth, getProductsByType);
 // Endpoint for "Craving It Again?" section
 router.get("/previously-ordered", auth, getPreviouslyOrderedItems);
 
-router.post("/create", auth, createProduct);
+router.post("/create", upload.array([
+    { name: "images", maxCount: 5 },
+  ]), auth, createProduct);
 router.put("/update/:id", auth, updateProduct);
 router.patch("/:id/availability", auth, toggleAvailability);
 router.delete("/delete/:id", auth, deleteProduct);

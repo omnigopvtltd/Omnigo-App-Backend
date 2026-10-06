@@ -21,7 +21,7 @@ const vendorSchema = new mongoose.Schema(
     businessEmail: {
       type: String,
       // required: true,
-      unique: true,
+      // unique: true,
       lowercase: true,
       trim: true,
     },
@@ -34,7 +34,7 @@ const vendorSchema = new mongoose.Schema(
     businessPhone: {
       type: String,
       // required: true,
-      unique: true,
+      // unique: true,
       trim: true,
     },
 
