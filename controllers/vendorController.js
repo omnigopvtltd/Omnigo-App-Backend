@@ -306,31 +306,27 @@ exports.validateSignup = [
 
 const BACKEND_URL = "https://api.omnigoapp.com";
 
-// Helper Function: Local file upload ya URL string dono ko absolute backend URL me convert kar
-const processMediaField = (bodyField, fileField, existingFieldValue) => {
-  // 1. Agar new file upload hui hai via Multer
-  if (fileField && fileField.filename) {
-    return `${BACKEND_URL}/uploads/${fileField.filename}`;
-  }
+// Helper Function: Local file upload ya URL string dono ko absolute backend URL me convert karne ke liye
+exports.processLocalMediaFields = (reqFiles = {}, reqBody = {}, fieldNames = []) => {
+  const result = {};
 
-  // 2. Agar frontend ne simple filename ya local path pass kiya hai
-  if (
-    bodyField &&
-    typeof bodyField === "string" &&
-    bodyField.startsWith("uploads/")
-  ) {
-    return `${BACKEND_URL}/${bodyField}`;
-  }
+  fieldNames.forEach((fieldName) => {
+    const file = reqFiles[fieldName]?.[0];
+    const fallbackPath = reqBody[fieldName];
 
-  // 3. Agar naya URL string pass kiya hai
-  if (bodyField && typeof bodyField === "string" && bodyField.trim() !== "") {
-    return bodyField.trim();
-  }
+    if (file) {
+      // Direct Multer diskStorage path/filename extraction
+      // Server relative path generate karne ke liye:
+      result[fieldName] = `${BACKEND_URL}/uploads/${file.filename || file.path.replace(/\\/g, "/")}`;
+    } else if (fallbackPath && typeof fallbackPath === "string") {
+      result[fieldName] = fallbackPath.trim();
+    } else {
+      result[fieldName] = "";
+    }
+  });
 
-  // 4. Agar koi nayi file ya string nahi di, toh existing document/database value retained rahegi
-  return existingFieldValue || "";
+  return result;
 };
-
 // exports.signup = async (req, res) => {
 //   try {
 //     const errors = validationResult(req);
@@ -862,7 +858,16 @@ exports.register = async (req, res) => {
       branchData,
     } = req.body;
 
-    const files = req.files || {};
+  const media = processLocalMediaFields(req.files, req.body, [
+      "profilePicture",
+      "cnicFrontPicture",
+      "cnicBackPicture",
+      "incorporationCertificate",
+      "foodSafetyLicense",
+      "ntnCertificate",
+      "logo",
+      "coverImage",
+    ]);
     const normalizedPhone = String(businessPhone).trim();
 
     if (cnicNumber == "") {
@@ -903,38 +908,16 @@ exports.register = async (req, res) => {
       ownerEmail: ownerEmail
         ? String(ownerEmail).toLowerCase().trim()
         : String(businessEmail).toLowerCase().trim(),
-      profilePicture: processMediaField(
-        profilePicture,
-        files.profilePicture?.[0],
-      ),
+      profilePicture: media.profilePicture || "",
 
       cnicNumber: cnicNumber || "",
-      cnicFrontPicture: processMediaField(
-        cnicFrontPicture,
-        files.cnicFrontPicture?.[0],
-      ),
-      cnicBackPicture: processMediaField(
-        cnicBackPicture,
-        files.cnicBackPicture?.[0],
-      ),
-
-      incorporationCertificate: processMediaField(
-        incorporationCertificate,
-        files.incorporationCertificate?.[0],
-      ),
-      foodSafetyLicense: processMediaField(
-        foodSafetyLicense,
-        files.foodSafetyLicense?.[0],
-      ),
-      ntnCertificate: processMediaField(
-        ntnCertificate,
-        files.ntnCertificate?.[0],
-      ),
-
-      businessType: businessType || "restaurant",
-      category: category || "",
-      logo: processMediaField(logo, files.logo?.[0]),
-      coverImage: processMediaField(coverImage, files.coverImage?.[0]),
+      cnicFrontPicture: media.cnicFrontPicture || "",
+      cnicBackPicture: media.cnicBackPicture || "",
+      incorporationCertificate: media.incorporationCertificate || "",
+      foodSafetyLicense: media.foodSafetyLicense || "",
+      ntnCertificate: media.ntnCertificate || "",
+      logo: media.logo || "",
+      coverImage: media.coverImage || "",
       description: description || "",
       businessRegistrationNumber: businessRegistrationNumber || "",
       taxNumber: taxNumber || "",
