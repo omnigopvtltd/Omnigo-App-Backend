@@ -307,7 +307,7 @@ exports.validateSignup = [
 const BACKEND_URL = "https://api.omnigoapp.com";
 
 // Helper Function: Local file upload ya URL string dono ko absolute backend URL me convert karne ke liye
-exports.processLocalMediaFields = (reqFiles = {}, reqBody = {}, fieldNames = []) => {
+const processLocalMediaFields = (reqFiles = {}, reqBody = {}, fieldNames = []) => {
   const result = {};
 
   fieldNames.forEach((fieldName) => {
