@@ -7,6 +7,7 @@ const { default: mongoose } = require("mongoose");
 const Vendor = require("../models/Vendor");
 const FoodCategories = require("../models/FoodCategories");
 const Campaign = require("../models/Campaign");
+const { handleImageUploads } = require("../utils/cloudinaryUpload");
 
 // exports.createProduct = async (req, res) => {
 //   try {
@@ -202,28 +203,30 @@ exports.createProduct = async (req, res) => {
     }
 
     // 3. Normalize Product Images (Supports Multer Single File, Multiple Files & JSON URLs)
-    let productImages = [];
+    // let productImages = [];
 
-    if (req.files && Array.isArray(req.files) && req.files.length > 0) {
-      // Multiple files uploaded via multer (e.g. req.files)
-      productImages = req.files.map(
-        (file) => file.path || file.location || file.filename,
-      );
-    } else if (req.file) {
-      // Single file uploaded via multer (e.g. req.file)
-      productImages = [req.file.path || req.file.location || req.file.filename];
-    } else if (images) {
-      // JSON array or string URL passed in body
-      if (typeof images === "string") {
-        try {
-          productImages = JSON.parse(images);
-        } catch {
-          productImages = [images];
-        }
-      } else if (Array.isArray(images)) {
-        productImages = images;
-      }
-    }
+    // if (req.files && Array.isArray(req.files) && req.files.length > 0) {
+    //   // Multiple files uploaded via multer (e.g. req.files)
+    //   productImages = req.files.map(
+    //     (file) => file.path || file.location || file.filename,
+    //   );
+    // } else if (req.file) {
+    //   // Single file uploaded via multer (e.g. req.file)
+    //   productImages = [req.file.path || req.file.location || req.file.filename];
+    // } else if (images) {
+    //   // JSON array or string URL passed in body
+    //   if (typeof images === "string") {
+    //     try {
+    //       productImages = JSON.parse(images);
+    //     } catch {
+    //       productImages = [images];
+    //     }
+    //   } else if (Array.isArray(images)) {
+    //     productImages = images;
+    //   }
+    // }
+
+  const productImages = await handleImageUploads(req, "images", "products");
 
     // 4. Dynamic Subcategory Auto-Creation Logic
     if (subcategory && subcategory.trim() !== "") {
@@ -580,7 +583,7 @@ exports.getProductsByCategory = async (req, res) => {
 
     // const query = {};
 
-   const query = {
+    const query = {
       vendorId: { $exists: true, $ne: null },
     };
 
@@ -878,8 +881,8 @@ exports.getProductsByVendorCategories = async (req, res) => {
 //         })
 //           .select("name images price description category type isFavourite isAvailable rating")
 //           .lean();
-//       } 
-      
+//       }
+
 //       // 2. Deals / Combos Fetching
 //       else if (["deals", "combos", "deal", "combo"].includes(formattedCategory)) {
 //         const deals = await Deal.find({
@@ -897,7 +900,7 @@ exports.getProductsByVendorCategories = async (req, res) => {
 //           dealType: d.dealType,
 //           isDeal: true,
 //         }));
-//       } 
+//       }
 
 //       // 3. Campaigns / Offers Fetching
 //       else if (["campaigns", "offers", "campaign", "offer"].includes(formattedCategory)) {
@@ -917,7 +920,7 @@ exports.getProductsByVendorCategories = async (req, res) => {
 //           applicableProducts: c.applicableProducts,
 //           isCampaign: true,
 //         }));
-//       } 
+//       }
 
 //       // 4. Standard Categories (Fallback e.g., "fast-food", "chinese", "burgers")
 //       else {
