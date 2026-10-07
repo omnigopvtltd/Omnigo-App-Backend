@@ -90,6 +90,8 @@ const productSchema = new mongoose.Schema(
       enum: ["popular", "special", "new", "signature", "featured"],
       default: "new",
     },
+    dosage: { type: String, default: "" }, // e.g. "500mg"
+    isRxRequired: { type: Boolean, default: false }, // Prescription Check
   },
   { timestamps: true },
 );
