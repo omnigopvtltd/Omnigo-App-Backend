@@ -33,7 +33,7 @@ router.get("/product-by-type", auth, getProductsByType);
 // Endpoint for "Craving It Again?" section
 router.get("/previously-ordered", auth, getPreviouslyOrderedItems);
 
-router.post("/create", upload.array([
+router.post("/create", upload.fields([
     { name: "images", maxCount: 5 },
   ]), auth, createProduct);
 router.put("/update/:id", auth, updateProduct);
