@@ -1146,7 +1146,7 @@ exports.getProductById = async (req, res) => {
 exports.getProductDetails = async (req, res) => {
   try {
     const product = await Product.findById(req.params.id).select(
-      "name image description rating price discountPrice addOns variations isAvailable isFavourite",
+      "name images description rating price discountPrice addOns variations isAvailable belongsTo isFavourite",
     );
 
     if (!product) {
@@ -1182,9 +1182,9 @@ exports.updateProduct = async (req, res) => {
       });
     }
 
-    // Validate updated vendor existence if vendorId is being changed
-    if (req.body.vendorId && req.body.vendorId !== String(product.vendorId)) {
-      const vendor = await Vendor.findById(req.body.vendorId);
+    // 1. Validate updated vendor existence if vendorId is being changed
+    if (req.body?.vendorId && req.body?.vendorId !== String(product?.vendorId)) {
+      const vendor = await Vendor.findById(req.body?.vendorId);
       if (!vendor) {
         return res.status(404).json({
           success: false,
@@ -1193,41 +1193,78 @@ exports.updateProduct = async (req, res) => {
       }
     }
 
-    // Comprehensive list of updatable product fields
-    const fields = [
-      "name",
-      "description",
-      "weight",
-      "quantity",
-      "images",
-      "vendorId",
-      "belongsTo",
-      "category",
-      "subcategory",
-      "price",
-      "discountPrice",
-      "variations",
-      "serving",
-      "addOns",
-      "isVeg",
-      "tags",
-      "likes",
-      "isAvailable",
-      "preparationTime",
-      "rating",
-      "status",
-      "type",
-    ];
+    // 2. Cloudinary Image Upload Processing
+    // Multer files (req.files / req.file) ya req.body.images ko process karke Cloudinary URL hasil karein
+    const uploadedImages = await handleImageUploads(req, "images", "products");
 
-    fields.forEach((field) => {
-      if (req.body[field] !== undefined) {
-        product[field] = req.body[field];
-      }
-    });
+    // Agar nayi images upload hue hain ya pass hue hain toh replace karein, warna previous images retain karein
+    if (uploadedImages && uploadedImages.length > 0) {
+      product.images = uploadedImages;
+    }
 
+    // 3. Stringified JSON Fields Parsing (agar FormData se aae hon)
+    let parsedVariations = product.variations;
+    if (req.body.variations !== undefined) {
+      parsedVariations =
+        typeof req.body.variations === "string"
+          ? JSON.parse(req.body.variations || "[]")
+          : Array.isArray(req.body.variations)
+          ? req.body.variations
+          : [];
+    }
+
+    let parsedAddOns = product.addOns;
+    if (req.body.addOns !== undefined) {
+      parsedAddOns =
+        typeof req.body.addOns === "string"
+          ? JSON.parse(req.body.addOns || "[]")
+          : Array.isArray(req.body.addOns)
+          ? req.body.addOns
+          : [];
+    }
+
+    let parsedTags = product.tags;
+    if (req.body.tags !== undefined) {
+      parsedTags =
+        typeof req.body.tags === "string"
+          ? JSON.parse(req.body.tags || "[]")
+          : Array.isArray(req.body.tags)
+          ? req.body.tags
+          : [];
+    }
+
+    // 4. Update basic primitive fields
+    if (req.body.name !== undefined) product.name = req.body.name;
+    if (req.body.description !== undefined) product.description = req.body.description;
+    if (req.body.weight !== undefined) product.weight = req.body.weight;
+    if (req.body.quantity !== undefined) product.quantity = Number(req.body.quantity);
+    if (req.body.vendorId !== undefined) product.vendorId = req.body.vendorId;
+    if (req.body.belongsTo !== undefined) product.belongsTo = req.body.belongsTo;
+    if (req.body.category !== undefined) product.category = req.body.category;
+    if (req.body.subcategory !== undefined) product.subcategory = req.body.subcategory;
+    if (req.body.price !== undefined) product.price = Number(req.body.price);
+    if (req.body.discountPrice !== undefined) {
+      product.discountPrice =
+        req.body.discountPrice === "" || req.body.discountPrice === null
+          ? null
+          : Number(req.body.discountPrice);
+    }
+    if (req.body.serving !== undefined) product.serving = req.body.serving;
+    if (req.body.isVeg !== undefined) product.isVeg = req.body.isVeg === "true" || req.body.isVeg === true;
+    if (req.body.isAvailable !== undefined) product.isAvailable = req.body.isAvailable === "true" || req.body.isAvailable === true;
+    if (req.body.preparationTime !== undefined) product.preparationTime = Number(req.body.preparationTime);
+    if (req.body.status !== undefined) product.status = req.body.status;
+    if (req.body.type !== undefined) product.type = req.body.type;
+
+    // Apply parsed JSON arrays
+    product.variations = parsedVariations;
+    product.addOns = parsedAddOns;
+    product.tags = parsedTags;
+
+    // 5. Save updated product to DB
     await product.save();
 
-    // Trigger Socket IO Real-time Events
+    // 6. Trigger Socket IO Real-time Events
     const io = req.app.get("io");
 
     if (io) {

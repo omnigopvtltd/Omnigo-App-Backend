@@ -36,7 +36,9 @@ router.get("/previously-ordered", auth, getPreviouslyOrderedItems);
 router.post("/create", upload.fields([
     { name: "images", maxCount: 5 },
   ]), auth, createProduct);
-router.put("/update/:id", auth, updateProduct);
+router.put("/update/:id", upload.fields([
+    { name: "images", maxCount: 5 },
+  ]), auth, updateProduct);
 router.patch("/:id/availability", auth, toggleAvailability);
 router.delete("/delete/:id", auth, deleteProduct);
 
