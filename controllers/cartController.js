@@ -45,6 +45,14 @@ exports.addToCart = async (req, res) => {
         0,
       );
 
+      const incomingVariations = Array.isArray(newItem.variations)
+        ? newItem.variations
+        : [];
+      const variationsPrice = incomingVariations.reduce(
+        (sum, variations) => sum + (Number(variations.price) || 0),
+        0,
+      );
+
       // ----------------------------------------------------
       // AUTO-MATCH ID WITH PRODUCT, DEAL, OR CAMPAIGN
       // ----------------------------------------------------
@@ -107,9 +115,13 @@ exports.addToCart = async (req, res) => {
     (sum, addOn) => sum + (Number(addOn.price) || 0),
     0
   );
+  const currentVariationsPrice = existingItem.variations.reduce(
+    (sum, variations) => sum + (Number(variations.price) || 0),
+    0
+  );
 
   // Exact Total Calculation: (Price + AddOns) * Total Quantity
-  existingItem.total = (existingItem.price + currentAddOnsPrice) * existingItem.quantity;
+  existingItem.total = (existingItem.price + currentAddOnsPrice + currentVariationsPrice) * existingItem.quantity;
 } 
       else {
         // Construct new cart item object
@@ -139,10 +151,8 @@ exports.addToCart = async (req, res) => {
           isVeg: newItem.isVeg ?? matchedEntity.isVeg ?? false,
           total:
             (itemPrice +
-              newItem.addOns.reduce(
-                (sum, addOn) => sum + (addOn.price || 0),
-                0,
-              )) *
+              addOnsPrice +
+              variationsPrice) *
             qty,
         };
 
@@ -292,7 +302,6 @@ exports.getCart = async (req, res) => {
 exports.updateCart = async (req, res) => {
   try {
     const io = req.app.get("io");
-
     const { productId, quantity } = req.body;
 
     if (!productId) {
@@ -314,36 +323,61 @@ exports.updateCart = async (req, res) => {
     }
 
     const item = cart.items.find(
-      (item) => item.productId.toString() === productId.toString(),
+      (item) => item.productId && item.productId.toString() === productId.toString()
     );
 
     if (!item) {
       return res.status(404).json({
         success: false,
-        msg: "Item not found",
+        msg: "Item not found in cart",
       });
     }
 
-    item.quantity = Number(quantity);
+    const newQty = Number(quantity);
 
-    // quantity <= 0 ho to remove
-    cart.items = cart.items.filter((item) => item.quantity > 0);
+    if (newQty <= 0) {
+      // Quantity 0 ya us se kam hone par item remove kar dein
+      cart.items = cart.items.filter(
+        (i) => i.productId && i.productId.toString() !== productId.toString()
+      );
+    } else {
+      // 1. Quantity update karein
+      item.quantity = newQty;
+
+      // 2. Safe AddOns & Variations price calculation
+      const addOnsPrice = (item.addOns || []).reduce(
+        (sum, addOn) => sum + (Number(addOn.price) || 0),
+        0
+      );
+
+      const variationsPrice = (item.variations || []).reduce(
+        (sum, variation) => sum + (Number(variation.price) || 0),
+        0
+      );
+
+      // 3. Recalculate Item Total: (Base Price + AddOns + Variations) * Quantity
+      item.total = (Number(item.price || 0) + addOnsPrice + variationsPrice) * newQty;
+    }
 
     await cart.save();
 
-    io.to(`user_${req.user.id}`).emit("cart_updated", cart);
+    // Socket Event Emit (Ensured room format consistency `user:${req.user.id}`)
+    if (io) {
+      io.to(`user:${req.user.id}`).emit("cart_updated", cart);
+    }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      msg: "Cart updated",
+      msg: "Cart updated successfully",
       cart,
     });
   } catch (err) {
-    console.log("UPDATE CART ERROR:", err);
+    console.error("UPDATE CART ERROR:", err);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       msg: "Server Error",
+      error: err.message,
     });
   }
 };
@@ -431,7 +465,7 @@ exports.clearCart = async (req, res) => {
 
     await cart.save();
 
-    io.to(`user_${req.user.id}`).emit("cart_updated", cart);
+    io.to(`user:${req.user.id}`).emit("cart_updated", cart);
 
     res.status(200).json({
       success: true,
