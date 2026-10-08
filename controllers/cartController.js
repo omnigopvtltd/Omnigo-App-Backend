@@ -37,6 +37,14 @@ exports.addToCart = async (req, res) => {
 
       const qty = Number(newItem.quantity) || 1;
 
+      const incomingAddOns = Array.isArray(newItem.addOns)
+        ? newItem.addOns
+        : [];
+      const addOnsPrice = incomingAddOns.reduce(
+        (sum, addOn) => sum + (Number(addOn.price) || 0),
+        0,
+      );
+
       // ----------------------------------------------------
       // AUTO-MATCH ID WITH PRODUCT, DEAL, OR CAMPAIGN
       // ----------------------------------------------------
@@ -71,23 +79,55 @@ exports.addToCart = async (req, res) => {
 
       // Price determination
       const itemPrice = Number(
-        matchedEntity.discountPrice ||  matchedEntity.price || newItem.price || 0
+        matchedEntity.discountPrice ||
+          matchedEntity.price ||
+          newItem.price ||
+          0,
       );
 
+      // if (existingIndex > -1) {
+      //   // Update quantity & total if already in cart
+      //   cart.items[existingIndex].quantity += qty;
+      //   cart.items[existingIndex].total =
+      //     cart.items[existingIndex].addOns.reduce(
+      //       (sum, addOn) => sum + (addOn.price || 0),
+      //       0,
+      //     ) +
+      //     cart.items[existingIndex].quantity * cart.items[existingIndex].price;
+      // }
       if (existingIndex > -1) {
-        // Update quantity & total if already in cart
-        cart.items[existingIndex].quantity += qty;
-        cart.items[existingIndex].total = cart.items[existingIndex].addOns.reduce((sum, addOn) => sum + (addOn.price || 0), 0) +
-          cart.items[existingIndex].quantity * cart.items[existingIndex].price;
-      } else {
+  const existingItem = cart.items[existingIndex];
+
+  if (incomingAddOns.length > 0) existingItem.addOns = incomingAddOns;
+  if (newItem.variations) existingItem.variations = newItem.variations;
+
+  existingItem.quantity += qty;
+
+  const currentAddOnsPrice = existingItem.addOns.reduce(
+    (sum, addOn) => sum + (Number(addOn.price) || 0),
+    0
+  );
+
+  // Exact Total Calculation: (Price + AddOns) * Total Quantity
+  existingItem.total = (existingItem.price + currentAddOnsPrice) * existingItem.quantity;
+} 
+      else {
         // Construct new cart item object
         const cartItem = {
           orderFrom: newItem.orderFrom || "fast-food",
-          name: matchedEntity.name || matchedEntity.title || matchedEntity.dealName || matchedEntity.campaignName || newItem.name || "Item",
+          name:
+            matchedEntity.name ||
+            matchedEntity.title ||
+            matchedEntity.dealName ||
+            matchedEntity.campaignName ||
+            newItem.name ||
+            "Item",
           image:
             matchedEntity.image ||
-            (matchedEntity.images && matchedEntity.images[0]) || matchedEntity.campaignBanner || matchedEntity.dealBanner ||
-            newItem.image || 
+            (matchedEntity.images && matchedEntity.images[0]) ||
+            matchedEntity.campaignBanner ||
+            matchedEntity.dealBanner ||
+            newItem.image ||
             "",
           category: matchedEntity.category || newItem.category || entityType,
           weight: matchedEntity.weight || newItem.weight || "",
@@ -97,7 +137,13 @@ exports.addToCart = async (req, res) => {
           addOns: newItem.addOns || matchedEntity.addOns || [],
           serving: newItem.serving || matchedEntity.serving || "full",
           isVeg: newItem.isVeg ?? matchedEntity.isVeg ?? false,
-          total: (itemPrice + newItem.addOns.reduce((sum, addOn) => sum + (addOn.price || 0), 0)) * qty,
+          total:
+            (itemPrice +
+              newItem.addOns.reduce(
+                (sum, addOn) => sum + (addOn.price || 0),
+                0,
+              )) *
+            qty,
         };
 
         // Attach specific ID based on match
