@@ -9,7 +9,10 @@ const { processRiderBikeInstallment } = require("../helpers/bikeInstallment");
 const Cart = require("../models/Cart");
 const WalletTransaction = require("../models/WalletTransaction");
 const Vendor = require("../models/Vendor");
-const { sendNotification, sendNotificationToVendor } = require("../utils/sendNotification");
+const {
+  sendNotification,
+  sendNotificationToVendor,
+} = require("../utils/sendNotification");
 const { default: mongoose } = require("mongoose");
 
 exports.createOrder = async (req, res) => {
@@ -112,6 +115,9 @@ exports.createOrder = async (req, res) => {
       Number(salesAndServiceTaxForUser) -
       discount;
 
+    const hasGrocery = formattedItems.some(
+      (item) => item.orderFrom === "grocery",
+    );
     const order = await Order.create({
       orderNumber: "ORD" + Date.now() + Math.floor(Math.random() * 1000),
       userId: req.user.id,
@@ -127,7 +133,7 @@ exports.createOrder = async (req, res) => {
       promoDiscount: discount,
       totalAmount,
       routingMetrics,
-      status: "pending",
+      status: hasGrocery ? "confirmed" : "pending",
       riderId: null,
       isAssigned: false,
     });
@@ -322,7 +328,7 @@ exports.cancelOrder = async (req, res) => {
     const customer = await User.findById(order.userId);
     sendNotification(req.app, {
       vendorId: order.stops[0]?.vendorId,
-     role: "Vendor",
+      role: "Vendor",
       title: "Order Cancelled",
       message: `Order#${order.orderNumber} has been cancelled.`,
       type: "cancelled_order",
@@ -698,7 +704,7 @@ exports.readyOrder = async (req, res) => {
 
     sendNotification(req.app, {
       userId: order?.riderId,
-     role: "rider",
+      role: "rider",
       title: "Order Ready For Pickup",
       message: `Order #${order.orderNumber} is raedy. Please pickup order now.`,
       type: "ready_order",
@@ -1883,17 +1889,21 @@ exports.trackOrder = async (req, res) => {
     const order = await Order.findById(req.params.id)
       .populate("riderId", "name phone location")
       .populate("stops.vendorId", "name address location contact")
-      .populate("userId", "name email phone")
+      .populate("userId", "name email phone");
 
-const productIds = order?.items?.map((item) => item.productId) || [];
-productIds.forEach((productId) => {
-  if (!mongoose.Types.ObjectId.isValid(productId)) {
-    console.warn(`Invalid productId detected: ${productId}`);
-  }
-});
+    const productIds = order?.items?.map((item) => item.productId) || [];
+    productIds.forEach((productId) => {
+      if (!mongoose.Types.ObjectId.isValid(productId)) {
+        console.warn(`Invalid productId detected: ${productId}`);
+      }
+    });
 
-const products = await Product.find({ _id: { $in: productIds } }).select("vendorId");
-const vendors = await Vendor.find({ _id: { $in: products.map((p) => p.vendorId) } }).select("businessName logo address contact location status");
+    const products = await Product.find({ _id: { $in: productIds } }).select(
+      "vendorId",
+    );
+    const vendors = await Vendor.find({
+      _id: { $in: products.map((p) => p.vendorId) },
+    }).select("businessName logo address contact location status");
 
     if (!order) {
       return res

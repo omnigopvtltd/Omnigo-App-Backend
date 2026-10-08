@@ -71,13 +71,13 @@ exports.addToCart = async (req, res) => {
 
       // Price determination
       const itemPrice = Number(
-        matchedEntity.price || matchedEntity.discountPrice || newItem.price || 0
+        matchedEntity.discountPrice ||  matchedEntity.price || newItem.price || 0
       );
 
       if (existingIndex > -1) {
         // Update quantity & total if already in cart
         cart.items[existingIndex].quantity += qty;
-        cart.items[existingIndex].total =
+        cart.items[existingIndex].total = cart.items[existingIndex].addOns.reduce((sum, addOn) => sum + (addOn.price || 0), 0) +
           cart.items[existingIndex].quantity * cart.items[existingIndex].price;
       } else {
         // Construct new cart item object
@@ -97,7 +97,7 @@ exports.addToCart = async (req, res) => {
           addOns: newItem.addOns || matchedEntity.addOns || [],
           serving: newItem.serving || matchedEntity.serving || "full",
           isVeg: newItem.isVeg ?? matchedEntity.isVeg ?? false,
-          total: itemPrice * qty,
+          total: (itemPrice + cartItem.addOns.reduce((sum, addOn) => sum + (addOn.price || 0), 0)) * qty,
         };
 
         // Attach specific ID based on match

@@ -2225,7 +2225,7 @@ exports.deleteVendor = async (req, res) => {
 // =======================
 exports.getVendors = async (req, res) => {
   try {
-    const { status, search, type } = req.query;
+    const { status, search, type, businessType } = req.query;
 
     const filter = {};
 
@@ -2241,7 +2241,12 @@ exports.getVendors = async (req, res) => {
       filter.businessType = { $regex: new RegExp(type, "i") };
     }
 
-    // 3. Search by Vendor Name
+    // 3. Filter by Business Type
+    if (businessType && businessType !== "all") {
+      filter.businessType = { $regex: new RegExp(businessType, "i") };
+    }
+
+    // 4. Search by Vendor Name
     if (search && search.trim() !== "") {
       filter.businessName = {
         $regex: search.trim().toLowerCase(),
