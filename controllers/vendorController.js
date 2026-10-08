@@ -307,7 +307,11 @@ exports.validateSignup = [
 const BACKEND_URL = "https://api.omnigoapp.com";
 
 // Helper Function: Local file upload ya URL string dono ko absolute backend URL me convert karne ke liye
-const processLocalMediaFields = (reqFiles = {}, reqBody = {}, fieldNames = []) => {
+const processLocalMediaFields = (
+  reqFiles = {},
+  reqBody = {},
+  fieldNames = [],
+) => {
   const result = {};
 
   fieldNames.forEach((fieldName) => {
@@ -317,7 +321,8 @@ const processLocalMediaFields = (reqFiles = {}, reqBody = {}, fieldNames = []) =
     if (file) {
       // Direct Multer diskStorage path/filename extraction
       // Server relative path generate karne ke liye:
-      result[fieldName] = `${BACKEND_URL}/uploads/${file.filename || file.path.replace(/\\/g, "/")}`;
+      result[fieldName] =
+        `${BACKEND_URL}/uploads/${file.filename || file.path.replace(/\\/g, "/")}`;
     } else if (fallbackPath && typeof fallbackPath === "string") {
       result[fieldName] = fallbackPath.trim();
     } else {
@@ -811,7 +816,6 @@ exports.signup = async (req, res) => {
 
 exports.register = async (req, res) => {
   try {
-
     const vendorId = req.user.id || req.user._id;
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -858,7 +862,7 @@ exports.register = async (req, res) => {
       branchData,
     } = req.body;
 
-  const media = processLocalMediaFields(req.files, req.body, [
+    const media = processLocalMediaFields(req.files, req.body, [
       "profilePicture",
       "cnicFrontPicture",
       "cnicBackPicture",
@@ -935,11 +939,9 @@ exports.register = async (req, res) => {
     };
 
     // 4. Save Vendor to MongoDB
-    const vendor = await Vendor.findByIdAndUpdate(
-      req.user?.id,
-      vendorData,
-      { new: true },
-    );
+    const vendor = await Vendor.findByIdAndUpdate(req.user?.id, vendorData, {
+      new: true,
+    });
 
     // 5. CREATE OPERATIONAL BRANCHES (Handles Single & Multiple Branches)
     let createdBranches = [];
@@ -1601,13 +1603,24 @@ exports.updateVendorProfile = async (req, res) => {
     } = req.body;
 
     // File Upload Processing (Multer compatibility)
-    const files = req.files || {};
+    // const files = req.files || {};
 
-    const processMediaField = (bodyField, fileField, defaultValue) => {
-      if (fileField && fileField.path) return fileField.path; // Multer Upload Path / Cloudinary URL
-      if (bodyField) return bodyField;
-      return defaultValue || "";
-    };
+    // const processMediaField = (bodyField, fileField, defaultValue) => {
+    //   if (fileField && fileField.path) return fileField.path; // Multer Upload Path / Cloudinary URL
+    //   if (bodyField) return bodyField;
+    //   return defaultValue || "";
+    // };
+
+    const media = processLocalMediaFields(req.files, req.body, [
+      "profilePicture",
+      "cnicFrontPicture",
+      "cnicBackPicture",
+      "incorporationCertificate",
+      "foodSafetyLicense",
+      "ntnCertificate",
+      "logo",
+      "coverImage",
+    ]);
 
     // 1. Fetch Vendor
     const vendor = await Vendor.findById(vendorId);
@@ -1893,13 +1906,24 @@ exports.updateVendor = async (req, res) => {
     } = req.body;
 
     // File Upload Processing (Multer compatibility)
-    const files = req.files || {};
+    // const files = req.files || {};
 
-    const processMediaField = (bodyField, fileField, defaultValue) => {
-      if (fileField && fileField.path) return fileField.path; // Multer Upload Path / Cloudinary URL
-      if (bodyField) return bodyField;
-      return defaultValue || "";
-    };
+    // const processMediaField = (bodyField, fileField, defaultValue) => {
+    //   if (fileField && fileField.path) return fileField.path; // Multer Upload Path / Cloudinary URL
+    //   if (bodyField) return bodyField;
+    //   return defaultValue || "";
+    // };
+
+    const media = processLocalMediaFields(req.files, req.body, [
+      "profilePicture",
+      "cnicFrontPicture",
+      "cnicBackPicture",
+      "incorporationCertificate",
+      "foodSafetyLicense",
+      "ntnCertificate",
+      "logo",
+      "coverImage",
+    ]);
 
     // 1. Fetch Vendor
     const vendor = await Vendor.findById(vendorId);
@@ -1974,49 +1998,58 @@ exports.updateVendor = async (req, res) => {
     if (ownerEmail) vendor.ownerEmail = String(ownerEmail).toLowerCase().trim();
 
     // 5. Media Files Processing (Logo, Cover, CNIC, Licenses)
-    vendor.profilePicture = processMediaField(
-      profilePicture,
-      files.profilePicture?.[0],
-      vendor.profilePicture,
-    );
-    vendor.logo = processMediaField(
-      logoImage || logo,
-      files.logoImage?.[0] || files.logo?.[0],
-      vendor.logo,
-    );
-    vendor.coverImage = processMediaField(
-      bannerImage || coverImage,
-      files.bannerImage?.[0] || files.coverImage?.[0],
-      vendor.coverImage,
-    );
+    // vendor.profilePicture = processMediaField(
+    //   profilePicture,
+    //   files.profilePicture?.[0],
+    //   vendor.profilePicture,
+    // );
+    // vendor.logo = processMediaField(
+    //   logoImage || logo,
+    //   files.logoImage?.[0] || files.logo?.[0],
+    //   vendor.logo,
+    // );
+    // vendor.coverImage = processMediaField(
+    //   bannerImage || coverImage,
+    //   files.bannerImage?.[0] || files.coverImage?.[0],
+    //   vendor.coverImage,
+    // );
+
+    vendor.profilePicture = media.profilePicture || vendor.profilePicture;
+    vendor.logo = media.logo || vendor.logo;
+    vendor.coverImage = media.coverImage || vendor.coverImage;
 
     vendor.cnicNumber = cnicNumber || vendor.cnicNumber || "";
-    vendor.cnicFrontPicture = processMediaField(
-      cnicFrontPicture,
-      files.cnicFrontPicture?.[0],
-      vendor.cnicFrontPicture,
-    );
-    vendor.cnicBackPicture = processMediaField(
-      cnicBackPicture,
-      files.cnicBackPicture?.[0],
-      vendor.cnicBackPicture,
-    );
+    // vendor.cnicFrontPicture = processMediaField(
+    //   cnicFrontPicture,
+    //   files.cnicFrontPicture?.[0],
+    //   vendor.cnicFrontPicture,
+    // );
+    // vendor.cnicBackPicture = processMediaField(
+    //   cnicBackPicture,
+    //   files.cnicBackPicture?.[0],
+    //   vendor.cnicBackPicture,
+    // );
 
-    vendor.incorporationCertificate = processMediaField(
-      incorporationCertificate,
-      files.incorporationCertificate?.[0],
-      vendor.incorporationCertificate,
-    );
-    vendor.foodSafetyLicense = processMediaField(
-      foodSafetyLicense,
-      files.foodSafetyLicense?.[0],
-      vendor.foodSafetyLicense,
-    );
-    vendor.ntnCertificate = processMediaField(
-      ntnCertificate,
-      files.ntnCertificate?.[0],
-      vendor.ntnCertificate,
-    );
+    // vendor.incorporationCertificate = processMediaField(
+    //   incorporationCertificate,
+    //   files.incorporationCertificate?.[0],
+    //   vendor.incorporationCertificate,
+    // );
+    // vendor.foodSafetyLicense = processMediaField(
+    //   foodSafetyLicense,
+    //   files.foodSafetyLicense?.[0],
+    //   vendor.foodSafetyLicense,
+    // );
+    // vendor.ntnCertificate = processMediaField(
+    //   ntnCertificate,
+    //   files.ntnCertificate?.[0],
+    //   vendor.ntnCertificate,
+    // );
+    vendor.cnicFrontPicture = media.cnicFrontPicture || vendor.cnicFrontPicture;
+    vendor.cnicBackPicture = media.cnicBackPicture || vendor.cnicBackPicture;
+    vendor.incorporationCertificate = media.incorporationCertificate || vendor.incorporationCertificate;
+    vendor.foodSafetyLicense = media.foodSafetyLicense || vendor.foodSafetyLicense;
+    vendor.ntnCertificate = media.ntnCertificate || vendor.ntnCertificate;
 
     // 6. Payout Info
     vendor.payout = {
@@ -3663,7 +3696,6 @@ exports.getVendorCategories = async (req, res) => {
     });
   }
 };
-
 
 // ======================================================
 // ACCOUNT DELETE
