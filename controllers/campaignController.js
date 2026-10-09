@@ -142,6 +142,12 @@ exports.createCampaign = async (req, res) => {
       });
     }
 
+    const bannerImage = await handleImageUploads(
+      req,
+      "campaignBanner",
+      "campaign",
+    );
+
     const campaign = await Campaign.create({
       vendorId,
       branchId: branchId || null,
@@ -161,7 +167,7 @@ exports.createCampaign = async (req, res) => {
       usageLimit,
       perCustomerLimit,
       eligibleCustomers,
-      campaignBanner,
+      campaignBanner: bannerImage,
       isActive: isActive !== undefined ? isActive : true,
     });
 
@@ -295,7 +301,7 @@ exports.getCampaignsByVendor = async (req, res) => {
         .populate("vendorId", "businessName logo rating package")
         .populate(
           "branchId",
-          "branchName address area city phone isOpen isActive"
+          "branchName address area city phone isOpen isActive",
         )
         .populate("offerDetails.freeItemId", "name price image")
         .populate("offerDetails.comboItems", "name price image")
@@ -331,7 +337,10 @@ exports.getCampaignById = async (req, res) => {
   try {
     const campaign = await Campaign.findById(req.params.id)
       .populate("vendorId", "businessName logo rating")
-      .populate("branchId", "branchName address area city phone isOpen isActive")
+      .populate(
+        "branchId",
+        "branchName address area city phone isOpen isActive",
+      )
       .populate("offerDetails.freeItemId")
       .populate("offerDetails.comboItems")
       .populate("applicableCategories")
@@ -380,6 +389,17 @@ exports.updateCampaign = async (req, res) => {
       "campaignBanner",
       "isActive",
     ];
+
+    const uploadedImages = await handleImageUploads(
+      req,
+      "campaignBanner",
+      "campaign",
+    );
+
+    // Agar nayi images upload hue hain ya pass hue hain toh replace karein, warna previous images retain karein
+    if (uploadedImages && uploadedImages.length > 0) {
+      campaign.campaignBanner = uploadedImages[0];
+    }
 
     updateFields.forEach((field) => {
       if (req.body[field] !== undefined) {

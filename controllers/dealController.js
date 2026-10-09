@@ -412,6 +412,8 @@ exports.createDeal = async (req, res) => {
       });
     }
 
+    const bannerImage = await handleImageUploads(req, "dealBanner", "deal");
+
     const deal = await Deal.create({
       vendorId,
       branchId: branchId || null,
@@ -431,7 +433,7 @@ exports.createDeal = async (req, res) => {
       usageLimit,
       perCustomerLimit,
       eligibleCustomers,
-      dealBanner,
+      dealBanner: bannerImage,
       isActive: isActive !== undefined ? isActive : true,
     });
 
@@ -629,6 +631,13 @@ exports.updateDeal = async (req, res) => {
       "isActive",
     ];
 
+    const uploadedImages = await handleImageUploads(req, "dealBanner", "deals");
+
+    // Agar nayi images upload hue hain ya pass hue hain toh replace karein, warna previous images retain karein
+    if (uploadedImages && uploadedImages.length > 0) {
+      deal.dealBanner = uploadedImages[0];
+    }
+    
     updateFields.forEach((field) => {
       if (req.body[field] !== undefined) {
         deal[field] = req.body[field];
