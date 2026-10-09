@@ -106,7 +106,7 @@
 
 const Campaign = require("../models/Campaign");
 const VendorBranch = require("../models/VendorBranch");
-
+const { handleImageUploads } = require("../utils/cloudinaryUpload");
 // Create Campaign
 exports.createCampaign = async (req, res) => {
   try {
