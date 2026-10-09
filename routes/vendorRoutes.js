@@ -66,7 +66,17 @@ router.post(
 );
 router.post(
   "/register",
-  upload.fields([
+  // upload.array([
+  //   { name: "logo", maxCount: 1 },
+  //   { name: "coverImage", maxCount: 1 },
+  //   { name: "profilePicture", maxCount: 1 },
+  //   { name: "cnicFrontPicture", maxCount: 1 },
+  //   { name: "cnicBackPicture", maxCount: 1 },
+  //   { name: "incorporationCertificate", maxCount: 1 },
+  //   { name: "foodSafetyLicense", maxCount: 1 },
+  //   { name: "ntnCertificate", maxCount: 1 },
+  // ]),
+  upload.diskUpload.fields([
     { name: "logo", maxCount: 1 },
     { name: "coverImage", maxCount: 1 },
     { name: "profilePicture", maxCount: 1 },
@@ -96,7 +106,7 @@ router.post("/forgot-password", forgotPassword);
 router.post("/save-fcm-token", auth, saveFcmToken);
 router.put(
   "/complete-profile",
-  upload.fields([
+  upload.diskUpload.fields([
     { name: "logo", maxCount: 1 },
     { name: "coverImage", maxCount: 1 },
     { name: "profilePicture", maxCount: 1 },
@@ -107,13 +117,13 @@ router.put(
     { name: "ntnCertificate", maxCount: 1 },
   ]),
   auth,
-  updateVendorProfile,
+  updateVendor,
 );
 
 
 router.put(
   "/vendor-profile/update",
-  upload.fields([
+  upload.diskUpload.fields([
     { name: "logo", maxCount: 1 },
     { name: "coverImage", maxCount: 1 },
   ]),
@@ -122,7 +132,7 @@ router.put(
 );
 router.put(
   "/update/:id",
-  upload.fields([
+  upload.diskUpload.fields([
     { name: "logo", maxCount: 1 },
     { name: "coverImage", maxCount: 1 },
   ]),

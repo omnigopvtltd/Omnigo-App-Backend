@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const multer = require('multer');
+// const multer = require('multer');
 const { 
   createQuickOrder,
   confirmQuickOrderToMainOrder,
@@ -9,10 +9,10 @@ const {
 //   respondToPriceUpdate 
 } = require('../controllers/quickOrderController.js');
 
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = require("../middleware/upload");
 
 // Unified Parsing Route for Food, Mart, Pharmacy (Text or Upload Image)
-router.post('/parse', upload.single('image'), createQuickOrder);
+router.post('/parse', upload.memoryUpload.single('image'), createQuickOrder);
 // Step 2: Convert Parsed Quick Order to Live Main Order
 router.post("/confirm", confirmQuickOrderToMainOrder);
 router.put("/edit", editQuickOrder);
