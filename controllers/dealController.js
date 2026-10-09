@@ -377,6 +377,7 @@
 
 const Deal = require("../models/Deal");
 const VendorBranch = require("../models/VendorBranch");
+const { handleImageUploads } = require("../utils/cloudinaryUpload");
 
 // Create Deal (Supports both Campaign-style Deals & Menu Combos)
 exports.createDeal = async (req, res) => {
