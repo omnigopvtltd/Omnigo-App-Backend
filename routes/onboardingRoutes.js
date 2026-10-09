@@ -1,8 +1,6 @@
 const express = require("express");
 const router = express.Router();
 
-const upload = require("../middleware/upload");
-
 const {
   createOnboarding,
   getOnboardings,
@@ -11,10 +9,11 @@ const {
   deleteOnboarding,
   toggleOnboardingStatus,
 } = require("../controllers/onboardingController");
+const upload = require("../middleware/upload");
 
 router.post(
   "/",
-  upload.single("image"),
+  upload.diskUpload.single("image_url"),
   createOnboarding
 );
 
@@ -23,7 +22,7 @@ router.get("/", getOnboardings);
 
 router.put(
   "/:id", 
-  upload.single("image"),
+  upload.diskUpload.single("image_url"),
   updateOnboarding
 );
 

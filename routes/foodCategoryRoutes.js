@@ -17,22 +17,35 @@ const {
   deleteSubCategory,
   getAllCategoriesWithSubCategories,
 } = require("../controllers/foodCategoryController");
+const upload = require("../middleware/upload");
 
 // Category Routes
 router.get("/", auth, getAllCategories);
 router.get("/with-subcategories", auth, getAllCategoriesWithSubCategories);
-router.post("/create", auth, createCategory);
+router.post("/create", upload.memoryUpload.fields([
+  { name: "image", maxCount: 1 },
+  { name: "icon", maxCount: 1 },
+]), auth, createCategory);
 router.put("/reorder", auth, reorderCategories);
 
 // Sub-Category Routes
 router.get("/subcategories", auth, getAllSubCategories);
-router.post("/create/subcategories", auth, createSubCategory);
+router.post("/create/subcategories", upload.memoryUpload.fields([
+  { name: "image", maxCount: 1 },
+  // { name: "icon", maxCount: 1 },
+]), auth, createSubCategory);
 router.get("/:categoryId/subcategories", auth, getSubCategoriesByCategory);
 router.get("/subcategories/:subId", auth, getSubCategoryById);
-router.put("/update/subcategories/:subId", auth, updateSubCategory);
+router.put("/update/subcategories/:subId", upload.memoryUpload.fields([
+  { name: "image", maxCount: 1 },
+  // { name: "icon", maxCount: 1 },
+]), auth, updateSubCategory);
 router.delete("/delete/:id", auth, deleteCategory);
 router.delete("/delete/subcategories/:subId", auth, deleteSubCategory);
 
-router.put("/update/:id", auth, updateCategory);
+router.put("/update/:id", upload.memoryUpload.fields([
+  { name: "image", maxCount: 1 },
+  { name: "icon", maxCount: 1 },
+]), auth, updateCategory);
 router.get("/:id", auth, getCategoryById);
 module.exports = router;

@@ -74,15 +74,15 @@ const {
   getDealFormConfig,
   getAllVendorDeals
 } = require("../controllers/dealController");
-
+const upload = require("../middleware/upload");
 
 // Get dynamic form configuration
 router.get("/form-config", getDealFormConfig);
 
 // Other Deal routes
-router.post("/", createDeal);
+router.post("/", upload.diskUpload.single("dealBanner"), createDeal);
 router.get("/", getAllDeals);
-router.put("/:id", updateDeal);
+router.put("/:id", upload.diskUpload.single("dealBanner"), updateDeal);
 router.patch("/:id", toggleDealAvailability); // New route for toggling status
 router.delete("/:id", deleteDeal);
 

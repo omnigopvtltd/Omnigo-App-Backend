@@ -321,8 +321,9 @@ const processLocalMediaFields = (
     if (file) {
       // Direct Multer diskStorage path/filename extraction
       // Server relative path generate karne ke liye:
+      console.log(file);
       result[fieldName] =
-        `${BACKEND_URL}/uploads/${file.filename || file.path.replace(/\\/g, "/")}`;
+        `${BACKEND_URL}/uploads/${file.originalname || file.path?.replace(/\\/g, "/")}`;
     } else if (fallbackPath && typeof fallbackPath === "string") {
       result[fieldName] = fallbackPath.trim();
     } else {
@@ -1695,49 +1696,17 @@ exports.updateVendorProfile = async (req, res) => {
     if (ownerEmail) vendor.ownerEmail = String(ownerEmail).toLowerCase().trim();
 
     // 5. Media Files Processing (Logo, Cover, CNIC, Licenses)
-    vendor.profilePicture = processMediaField(
-      profilePicture,
-      files.profilePicture?.[0],
-      vendor.profilePicture,
-    );
-    vendor.logo = processMediaField(
-      logoImage || logo,
-      files.logoImage?.[0] || files.logo?.[0],
-      vendor.logo,
-    );
-    vendor.coverImage = processMediaField(
-      bannerImage || coverImage,
-      files.bannerImage?.[0] || files.coverImage?.[0],
-      vendor.coverImage,
-    );
+    vendor.profilePicture = media.profilePicture || vendor.profilePicture || "";
+    vendor.logo = media.logo || vendor.logo || "";
+    vendor.coverImage = media.coverImage || vendor.coverImage || "";
 
     vendor.cnicNumber = cnicNumber || vendor.cnicNumber || "";
-    vendor.cnicFrontPicture = processMediaField(
-      cnicFrontPicture,
-      files.cnicFrontPicture?.[0],
-      vendor.cnicFrontPicture,
-    );
-    vendor.cnicBackPicture = processMediaField(
-      cnicBackPicture,
-      files.cnicBackPicture?.[0],
-      vendor.cnicBackPicture,
-    );
+    vendor.cnicFrontPicture = media.cnicFrontPicture || vendor.cnicFrontPicture || "";
+    vendor.cnicBackPicture = media.cnicBackPicture || vendor.cnicBackPicture || "";
 
-    vendor.incorporationCertificate = processMediaField(
-      incorporationCertificate,
-      files.incorporationCertificate?.[0],
-      vendor.incorporationCertificate,
-    );
-    vendor.foodSafetyLicense = processMediaField(
-      foodSafetyLicense,
-      files.foodSafetyLicense?.[0],
-      vendor.foodSafetyLicense,
-    );
-    vendor.ntnCertificate = processMediaField(
-      ntnCertificate,
-      files.ntnCertificate?.[0],
-      vendor.ntnCertificate,
-    );
+    vendor.incorporationCertificate = media.incorporationCertificate || vendor.incorporationCertificate || "";
+    vendor.foodSafetyLicense = media.foodSafetyLicense || vendor.foodSafetyLicense || "";
+    vendor.ntnCertificate = media.ntnCertificate || vendor.ntnCertificate || "";
 
     // 6. Payout Info
     vendor.payout = {
@@ -1867,7 +1836,7 @@ exports.updateVendorProfile = async (req, res) => {
 // =======================
 exports.updateVendor = async (req, res) => {
   try {
-    const vendorId = req.params.id || req.params._id;
+    const vendorId = req.user.id || req.user._id || req.params.id || req.params._id;
 
     const {
       storeName,

@@ -8,13 +8,14 @@ const {
   deleteReview,
   getAllRestaurantReviews
 } = require("../controllers/restaurantReviewsController");
+const upload = require("../middleware/upload");
 
 // Public route to fetch reviews
 router.get("/", getAllRestaurantReviews);
 
 // Protected routes (User must be logged in)
-router.post("/add", auth, addReview);
-router.put("/:reviewId", auth, updateReview);
+router.post("/add", upload.diskUpload.single("image"), auth, addReview);
+router.put("/:reviewId", upload.diskUpload.single("image"), auth, updateReview);
 router.delete("/:reviewId", auth, deleteReview);
 
 router.get("/restaurant/:restaurantId", getRestaurantReviews);

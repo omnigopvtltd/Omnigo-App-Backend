@@ -32,16 +32,17 @@ const {
   toggleCampaignAvailability,
   getCampaignsByVendor
 } = require("../controllers/campaignController");
+const upload = require("../middleware/upload");
 
 
 // Get dynamic form configuration
 router.get("/form-config", getCampaignFormConfig);
 
 // Other Campaign routes
-router.post("/", createCampaign);
+router.post("/", upload.diskUpload.single("campaignBanner"), createCampaign);
 router.get("/", getAllCampaigns);
 router.get("/vendor/:vendorId", auth, getCampaignsByVendor);
-router.put("/:id", updateCampaign);
+router.put("/:id", upload.diskUpload.single("campaignBanner"), updateCampaign);
 router.patch("/:id", toggleCampaignAvailability); // New route for toggling status
 router.delete("/:id", deleteCampaign);
 

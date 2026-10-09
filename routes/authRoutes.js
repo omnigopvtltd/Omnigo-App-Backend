@@ -99,7 +99,7 @@ router.get("/all-users", getAllUsers);
 router.get("/users", getUsers);
 router.get("/user/me", auth, getUser);
 router.get("/my-profile/:id", getUserProfile);
-router.put("/my-profile/update/:id", upload.single("profilePicture"), updateUserProfile);
+router.put("/my-profile/update/:id", upload.diskUpload.single("profilePicture"), updateUserProfile);
 router.patch("/users/update/:id/status", updateUserStatus);
 
 
