@@ -106,7 +106,7 @@
 
 const Campaign = require("../models/Campaign");
 const VendorBranch = require("../models/VendorBranch");
-const { handleImageUploads } = require("../utils/cloudinaryUpload");
+const { handleImageUploads, uploadSingleToCloudinary } = require("../utils/cloudinaryUpload");
 // Create Campaign
 exports.createCampaign = async (req, res) => {
   try {
@@ -142,11 +142,29 @@ exports.createCampaign = async (req, res) => {
       });
     }
 
-    const bannerImage = await handleImageUploads(
-      req,
-      "campaignBanner",
-      "campaign",
-    );
+    // const bannerImage = await uploadSingleToCloudinary(req, "campaignBanner", "campaign");
+    // 2. Safe Banner Image Upload
+    let bannerImage = "";
+    
+    // Agar helper function handleImageUploads available ho:
+    if (typeof handleImageUploads === "function") {
+      const uploadedImages = await handleImageUploads(req, "campaignBanner", "campaigns");
+      if (uploadedImages && uploadedImages.length > 0) {
+        bannerImage = uploadedImages[0];
+      }
+    } else if (typeof uploadSingleToCloudinary === "function") {
+      // Fallback check: Extract exact file object instead of req.file directory path
+      const fileObj =
+        req.file ||
+        (req.files && req.files["campaignBanner"] && req.files["campaignBanner"][0]) ||
+        (req.files && req.files[0]);
+
+      if (fileObj) {
+        bannerImage = await uploadSingleToCloudinary(fileObj, "campaigns");
+      } else if (typeof req.body.campaignBanner === "string") {
+        bannerImage = req.body.campaignBanner;
+      }
+    }
 
     const campaign = await Campaign.create({
       vendorId,
@@ -390,15 +408,38 @@ exports.updateCampaign = async (req, res) => {
       "isActive",
     ];
 
-    const uploadedImages = await handleImageUploads(
-      req,
-      "campaignBanner",
-      "campaign",
-    );
+    // const uploadedImages = await uploadSingleToCloudinary(
+    //   req,
+    //   "campaignBanner",
+    //   "campaign",
+    // );
 
-    // Agar nayi images upload hue hain ya pass hue hain toh replace karein, warna previous images retain karein
-    if (uploadedImages && uploadedImages.length > 0) {
-      campaign.campaignBanner = uploadedImages[0];
+    // // Agar nayi images upload hue hain ya pass hue hain toh replace karein, warna previous images retain karein
+    // if (uploadedImages && uploadedImages.length > 0) {
+    //   campaign.campaignBanner = uploadedImages[0];
+    // }
+
+    // 2. Safe Banner Image Upload
+    let campaignBanner = "";
+    
+    // Agar helper function handleImageUploads available ho:
+    if (typeof handleImageUploads === "function") {
+      const uploadedImages = await handleImageUploads(req, "campaignBanner", "campaigns");
+      if (uploadedImages && uploadedImages.length > 0) {
+        campaignBanner = uploadedImages[0];
+      }
+    } else if (typeof uploadSingleToCloudinary === "function") {
+      // Fallback check: Extract exact file object instead of req.file directory path
+      const fileObj =
+        req.file ||
+        (req.files && req.files["campaignBanner"] && req.files["campaignBanner"][0]) ||
+        (req.files && req.files[0]);
+
+      if (fileObj) {
+        campaignBanner = await uploadSingleToCloudinary(fileObj, "campaigns");
+      } else if (typeof req.body.campaignBanner === "string") {
+        campaignBanner = req.body.campaignBanner;
+      }
     }
 
     updateFields.forEach((field) => {

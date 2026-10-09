@@ -97,7 +97,7 @@
 //       const price = Number(item.price) || 0;
 //       const quantity = Number(item.quantity) || 1;
 //       const total = price * quantity;
-      
+
 //       calculatedItemsTotal += total;
 
 //       return {
@@ -181,7 +181,7 @@
 //     if (type === "daily-deal") {
 //       requestedType = "Daily Deal";
 //     }
-    
+
 //     const deals = await Deal.find({
 //       isActive: true,
 //       dealType: requestedType,
@@ -239,7 +239,7 @@
 //       for (const item of items) {
 //         // Fetch product from DB to auto-populate missing fields if needed
 //         const product = await Product.findById(item.productId);
-        
+
 //         const price = Number(item.price || product?.price || 0);
 //         const quantity = Number(item.quantity || 1);
 //         const total = price * quantity;
@@ -377,7 +377,10 @@
 
 const Deal = require("../models/Deal");
 const VendorBranch = require("../models/VendorBranch");
-const { handleImageUploads } = require("../utils/cloudinaryUpload");
+const {
+  handleImageUploads,
+  uploadSingleToCloudinary,
+} = require("../utils/cloudinaryUpload");
 
 // Create Deal (Supports both Campaign-style Deals & Menu Combos)
 exports.createDeal = async (req, res) => {
@@ -409,11 +412,38 @@ exports.createDeal = async (req, res) => {
     if (!dealName || !dealType || !startDate || !endDate) {
       return res.status(400).json({
         success: false,
-        message: "dealName, dealType, startDate, and endDate are required fields.",
+        message:
+          "dealName, dealType, startDate, and endDate are required fields.",
       });
     }
 
-    const bannerImage = await handleImageUploads(req, "dealBanner", "deal");
+    // const bannerImage = await uploadSingleToCloudinary(req, "dealBanner", "deal");
+    // 2. Safe Banner Image Upload
+    let bannerImage = "";
+
+    // Agar helper function handleImageUploads available ho:
+    if (typeof handleImageUploads === "function") {
+      const uploadedImages = await handleImageUploads(
+        req,
+        "dealBanner",
+        "deals",
+      );
+      if (uploadedImages && uploadedImages.length > 0) {
+        bannerImage = uploadedImages[0];
+      }
+    } else if (typeof uploadSingleToCloudinary === "function") {
+      // Fallback check: Extract exact file object instead of req.file directory path
+      const fileObj =
+        req.file ||
+        (req.files && req.files["dealBanner"] && req.files["dealBanner"][0]) ||
+        (req.files && req.files[0]);
+
+      if (fileObj) {
+        bannerImage = await uploadSingleToCloudinary(fileObj, "deals");
+      } else if (typeof req.body.dealBanner === "string") {
+        bannerImage = req.body.dealBanner;
+      }
+    }
 
     const deal = await Deal.create({
       vendorId,
@@ -481,7 +511,10 @@ exports.getAllDeals = async (req, res) => {
     const [deals, total] = await Promise.all([
       Deal.find(query)
         .populate("vendorId", "businessName logo rating")
-        .populate("branchId", "branchName address area city phone isOpen isActive")
+        .populate(
+          "branchId",
+          "branchName address area city phone isOpen isActive",
+        )
         .populate("offerDetails.freeItemId", "name price image")
         .populate("offerDetails.comboItems", "name price image")
         .populate("offerDetails.itemsIncluded.product", "name price image")
@@ -495,9 +528,13 @@ exports.getAllDeals = async (req, res) => {
     ]);
 
     const vendorIds = [
-      ...new Set(deals.map((d) => d.vendorId?._id || d.vendorId).filter(Boolean)),
+      ...new Set(
+        deals.map((d) => d.vendorId?._id || d.vendorId).filter(Boolean),
+      ),
     ];
-    const vendorBranches = await VendorBranch.find({ vendorId: { $in: vendorIds } }).lean();
+    const vendorBranches = await VendorBranch.find({
+      vendorId: { $in: vendorIds },
+    }).lean();
 
     return res.status(200).json({
       success: true,
@@ -547,7 +584,10 @@ exports.getAllVendorDeals = async (req, res) => {
     const [deals, total] = await Promise.all([
       Deal.find({ ...query, vendorId })
         .populate("vendorId", "businessName logo rating")
-        .populate("branchId", "branchName address area city phone isOpen isActive")
+        .populate(
+          "branchId",
+          "branchName address area city phone isOpen isActive",
+        )
         .populate("offerDetails.freeItemId", "name price image")
         .populate("offerDetails.comboItems", "name price image")
         .populate("offerDetails.itemsIncluded.product", "name price image")
@@ -561,9 +601,13 @@ exports.getAllVendorDeals = async (req, res) => {
     ]);
 
     const vendorIds = [
-      ...new Set(deals.map((d) => d.vendorId?._id || d.vendorId).filter(Boolean)),
+      ...new Set(
+        deals.map((d) => d.vendorId?._id || d.vendorId).filter(Boolean),
+      ),
     ];
-    const vendorBranches = await VendorBranch.find({ vendorId: { $in: vendorIds } }).lean();
+    const vendorBranches = await VendorBranch.find({
+      vendorId: { $in: vendorIds },
+    }).lean();
 
     return res.status(200).json({
       success: true,
@@ -585,7 +629,10 @@ exports.getDealById = async (req, res) => {
   try {
     const deal = await Deal.findById(req.params.id)
       .populate("vendorId", "businessName logo rating")
-      .populate("branchId", "branchName address area city phone isOpen isActive")
+      .populate(
+        "branchId",
+        "branchName address area city phone isOpen isActive",
+      )
       .populate("offerDetails.freeItemId")
       .populate("offerDetails.comboItems")
       .populate("offerDetails.itemsIncluded.product")
@@ -593,7 +640,9 @@ exports.getDealById = async (req, res) => {
       .populate("applicableProducts");
 
     if (!deal) {
-      return res.status(404).json({ success: false, message: "Deal not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Deal not found" });
     }
 
     return res.status(200).json({ success: true, deal });
@@ -607,18 +656,102 @@ exports.updateDeal = async (req, res) => {
   try {
     const deal = await Deal.findById(req.params.id);
     if (!deal) {
-      return res.status(404).json({ success: false, message: "Deal not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Deal not found" });
     }
 
-    const updateFields = [
+    // 1. Cloudinary / Image Upload Handling
+    // const uploadedImages = await uploadSingleToCloudinary(req, "dealBanner", "deals");
+    // 2. Safe Banner Image Upload
+    let bannerImage = "";
+
+    // Agar helper function handleImageUploads available ho:
+    if (typeof handleImageUploads === "function") {
+      const uploadedImages = await handleImageUploads(
+        req,
+        "dealBanner",
+        "deals",
+      );
+      if (uploadedImages && uploadedImages.length > 0) {
+        bannerImage = uploadedImages[0];
+      }
+    } else if (typeof uploadSingleToCloudinary === "function") {
+      // Fallback check: Extract exact file object instead of req.file directory path
+      const fileObj =
+        req.file ||
+        (req.files && req.files["dealBanner"] && req.files["dealBanner"][0]) ||
+        (req.files && req.files[0]);
+
+      if (fileObj) {
+        bannerImage = await uploadSingleToCloudinary(fileObj, "deals");
+      } else if (typeof req.body.dealBanner === "string") {
+        bannerImage = req.body.dealBanner;
+      }
+    }
+    // if (uploadedImages && uploadedImages.length > 0) {
+    //   deal.dealBanner = uploadedImages[0];
+    // }
+    deal.dealBanner = bannerImage || deal.dealBanner; // Retain existing banner if no new upload
+    
+    // 2. Safe Helper Function for JSON Parsing
+    const safeJsonParse = (value, fallback) => {
+      if (value === undefined || value === null) return fallback;
+      if (typeof value === "string") {
+        try {
+          const parsed = JSON.parse(value);
+          // Agar parse karke string '"[]"' ya nested string bache, usko recursively/cleanly handle karein
+          if (typeof parsed === "string") {
+            try {
+              return JSON.parse(parsed);
+            } catch {
+              return parsed;
+            }
+          }
+          return parsed;
+        } catch {
+          return fallback;
+        }
+      }
+      return value;
+    };
+
+    // 3. Parsing Complex & Nested Form-Data Fields
+    if (req.body.offerDetails !== undefined) {
+      deal.offerDetails = safeJsonParse(
+        req.body.offerDetails,
+        deal.offerDetails,
+      );
+    }
+
+    if (req.body.applicableProducts !== undefined) {
+      const parsedProducts = safeJsonParse(req.body.applicableProducts, []);
+      deal.applicableProducts = Array.isArray(parsedProducts)
+        ? parsedProducts.filter((id) => id && id !== "[]")
+        : [];
+    }
+
+    if (req.body.applicableCategories !== undefined) {
+      const parsedCategories = safeJsonParse(req.body.applicableCategories, []);
+      deal.applicableCategories = Array.isArray(parsedCategories)
+        ? parsedCategories.filter((id) => id && id !== "[]")
+        : [];
+    }
+
+    if (req.body.eligibleCustomers !== undefined) {
+      const parsedCustomers = safeJsonParse(req.body.eligibleCustomers, []);
+      deal.eligibleCustomers = Array.isArray(parsedCustomers)
+        ? parsedCustomers.filter((id) => id && id !== "[]")
+        : [];
+    }
+
+    // 4. Update Primitive Fields
+    const simpleFields = [
       "dealName",
       "dealType",
       "branchId",
       "description",
-      "offerDetails",
       "appliesTo",
-      "applicableCategories",
-      "applicableProducts",
       "startDate",
       "endDate",
       "startTime",
@@ -627,24 +760,16 @@ exports.updateDeal = async (req, res) => {
       "maxDiscountAmount",
       "usageLimit",
       "perCustomerLimit",
-      "eligibleCustomers",
-      "dealBanner",
       "isActive",
     ];
 
-    const uploadedImages = await handleImageUploads(req, "dealBanner", "deals");
-
-    // Agar nayi images upload hue hain ya pass hue hain toh replace karein, warna previous images retain karein
-    if (uploadedImages && uploadedImages.length > 0) {
-      deal.dealBanner = uploadedImages[0];
-    }
-    
-    updateFields.forEach((field) => {
+    simpleFields.forEach((field) => {
       if (req.body[field] !== undefined) {
         deal[field] = req.body[field];
       }
     });
 
+    // 5. Save Updated Deal Document
     await deal.save();
 
     return res.status(200).json({
@@ -663,10 +788,14 @@ exports.deleteDeal = async (req, res) => {
   try {
     const deal = await Deal.findByIdAndDelete(req.params.id);
     if (!deal) {
-      return res.status(404).json({ success: false, message: "Deal not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Deal not found" });
     }
 
-    return res.status(200).json({ success: true, message: "Deal deleted successfully" });
+    return res
+      .status(200)
+      .json({ success: true, message: "Deal deleted successfully" });
   } catch (err) {
     console.error("DELETE DEAL ERROR:", err);
     return res.status(500).json({ success: false, message: err.message });
@@ -678,7 +807,9 @@ exports.toggleDealAvailability = async (req, res) => {
   try {
     const deal = await Deal.findById(req.params.id);
     if (!deal) {
-      return res.status(404).json({ success: false, message: "Deal not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Deal not found" });
     }
 
     deal.isActive = !deal.isActive;
@@ -1010,7 +1141,7 @@ exports.getDealFormConfig = async (req, res) => {
             recommendedSize: "1200 x 400 px",
           },
         ],
-      }
+      },
     );
 
     return res.status(200).json({
