@@ -85,13 +85,13 @@ exports.addToCart = async (req, res) => {
         return false;
       });
 
-      // Price determination
-      const itemPrice = Number(
-        matchedEntity.discountPrice ||
-          matchedEntity.price ||
-          newItem.price ||
-          0,
-      );
+      // // Price determination
+      // const itemPrice = Number(
+      //   item.discountPrice ||
+      //     matchedEntity.price ||
+      //     newItem.price ||
+      //     0,
+      // );
 
       // if (existingIndex > -1) {
       //   // Update quantity & total if already in cart
@@ -104,7 +104,9 @@ exports.addToCart = async (req, res) => {
       //     cart.items[existingIndex].quantity * cart.items[existingIndex].price;
       // }
       if (existingIndex > -1) {
-  const existingItem = cart.items[existingIndex];
+        console.log("Item already exists in cart. Updating quantity and total.", existingIndex);
+        const existingItem = cart.items[existingIndex];
+        console.log("Item already exists in cart. Updating quantity and total.", existingItem);
 
   if (incomingAddOns.length > 0) existingItem.addOns = incomingAddOns;
   if (newItem.variations) existingItem.variations = newItem.variations;
@@ -121,7 +123,7 @@ exports.addToCart = async (req, res) => {
   );
 
   // Exact Total Calculation: (Price + AddOns) * Total Quantity
-  existingItem.total = (existingItem.price + currentAddOnsPrice + currentVariationsPrice) * existingItem.quantity;
+  existingItem.total = (existingItem.price) * existingItem.quantity;
 } 
       else {
         // Construct new cart item object
@@ -143,16 +145,14 @@ exports.addToCart = async (req, res) => {
             "",
           category: matchedEntity.category || newItem.category || entityType,
           weight: matchedEntity.weight || newItem.weight || "",
-          price: itemPrice || matchedEntity.discountPrice,
+          price: newItem.price || matchedEntity.discountPrice,
           quantity: qty,
           variations: newItem.variations || matchedEntity.variations || [],
           addOns: newItem.addOns || matchedEntity.addOns || [],
           serving: newItem.serving || matchedEntity.serving || "full",
           isVeg: newItem.isVeg ?? matchedEntity.isVeg ?? false,
           total:
-            (itemPrice +
-              addOnsPrice +
-              variationsPrice) *
+            (newItem.price) *
             qty,
         };
 
@@ -175,7 +175,7 @@ exports.addToCart = async (req, res) => {
     if (io) {
       io.to(`user:${req.user.id}`).emit("cart_updated", cart);
     }
-
+console.log("CART AFTER ADDITION:", cart);
     return res.status(200).json({
       success: true,
       msg: "Added to cart successfully",
