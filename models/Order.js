@@ -208,7 +208,7 @@ const orderSchema = new mongoose.Schema(
         vendorName: { type: String, default: "" },
         vendorType: {
           type: String,
-          enum: ["fast-food", "grocery", "pharmacy", "other"],
+          enum: ["fast-food", "restaurant", "grocery", "pharmacy", "bakery", "other"],
           default: "fast-food",
         },
         address: { type: String, default: "" },
@@ -228,7 +228,7 @@ const orderSchema = new mongoose.Schema(
       {
         orderFrom: {
           type: String,
-          enum: ["fast-food", "grocery", "pharmacy", "bakery", "other"],
+          enum: ["fast-food", "restaurant", "grocery", "pharmacy", "bakery", "other"],
           default: "fast-food",
         },
         productId: {

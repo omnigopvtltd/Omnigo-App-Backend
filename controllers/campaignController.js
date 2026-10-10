@@ -1,113 +1,71 @@
-// const Campaign = require("../models/Campaign");
 
-// exports.createCampaign = async (req, res) => {
-//   try {
-//     const {
-//       title, description, bannerImage, type, linkedCoupon,
-//       targetAudience, startDate, endDate, isActive,
-//     } = req.body;
-
-//     if (!title) return res.status(400).json({ success: false, message: "Title is required" });
-//     if (!startDate || !endDate) {
-//       return res.status(400).json({ success: false, message: "startDate and endDate are required" });
-//     }
-
-//     const campaign = await Campaign.create({
-//       title, description, bannerImage, type,
-//       linkedCoupon: linkedCoupon || null,
-//       targetAudience, startDate, endDate, isActive,
-//     });
-
-//     return res.status(201).json({ success: true, message: "Campaign created successfully", campaign });
-//   } catch (err) {
-//     console.log("CREATE CAMPAIGN ERROR:", err);
-//     return res.status(500).json({ success: false, message: err.message });
-//   }
-// };
-
-// exports.getAllCampaigns = async (req, res) => {
-//   try {
-//     const { search, isActive, type, page = 1, limit = 20 } = req.query;
-//     const query = {};
-
-//     if (search) query.title = new RegExp(search, "i");
-//     if (isActive !== undefined) query.isActive = isActive === "true";
-//     if (type && type !== "all") query.type = type;
-
-//     const pageNum = Math.max(parseInt(page, 10) || 1, 1);
-//     const limitNum = Math.max(parseInt(limit, 10) || 20, 1);
-//     const skip = (pageNum - 1) * limitNum;
-
-//     const [campaigns, total] = await Promise.all([
-//       Campaign.find(query)
-//         .populate("linkedCoupon", "code type value")
-//         .sort({ createdAt: -1 })
-//         .skip(skip)
-//         .limit(limitNum),
-//       Campaign.countDocuments(query),
-//     ]);
-
-//     return res.status(200).json({
-//       success: true,
-//       count: campaigns.length,
-//       total,
-//       page: pageNum,
-//       totalPages: Math.ceil(total / limitNum) || 1,
-//       campaigns,
-//     });
-//   } catch (err) {
-//     console.log("GET CAMPAIGNS ERROR:", err);
-//     return res.status(500).json({ success: false, message: err.message });
-//   }
-// };
-
-// exports.getCampaignById = async (req, res) => {
-//   try {
-//     const campaign = await Campaign.findById(req.params.id).populate("linkedCoupon");
-//     if (!campaign) return res.status(404).json({ success: false, message: "Campaign not found" });
-//     return res.status(200).json({ success: true, campaign });
-//   } catch (err) {
-//     return res.status(500).json({ success: false, message: err.message });
-//   }
-// };
-
-// exports.updateCampaign = async (req, res) => {
-//   try {
-//     const campaign = await Campaign.findById(req.params.id);
-//     if (!campaign) return res.status(404).json({ success: false, message: "Campaign not found" });
-
-//     const fields = [
-//       "title", "description", "bannerImage", "type", "linkedCoupon",
-//       "targetAudience", "startDate", "endDate", "isActive",
-//     ];
-//     fields.forEach((field) => {
-//       if (req.body[field] !== undefined) campaign[field] = req.body[field];
-//     });
-
-//     await campaign.save();
-
-//     return res.status(200).json({ success: true, message: "Campaign updated successfully", campaign });
-//   } catch (err) {
-//     console.log("UPDATE CAMPAIGN ERROR:", err);
-//     return res.status(500).json({ success: false, message: err.message });
-//   }
-// };
-
-// exports.deleteCampaign = async (req, res) => {
-//   try {
-//     const campaign = await Campaign.findByIdAndDelete(req.params.id);
-//     if (!campaign) return res.status(404).json({ success: false, message: "Campaign not found" });
-//     return res.status(200).json({ success: true, message: "Campaign deleted successfully" });
-//   } catch (err) {
-//     console.log("DELETE CAMPAIGN ERROR:", err);
-//     return res.status(500).json({ success: false, message: err.message });
-//   }
-// };
 
 const Campaign = require("../models/Campaign");
 const VendorBranch = require("../models/VendorBranch");
 const { handleImageUploads, uploadSingleToCloudinary } = require("../utils/cloudinaryUpload");
+
 // Create Campaign
+// Helper 1: Safe JSON Parser (Objects/Arrays ke liye)
+const safeJsonParse = (value, fallback) => {
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      // Agar JSON parsing ke baad bhi double-encoded string miley
+      if (typeof parsed === "string") {
+        try {
+          return JSON.parse(parsed);
+        } catch {
+          return parsed;
+        }
+      }
+      return parsed;
+    } catch {
+      return fallback;
+    }
+  }
+  return value;
+};
+
+// Helper 2: Safe Mongo ObjectIds Array Extractor
+const sanitizeObjectIdArray = (value) => {
+  const parsed = safeJsonParse(value, []);
+  if (!Array.isArray(parsed)) return [];
+
+  return parsed.filter((id) => {
+    if (!id || typeof id !== "string") return false;
+    // Strip unwanted quotes or brackets like "['...']"
+    const cleanId = id.trim().replace(/^['"\[\]]+|['"\[\]]+$/g, "");
+    return cleanId.length === 24; // Mongo ObjectId length check
+  });
+};
+
+// Helper 3: Centralized Image Upload Handling
+const getBannerImageUrl = async (req, fieldName = "campaignBanner", folder = "campaigns") => {
+  if (typeof handleImageUploads === "function") {
+    const uploadedImages = await handleImageUploads(req, fieldName, folder);
+    if (uploadedImages && uploadedImages.length > 0) {
+      return uploadedImages[0];
+    }
+  } else if (typeof uploadSingleToCloudinary === "function") {
+    const fileObj =
+      req.file ||
+      (req.files && req.files[fieldName] && req.files[fieldName][0]) ||
+      (req.files && req.files[0]);
+
+    if (fileObj) {
+      return await uploadSingleToCloudinary(fileObj, folder);
+    }
+  }
+  
+  if (typeof req.body[fieldName] === "string") {
+    return req.body[fieldName];
+  }
+
+  return "";
+};
+
+// ================= CREATE CAMPAIGN =================
 exports.createCampaign = async (req, res) => {
   try {
     const vendorId = req.vendor?._id || req.user?._id || req.body.vendorId;
@@ -117,10 +75,7 @@ exports.createCampaign = async (req, res) => {
       campaignType,
       branchId,
       description,
-      offerDetails,
       appliesTo,
-      applicableCategories,
-      applicableProducts,
       startDate,
       endDate,
       startTime,
@@ -129,42 +84,24 @@ exports.createCampaign = async (req, res) => {
       maxDiscountAmount,
       usageLimit,
       perCustomerLimit,
-      eligibleCustomers,
-      campaignBanner,
       isActive,
     } = req.body;
 
     if (!campaignName || !campaignType || !startDate || !endDate) {
       return res.status(400).json({
         success: false,
-        message:
-          "campaignName, campaignType, startDate, and endDate are required fields.",
+        message: "campaignName, campaignType, startDate, and endDate are required fields.",
       });
     }
 
-    // const bannerImage = await uploadSingleToCloudinary(req, "campaignBanner", "campaign");
-    // 2. Safe Banner Image Upload
-    let bannerImage = "";
-    
-    // Agar helper function handleImageUploads available ho:
-    if (typeof handleImageUploads === "function") {
-      const uploadedImages = await handleImageUploads(req, "campaignBanner", "campaigns");
-      if (uploadedImages && uploadedImages.length > 0) {
-        bannerImage = uploadedImages[0];
-      }
-    } else if (typeof uploadSingleToCloudinary === "function") {
-      // Fallback check: Extract exact file object instead of req.file directory path
-      const fileObj =
-        req.file ||
-        (req.files && req.files["campaignBanner"] && req.files["campaignBanner"][0]) ||
-        (req.files && req.files[0]);
+    // Safely parse JSON objects and array fields
+    const offerDetails = safeJsonParse(req.body.offerDetails, {});
+    const applicableCategories = sanitizeObjectIdArray(req.body.applicableCategories);
+    const applicableProducts = sanitizeObjectIdArray(req.body.applicableProducts);
+    const eligibleCustomers = sanitizeObjectIdArray(req.body.eligibleCustomers);
 
-      if (fileObj) {
-        bannerImage = await uploadSingleToCloudinary(fileObj, "campaigns");
-      } else if (typeof req.body.campaignBanner === "string") {
-        bannerImage = req.body.campaignBanner;
-      }
-    }
+    // Extract Banner Image
+    const bannerImage = await getBannerImageUrl(req, "campaignBanner", "campaigns");
 
     const campaign = await Campaign.create({
       vendorId,
@@ -174,19 +111,19 @@ exports.createCampaign = async (req, res) => {
       description,
       offerDetails,
       appliesTo,
-      applicableCategories: applicableCategories || [],
-      applicableProducts: applicableProducts || [],
+      applicableCategories,
+      applicableProducts,
       startDate,
       endDate,
       startTime,
       endTime,
-      minOrderAmount,
-      maxDiscountAmount,
-      usageLimit,
-      perCustomerLimit,
+      minOrderAmount: minOrderAmount ? Number(minOrderAmount) : 0,
+      maxDiscountAmount: maxDiscountAmount ? Number(maxDiscountAmount) : 0,
+      usageLimit: usageLimit ? Number(usageLimit) : null,
+      perCustomerLimit: perCustomerLimit ? Number(perCustomerLimit) : null,
       eligibleCustomers,
       campaignBanner: bannerImage,
-      isActive: isActive !== undefined ? isActive : true,
+      isActive: isActive !== undefined ? isActive === "true" || isActive === true : true,
     });
 
     return res.status(201).json({
@@ -199,6 +136,81 @@ exports.createCampaign = async (req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 };
+
+// ================= UPDATE CAMPAIGN =================
+exports.updateCampaign = async (req, res) => {
+  try {
+    const campaign = await Campaign.findById(req.params.id);
+    if (!campaign) {
+      return res.status(404).json({ success: false, message: "Campaign not found" });
+    }
+
+    // 1. Process Banner Upload
+    const uploadedBanner = await getBannerImageUrl(req, "campaignBanner", "campaigns");
+    if (uploadedBanner) {
+      campaign.campaignBanner = uploadedBanner;
+    }
+
+    // 2. Process Complex / JSON / Array Fields safely
+    if (req.body.offerDetails !== undefined) {
+      campaign.offerDetails = safeJsonParse(req.body.offerDetails, campaign.offerDetails);
+    }
+
+    if (req.body.applicableCategories !== undefined) {
+      campaign.applicableCategories = sanitizeObjectIdArray(req.body.applicableCategories);
+    }
+
+    if (req.body.applicableProducts !== undefined) {
+      campaign.applicableProducts = sanitizeObjectIdArray(req.body.applicableProducts);
+    }
+
+    if (req.body.eligibleCustomers !== undefined) {
+      campaign.eligibleCustomers = sanitizeObjectIdArray(req.body.eligibleCustomers);
+    }
+
+    // 3. Process Primitive Fields
+    const updateFields = [
+      "campaignName",
+      "campaignType",
+      "branchId",
+      "description",
+      "appliesTo",
+      "startDate",
+      "endDate",
+      "startTime",
+      "endTime",
+      "minOrderAmount",
+      "maxDiscountAmount",
+      "usageLimit",
+      "perCustomerLimit",
+      "isActive",
+    ];
+
+    updateFields.forEach((field) => {
+      if (req.body[field] !== undefined) {
+        if (field === "isActive") {
+          campaign[field] = req.body[field] === "true" || req.body[field] === true;
+        } else if (["minOrderAmount", "maxDiscountAmount", "usageLimit", "perCustomerLimit"].includes(field)) {
+          campaign[field] = req.body[field] !== "" ? Number(req.body[field]) : null;
+        } else {
+          campaign[field] = req.body[field];
+        }
+      }
+    });
+
+    await campaign.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Campaign updated successfully",
+      campaign,
+    });
+  } catch (err) {
+    console.error("UPDATE CAMPAIGN ERROR:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 // Get All Campaigns (With Search, Filtering & Pagination)
 exports.getAllCampaigns = async (req, res) => {
   try {
@@ -377,89 +389,91 @@ exports.getCampaignById = async (req, res) => {
 };
 
 // Update Campaign
-exports.updateCampaign = async (req, res) => {
-  try {
-    const campaign = await Campaign.findById(req.params.id);
-    if (!campaign) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Campaign not found" });
-    }
+// exports.updateCampaign = async (req, res) => {
+//   try {
+//     const campaign = await Campaign.findById(req.params.id);
+//     if (!campaign) {
+//       return res
+//         .status(404)
+//         .json({ success: false, message: "Campaign not found" });
+//     }
 
-    const updateFields = [
-      "campaignName",
-      "campaignType",
-      "branchId",
-      "description",
-      "offerDetails",
-      "appliesTo",
-      "applicableCategories",
-      "applicableProducts",
-      "startDate",
-      "endDate",
-      "startTime",
-      "endTime",
-      "minOrderAmount",
-      "maxDiscountAmount",
-      "usageLimit",
-      "perCustomerLimit",
-      "eligibleCustomers",
-      "campaignBanner",
-      "isActive",
-    ];
+//     const updateFields = [
+//       "campaignName",
+//       "campaignType",
+//       "branchId",
+//       "description",
+//       "offerDetails",
+//       "appliesTo",
+//       "applicableCategories",
+//       "applicableProducts",
+//       "startDate",
+//       "endDate",
+//       "startTime",
+//       "endTime",
+//       "minOrderAmount",
+//       "maxDiscountAmount",
+//       "usageLimit",
+//       "perCustomerLimit",
+//       "eligibleCustomers",
+//       "campaignBanner",
+//       "isActive",
+//     ];
 
-    // const uploadedImages = await uploadSingleToCloudinary(
-    //   req,
-    //   "campaignBanner",
-    //   "campaign",
-    // );
+//     // const uploadedImages = await uploadSingleToCloudinary(
+//     //   req,
+//     //   "campaignBanner",
+//     //   "campaign",
+//     // );
 
-    // // Agar nayi images upload hue hain ya pass hue hain toh replace karein, warna previous images retain karein
-    // if (uploadedImages && uploadedImages.length > 0) {
-    //   campaign.campaignBanner = uploadedImages[0];
-    // }
+//     // // Agar nayi images upload hue hain ya pass hue hain toh replace karein, warna previous images retain karein
+//     // if (uploadedImages && uploadedImages.length > 0) {
+//     //   campaign.campaignBanner = uploadedImages[0];
+//     // }
 
-    // 2. Safe Banner Image Upload
-    let campaignBanner = "";
+//     // 2. Safe Banner Image Upload
+//     let campaignBanner = "";
     
-    // Agar helper function handleImageUploads available ho:
-    if (typeof handleImageUploads === "function") {
-      const uploadedImages = await handleImageUploads(req, "campaignBanner", "campaigns");
-      if (uploadedImages && uploadedImages.length > 0) {
-        campaignBanner = uploadedImages[0];
-      }
-    } else if (typeof uploadSingleToCloudinary === "function") {
-      // Fallback check: Extract exact file object instead of req.file directory path
-      const fileObj =
-        req.file ||
-        (req.files && req.files["campaignBanner"] && req.files["campaignBanner"][0]) ||
-        (req.files && req.files[0]);
+//     // Agar helper function handleImageUploads available ho:
+//     if (typeof handleImageUploads === "function") {
+//       const uploadedImages = await handleImageUploads(req, "campaignBanner", "campaigns");
+//       if (uploadedImages && uploadedImages.length > 0) {
+//         campaignBanner = uploadedImages[0];
+//       }
+//     } else if (typeof uploadSingleToCloudinary === "function") {
+//       // Fallback check: Extract exact file object instead of req.file directory path
+//       const fileObj =
+//         req.file ||
+//         (req.files && req.files["campaignBanner"] && req.files["campaignBanner"][0]) ||
+//         (req.files && req.files[0]);
 
-      if (fileObj) {
-        campaignBanner = await uploadSingleToCloudinary(fileObj, "campaigns");
-      } else if (typeof req.body.campaignBanner === "string") {
-        campaignBanner = req.body.campaignBanner;
-      }
-    }
+//       if (fileObj) {
+//         campaignBanner = await uploadSingleToCloudinary(fileObj, "campaigns");
+//       } else if (typeof req.body.campaignBanner === "string") {
+//         campaignBanner = req.body.campaignBanner;
+//       }
+//     }
 
-    updateFields.forEach((field) => {
-      if (req.body[field] !== undefined) {
-        campaign[field] = req.body[field];
-      }
-    });
+    
 
-    await campaign.save();
+//     updateFields.forEach((field) => {
+//       if (req.body[field] !== undefined) {
+//         campaign[field] = req.body[field];
+//       }
+//     });
 
-    return res.status(200).json({
-      success: true,
-      message: "Campaign updated successfully",
-      campaign,
-    });
-  } catch (err) {
-    console.error("UPDATE CAMPAIGN ERROR:", err);
-    return res.status(500).json({ success: false, message: err.message });
-  }
-};
+//     await campaign.save();
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Campaign updated successfully",
+//       campaign,
+//     });
+//   } catch (err) {
+//     console.error("UPDATE CAMPAIGN ERROR:", err);
+//     return res.status(500).json({ success: false, message: err.message });
+//   }
+// };
 
 // Delete Campaign
 exports.deleteCampaign = async (req, res) => {
