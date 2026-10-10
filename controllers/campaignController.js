@@ -5,126 +5,84 @@ const VendorBranch = require("../models/VendorBranch");
 const { handleImageUploads, uploadSingleToCloudinary } = require("../utils/cloudinaryUpload");
 
 // Create Campaign
-// Helper 1: Safe JSON Parser (Objects/Arrays ke liye)
-const safeJsonParse = (value, fallback) => {
-  if (value === undefined || value === null) return fallback;
-  if (typeof value === "string") {
+// Safe JSON Parser Helper
+const parseJsonField = (val, fallback) => {
+  if (val === undefined || val === null || val === "") return fallback;
+  if (typeof val === "string") {
     try {
-      const parsed = JSON.parse(value);
-      // Agar JSON parsing ke baad bhi double-encoded string miley
-      if (typeof parsed === "string") {
-        try {
-          return JSON.parse(parsed);
-        } catch {
-          return parsed;
-        }
-      }
+      let parsed = JSON.parse(val);
+      if (typeof parsed === "string") parsed = JSON.parse(parsed);
       return parsed;
     } catch {
-      return fallback;
+      return val;
     }
   }
-  return value;
+  return val;
 };
 
-// Helper 2: Safe Mongo ObjectIds Array Extractor
-const sanitizeObjectIdArray = (value) => {
-  const parsed = safeJsonParse(value, []);
+// Safe ObjectId Array Extractor
+const parseObjectIdArray = (val) => {
+  const parsed = parseJsonField(val, []);
   if (!Array.isArray(parsed)) return [];
-
-  return parsed.filter((id) => {
-    if (!id || typeof id !== "string") return false;
-    // Strip unwanted quotes or brackets like "['...']"
-    const cleanId = id.trim().replace(/^['"\[\]]+|['"\[\]]+$/g, "");
-    return cleanId.length === 24; // Mongo ObjectId length check
-  });
+  return parsed
+    .map((id) => (typeof id === "string" ? id.trim().replace(/^['"\[\]]+|['"\[\]]+$/g, "") : id))
+    .filter((id) => typeof id === "string" && id.length === 24);
 };
 
-// Helper 3: Centralized Image Upload Handling
-const getBannerImageUrl = async (req, fieldName = "campaignBanner", folder = "campaigns") => {
+// Centralized Image Upload Helper
+const getUploadedBanner = async (req) => {
   if (typeof handleImageUploads === "function") {
-    const uploadedImages = await handleImageUploads(req, fieldName, folder);
-    if (uploadedImages && uploadedImages.length > 0) {
-      return uploadedImages[0];
-    }
-  } else if (typeof uploadSingleToCloudinary === "function") {
+    const images = await handleImageUploads(req, "campaignBanner", "campaigns");
+    if (images && images.length > 0) return images[0];
+  }
+  if (typeof uploadSingleToCloudinary === "function") {
     const fileObj =
       req.file ||
-      (req.files && req.files[fieldName] && req.files[fieldName][0]) ||
+      (req.files && req.files["campaignBanner"] && req.files["campaignBanner"][0]) ||
       (req.files && req.files[0]);
-
-    if (fileObj) {
-      return await uploadSingleToCloudinary(fileObj, folder);
-    }
+    if (fileObj) return await uploadSingleToCloudinary(fileObj, "campaigns");
   }
-  
-  if (typeof req.body[fieldName] === "string") {
-    return req.body[fieldName];
-  }
-
-  return "";
+  return typeof req.body.campaignBanner === "string" ? req.body.campaignBanner : "";
 };
 
 // ================= CREATE CAMPAIGN =================
 exports.createCampaign = async (req, res) => {
   try {
     const vendorId = req.vendor?._id || req.user?._id || req.body.vendorId;
-
-    const {
-      campaignName,
-      campaignType,
-      branchId,
-      description,
-      appliesTo,
-      startDate,
-      endDate,
-      startTime,
-      endTime,
-      minOrderAmount,
-      maxDiscountAmount,
-      usageLimit,
-      perCustomerLimit,
-      isActive,
-    } = req.body;
+    const { campaignName, campaignType, startDate, endDate } = req.body;
 
     if (!campaignName || !campaignType || !startDate || !endDate) {
       return res.status(400).json({
         success: false,
-        message: "campaignName, campaignType, startDate, and endDate are required fields.",
+        message: "campaignName, campaignType, startDate, and endDate are required.",
       });
     }
 
-    // Safely parse JSON objects and array fields
-    const offerDetails = safeJsonParse(req.body.offerDetails, {});
-    const applicableCategories = sanitizeObjectIdArray(req.body.applicableCategories);
-    const applicableProducts = sanitizeObjectIdArray(req.body.applicableProducts);
-    const eligibleCustomers = sanitizeObjectIdArray(req.body.eligibleCustomers);
+    // 1. Process Image
+    const bannerImage = await getUploadedBanner(req);
 
-    // Extract Banner Image
-    const bannerImage = await getBannerImageUrl(req, "campaignBanner", "campaigns");
-
-    const campaign = await Campaign.create({
+    // 2. Format Body Data
+    const campaignData = {
+      ...req.body,
       vendorId,
-      branchId: branchId || null,
-      campaignName,
+      branchId: req.body.branchId || null,
       campaignType: campaignType.toLowerCase(),
-      description,
-      offerDetails,
-      appliesTo,
-      applicableCategories,
-      applicableProducts,
-      startDate,
-      endDate,
-      startTime,
-      endTime,
-      minOrderAmount: minOrderAmount ? Number(minOrderAmount) : 0,
-      maxDiscountAmount: maxDiscountAmount ? Number(maxDiscountAmount) : 0,
-      usageLimit: usageLimit ? Number(usageLimit) : null,
-      perCustomerLimit: perCustomerLimit ? Number(perCustomerLimit) : null,
-      eligibleCustomers,
       campaignBanner: bannerImage,
-      isActive: isActive !== undefined ? isActive === "true" || isActive === true : true,
-    });
+      offerDetails: parseJsonField(req.body.offerDetails, {}),
+      applicableCategories: parseObjectIdArray(req.body.applicableCategories),
+      applicableProducts: parseObjectIdArray(req.body.applicableProducts),
+      // Agar string hai toh string rakhein (e.g., "all"), warna parse karein
+      eligibleCustomers: typeof req.body.eligibleCustomers === "string" && !req.body.eligibleCustomers.startsWith("[")
+        ? req.body.eligibleCustomers
+        : parseJsonField(req.body.eligibleCustomers, "all"),
+      minOrderAmount: Number(req.body.minOrderAmount) || 0,
+      maxDiscountAmount: Number(req.body.maxDiscountAmount) || 0,
+      usageLimit: req.body.usageLimit ? Number(req.body.usageLimit) : null,
+      perCustomerLimit: req.body.perCustomerLimit ? Number(req.body.perCustomerLimit) : null,
+      isActive: req.body.isActive !== undefined ? String(req.body.isActive) === "true" : true,
+    };
+
+    const campaign = await Campaign.create(campaignData);
 
     return res.status(201).json({
       success: true,
@@ -145,31 +103,28 @@ exports.updateCampaign = async (req, res) => {
       return res.status(404).json({ success: false, message: "Campaign not found" });
     }
 
-    // 1. Process Banner Upload
-    const uploadedBanner = await getBannerImageUrl(req, "campaignBanner", "campaigns");
-    if (uploadedBanner) {
-      campaign.campaignBanner = uploadedBanner;
-    }
+    // 1. Banner Image Update
+    const bannerImage = await getUploadedBanner(req);
+    if (bannerImage) campaign.campaignBanner = bannerImage;
 
-    // 2. Process Complex / JSON / Array Fields safely
+    // 2. Complex & JSON Fields
     if (req.body.offerDetails !== undefined) {
-      campaign.offerDetails = safeJsonParse(req.body.offerDetails, campaign.offerDetails);
+      campaign.offerDetails = parseJsonField(req.body.offerDetails, campaign.offerDetails);
     }
-
     if (req.body.applicableCategories !== undefined) {
-      campaign.applicableCategories = sanitizeObjectIdArray(req.body.applicableCategories);
+      campaign.applicableCategories = parseObjectIdArray(req.body.applicableCategories);
     }
-
     if (req.body.applicableProducts !== undefined) {
-      campaign.applicableProducts = sanitizeObjectIdArray(req.body.applicableProducts);
+      campaign.applicableProducts = parseObjectIdArray(req.body.applicableProducts);
     }
-
     if (req.body.eligibleCustomers !== undefined) {
-      campaign.eligibleCustomers = sanitizeObjectIdArray(req.body.eligibleCustomers);
+      campaign.eligibleCustomers = typeof req.body.eligibleCustomers === "string" && !req.body.eligibleCustomers.startsWith("[")
+        ? req.body.eligibleCustomers
+        : parseJsonField(req.body.eligibleCustomers, campaign.eligibleCustomers);
     }
 
-    // 3. Process Primitive Fields
-    const updateFields = [
+    // 3. Primitive Fields Update
+    const fields = [
       "campaignName",
       "campaignType",
       "branchId",
@@ -179,24 +134,17 @@ exports.updateCampaign = async (req, res) => {
       "endDate",
       "startTime",
       "endTime",
-      "minOrderAmount",
-      "maxDiscountAmount",
-      "usageLimit",
-      "perCustomerLimit",
-      "isActive",
     ];
 
-    updateFields.forEach((field) => {
-      if (req.body[field] !== undefined) {
-        if (field === "isActive") {
-          campaign[field] = req.body[field] === "true" || req.body[field] === true;
-        } else if (["minOrderAmount", "maxDiscountAmount", "usageLimit", "perCustomerLimit"].includes(field)) {
-          campaign[field] = req.body[field] !== "" ? Number(req.body[field]) : null;
-        } else {
-          campaign[field] = req.body[field];
-        }
-      }
+    fields.forEach((f) => {
+      if (req.body[f] !== undefined) campaign[f] = req.body[f];
     });
+
+    if (req.body.minOrderAmount !== undefined) campaign.minOrderAmount = Number(req.body.minOrderAmount) || 0;
+    if (req.body.maxDiscountAmount !== undefined) campaign.maxDiscountAmount = Number(req.body.maxDiscountAmount) || 0;
+    if (req.body.usageLimit !== undefined) campaign.usageLimit = req.body.usageLimit ? Number(req.body.usageLimit) : null;
+    if (req.body.perCustomerLimit !== undefined) campaign.perCustomerLimit = req.body.perCustomerLimit ? Number(req.body.perCustomerLimit) : null;
+    if (req.body.isActive !== undefined) campaign.isActive = String(req.body.isActive) === "true";
 
     await campaign.save();
 
