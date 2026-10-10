@@ -382,7 +382,31 @@ const {
   uploadSingleToCloudinary,
 } = require("../utils/cloudinaryUpload");
 
-// Create Deal (Supports both Campaign-style Deals & Menu Combos)
+// Helper 1: Safe JSON Parser
+const parseJsonField = (val, fallback) => {
+  if (val === undefined || val === null || val === "") return fallback;
+  if (typeof val === "string") {
+    try {
+      let parsed = JSON.parse(val);
+      if (typeof parsed === "string") parsed = JSON.parse(parsed);
+      return parsed;
+    } catch {
+      return val;
+    }
+  }
+  return val;
+};
+
+// Helper 2: Safe Mongo ObjectIds Array Extractor
+const parseObjectIdArray = (val) => {
+  const parsed = parseJsonField(val, []);
+  if (!Array.isArray(parsed)) return [];
+  return parsed
+    .map((id) => (typeof id === "string" ? id.trim().replace(/^['"\[\]]+|['"\[\]]+$/g, "") : id))
+    .filter((id) => typeof id === "string" && id.length === 24);
+};
+
+// ================= CREATE DEAL =================
 exports.createDeal = async (req, res) => {
   try {
     const vendorId = req.vendor?._id || req.user?._id || req.body.vendorId;
@@ -390,49 +414,30 @@ exports.createDeal = async (req, res) => {
     const {
       dealName,
       dealType,
-      branchId,
-      description,
-      offerDetails,
-      appliesTo,
-      applicableCategories,
-      applicableProducts,
       startDate,
       endDate,
-      startTime,
-      endTime,
-      minOrderAmount,
-      maxDiscountAmount,
-      usageLimit,
-      perCustomerLimit,
-      eligibleCustomers,
-      dealBanner,
-      isActive,
     } = req.body;
 
     if (!dealName || !dealType || !startDate || !endDate) {
       return res.status(400).json({
         success: false,
-        message:
-          "dealName, dealType, startDate, and endDate are required fields.",
+        message: "dealName, dealType, startDate, and endDate are required fields.",
       });
     }
 
-    // const bannerImage = await uploadSingleToCloudinary(req, "dealBanner", "deal");
-    // 2. Safe Banner Image Upload
+    // Safe Banner Image Upload
     let bannerImage = "";
 
-    // Agar helper function handleImageUploads available ho:
     if (typeof handleImageUploads === "function") {
       const uploadedImages = await handleImageUploads(
         req,
         "dealBanner",
-        "deals",
+        "deals"
       );
       if (uploadedImages && uploadedImages.length > 0) {
         bannerImage = uploadedImages[0];
       }
     } else if (typeof uploadSingleToCloudinary === "function") {
-      // Fallback check: Extract exact file object instead of req.file directory path
       const fileObj =
         req.file ||
         (req.files && req.files["dealBanner"] && req.files["dealBanner"][0]) ||
@@ -445,28 +450,28 @@ exports.createDeal = async (req, res) => {
       }
     }
 
-    const deal = await Deal.create({
+    // Format & Sanitize Body Fields
+    const dealData = {
+      ...req.body,
       vendorId,
-      branchId: branchId || null,
+      branchId: req.body.branchId || null,
       dealName,
       dealType: dealType.toLowerCase(),
-      description,
-      offerDetails,
-      appliesTo,
-      applicableCategories: applicableCategories || [],
-      applicableProducts: applicableProducts || [],
-      startDate,
-      endDate,
-      startTime,
-      endTime,
-      minOrderAmount,
-      maxDiscountAmount,
-      usageLimit,
-      perCustomerLimit,
-      eligibleCustomers,
       dealBanner: bannerImage,
-      isActive: isActive !== undefined ? isActive : true,
-    });
+      offerDetails: parseJsonField(req.body.offerDetails, {}),
+      applicableCategories: parseObjectIdArray(req.body.applicableCategories),
+      applicableProducts: parseObjectIdArray(req.body.applicableProducts),
+      eligibleCustomers: typeof req.body.eligibleCustomers === "string" && !req.body.eligibleCustomers.startsWith("[")
+        ? req.body.eligibleCustomers
+        : parseJsonField(req.body.eligibleCustomers, "all"),
+      minOrderAmount: Number(req.body.minOrderAmount) || 0,
+      maxDiscountAmount: Number(req.body.maxDiscountAmount) || 0,
+      usageLimit: req.body.usageLimit ? Number(req.body.usageLimit) : null,
+      perCustomerLimit: req.body.perCustomerLimit ? Number(req.body.perCustomerLimit) : null,
+      isActive: req.body.isActive !== undefined ? String(req.body.isActive) === "true" : true,
+    };
+
+    const deal = await Deal.create(dealData);
 
     return res.status(201).json({
       success: true,
@@ -478,7 +483,6 @@ exports.createDeal = async (req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 };
-
 // Get All Deals (Identical response structure to getAllCampaigns)
 exports.getAllDeals = async (req, res) => {
   try {
