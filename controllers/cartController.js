@@ -31,7 +31,7 @@ console.log("ADD TO CART REQUEST BODY:", req.body);
       });
     }
 
-    log("CART BEFORE ADDITION:", cart);
+    console.log("CART BEFORE ADDITION:", cart);
 
     // 3. Process each item in the array
     for (const newItem of items) {
@@ -323,20 +323,31 @@ console.log("CART AFTER ADDITION:", cart);
 // ================= GET CART =================
 exports.getCart = async (req, res) => {
   try {
-    const cart = await Cart.findOne({
-      userId: req.user.id,
-    });
+    let cart = await Cart.findOne({ userId: req.user.id }).lean();
 
-    res.status(200).json({
+    if (!cart) {
+      return res.status(200).json({
+        success: true,
+        cart: { items: [], grandTotal: 0 },
+      });
+    }
+
+    // Calculate overall Cart Grand Total dynamically for frontend ease
+    const grandTotal = cart.items.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+const updatedCart = { ...cart, grandTotal };
+    return res.status(200).json({
       success: true,
-      cart: cart || { items: [] },
+      cart: {
+        ...cart,
+        grandTotal,
+      },
     });
   } catch (err) {
-    console.log("GET CART ERROR:", err);
-
-    res.status(500).json({
+    console.error("GET CART ERROR:", err);
+    return res.status(500).json({
       success: false,
       msg: "Server Error",
+      error: err.message,
     });
   }
 };
