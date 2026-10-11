@@ -8,6 +8,7 @@ const Vendor = require("../models/Vendor");
 const FoodCategories = require("../models/FoodCategories");
 const Campaign = require("../models/Campaign");
 const { handleImageUploads } = require("../utils/cloudinaryUpload");
+const Deal = require("../models/Deal");
 
 // exports.createProduct = async (req, res) => {
 //   try {
@@ -163,7 +164,7 @@ exports.createProduct = async (req, res) => {
       status,
       type,
     } = req.body;
-
+    console.log("REQ.BODY:", req.body);
     // 1. Mandatory Input Validations
     if (!name) {
       return res.status(400).json({
@@ -226,7 +227,7 @@ exports.createProduct = async (req, res) => {
     //   }
     // }
 
-  const productImages = await handleImageUploads(req, "images", "products");
+    const productImages = await handleImageUploads(req, "images", "products");
 
     // 4. Dynamic Subcategory Auto-Creation Logic
     if (subcategory && subcategory.trim() !== "") {
@@ -342,6 +343,75 @@ exports.createProduct = async (req, res) => {
 // =====================================
 // GET ALL PRODUCTS (filter, search, paginate)
 // =====================================
+// exports.getAllProducts = async (req, res) => {
+//   try {
+//     const {
+//       vendorId,
+//       category,
+//       subcategory,
+//       status,
+//       type,
+//       isAvailable,
+//       search,
+//       page = 1,
+//       limit = 20,
+//       sortBy = "createdAt",
+//       sortOrder = "desc",
+//     } = req.query;
+
+//     const query = {};
+
+//     // Vendor and category filtering
+//     if (vendorId) query.vendorId = vendorId;
+//     if (category) query.category = category;
+//     if (subcategory) query.subcategory = subcategory;
+//     if (type) query.type = type;
+//     if (status && status !== "all") query.status = status;
+
+//     if (isAvailable !== undefined) {
+//       query.isAvailable = isAvailable === "true" || isAvailable === true;
+//     }
+
+//     // Search filter across name, category, and tags
+//     if (search) {
+//       const regex = new RegExp(search, "i");
+//       query.$or = [{ name: regex }, { category: regex }, { tags: regex }];
+//     }
+
+//     const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+//     const limitNum = Math.max(parseInt(limit, 10) || 20, 1);
+//     const skip = (pageNum - 1) * limitNum;
+//     const sort = { [sortBy]: sortOrder === "asc" ? 1 : -1 };
+
+//     // Execute query with Vendor population
+//     const [products, total] = await Promise.all([
+//       Product.find(query)
+//         .populate("vendorId", "name logo status address phone storeType")
+//         .sort(sort)
+//         .skip(skip)
+//         .limit(limitNum)
+//         .lean(),
+//       Product.countDocuments(query),
+//     ]);
+
+//     return res.status(200).json({
+//       success: true,
+//       count: products.length,
+//       total,
+//       page: pageNum,
+//       totalPages: Math.ceil(total / limitNum) || 1,
+//       products,
+//     });
+//   } catch (err) {
+//     console.error("GET PRODUCTS ERROR:", err);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: err.message,
+//     });
+//   }
+// };
+
 exports.getAllProducts = async (req, res) => {
   try {
     const {
@@ -353,12 +423,12 @@ exports.getAllProducts = async (req, res) => {
       isAvailable,
       search,
       page = 1,
-      limit = 20,
+      limit = 10,
       sortBy = "createdAt",
       sortOrder = "desc",
     } = req.query;
 
-    const query = {};
+ const query = {};
 
     // Vendor and category filtering
     if (vendorId) query.vendorId = vendorId;
@@ -382,8 +452,8 @@ exports.getAllProducts = async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
     const sort = { [sortBy]: sortOrder === "asc" ? 1 : -1 };
 
-    // Execute query with Vendor population
-    const [products, total] = await Promise.all([
+    // 1. Fetch Products
+     const [products, total] = await Promise.all([
       Product.find(query)
         .populate("vendorId", "name logo status address phone storeType")
         .sort(sort)
@@ -393,21 +463,94 @@ exports.getAllProducts = async (req, res) => {
       Product.countDocuments(query),
     ]);
 
+    // 2. Fetch All Currently Active Deals
+    const now = new Date();
+    const activeDeals = await Deal.find({
+      isActive: true,
+      startDate: { $lte: now },
+      endDate: { $gte: now },
+    }).lean();
+
+    // 3. Map Deals onto Products dynamically
+    const enrichedProducts = products.map((product) => {
+      // Find matching deal for this product
+      const matchedDeal = activeDeals.find((deal) => {
+        // A. Specific Product Match
+        if (
+          deal.appliesTo === "specific_items" &&
+          deal.applicableProducts.some(
+            (pId) => pId.toString() === product._id.toString(),
+          )
+        ) {
+          return true;
+        }
+
+        // B. Category Match
+        if (
+          deal.appliesTo === "category" &&
+          deal.applicableCategories.some(
+            (cId) => cId.toString() === product.category?.toString(),
+          )
+        ) {
+          return true;
+        }
+
+        // C. All Items Match
+        if (deal.appliesTo === "all_items") {
+          return true;
+        }
+
+        return false;
+      });
+
+      // Calculate Applied Price
+      let calculatedDiscountPrice = product.price;
+      let dealTag = null;
+
+      if (matchedDeal && matchedDeal.offerDetails) {
+        const { offerType, discountType, discountValue, dealPrice } =
+          matchedDeal.offerDetails;
+
+        if (offerType === "special_price" && dealPrice > 0) {
+          calculatedDiscountPrice = dealPrice;
+        } else if (discountType === "percentage") {
+          calculatedDiscountPrice =
+            product.price - (product.price * discountValue) / 100;
+        } else if (discountType === "fixed_amount") {
+          calculatedDiscountPrice = Math.max(0, product.price - discountValue);
+        }
+
+        dealTag = matchedDeal.dealName || "Special Deal";
+      }
+
+      return {
+        ...product,
+        originalPrice: product.price,
+        discountPrice: calculatedDiscountPrice,
+        hasActiveDeal: Boolean(matchedDeal),
+        activeDealDetails: matchedDeal
+          ? {
+              dealId: matchedDeal._id,
+              dealName: matchedDeal.dealName,
+              dealType: matchedDeal.dealType,
+              tag: dealTag,
+              offerDetails: matchedDeal.offerDetails,
+            }
+          : null,
+      };
+    });
+
     return res.status(200).json({
       success: true,
       count: products.length,
       total,
       page: pageNum,
       totalPages: Math.ceil(total / limitNum) || 1,
-      products,
+      products: enrichedProducts,
     });
   } catch (err) {
-    console.error("GET PRODUCTS ERROR:", err);
-
-    return res.status(500).json({
-      success: false,
-      message: err.message,
-    });
+    console.error("GET PRODUCTS DEALS ERROR:", err);
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
 
@@ -1183,7 +1326,10 @@ exports.updateProduct = async (req, res) => {
     }
 
     // 1. Validate updated vendor existence if vendorId is being changed
-    if (req.body?.vendorId && req.body?.vendorId !== String(product?.vendorId)) {
+    if (
+      req.body?.vendorId &&
+      req.body?.vendorId !== String(product?.vendorId)
+    ) {
       const vendor = await Vendor.findById(req.body?.vendorId);
       if (!vendor) {
         return res.status(404).json({
@@ -1209,8 +1355,8 @@ exports.updateProduct = async (req, res) => {
         typeof req.body.variations === "string"
           ? JSON.parse(req.body.variations || "[]")
           : Array.isArray(req.body.variations)
-          ? req.body.variations
-          : [];
+            ? req.body.variations
+            : [];
     }
 
     let parsedAddOns = product.addOns;
@@ -1219,8 +1365,8 @@ exports.updateProduct = async (req, res) => {
         typeof req.body.addOns === "string"
           ? JSON.parse(req.body.addOns || "[]")
           : Array.isArray(req.body.addOns)
-          ? req.body.addOns
-          : [];
+            ? req.body.addOns
+            : [];
     }
 
     let parsedTags = product.tags;
@@ -1229,19 +1375,23 @@ exports.updateProduct = async (req, res) => {
         typeof req.body.tags === "string"
           ? JSON.parse(req.body.tags || "[]")
           : Array.isArray(req.body.tags)
-          ? req.body.tags
-          : [];
+            ? req.body.tags
+            : [];
     }
 
     // 4. Update basic primitive fields
     if (req.body.name !== undefined) product.name = req.body.name;
-    if (req.body.description !== undefined) product.description = req.body.description;
+    if (req.body.description !== undefined)
+      product.description = req.body.description;
     if (req.body.weight !== undefined) product.weight = req.body.weight;
-    if (req.body.quantity !== undefined) product.quantity = Number(req.body.quantity);
+    if (req.body.quantity !== undefined)
+      product.quantity = Number(req.body.quantity);
     if (req.body.vendorId !== undefined) product.vendorId = req.body.vendorId;
-    if (req.body.belongsTo !== undefined) product.belongsTo = req.body.belongsTo;
+    if (req.body.belongsTo !== undefined)
+      product.belongsTo = req.body.belongsTo;
     if (req.body.category !== undefined) product.category = req.body.category;
-    if (req.body.subcategory !== undefined) product.subcategory = req.body.subcategory;
+    if (req.body.subcategory !== undefined)
+      product.subcategory = req.body.subcategory;
     if (req.body.price !== undefined) product.price = Number(req.body.price);
     if (req.body.discountPrice !== undefined) {
       product.discountPrice =
@@ -1250,9 +1400,13 @@ exports.updateProduct = async (req, res) => {
           : Number(req.body.discountPrice);
     }
     if (req.body.serving !== undefined) product.serving = req.body.serving;
-    if (req.body.isVeg !== undefined) product.isVeg = req.body.isVeg === "true" || req.body.isVeg === true;
-    if (req.body.isAvailable !== undefined) product.isAvailable = req.body.isAvailable === "true" || req.body.isAvailable === true;
-    if (req.body.preparationTime !== undefined) product.preparationTime = Number(req.body.preparationTime);
+    if (req.body.isVeg !== undefined)
+      product.isVeg = req.body.isVeg === "true" || req.body.isVeg === true;
+    if (req.body.isAvailable !== undefined)
+      product.isAvailable =
+        req.body.isAvailable === "true" || req.body.isAvailable === true;
+    if (req.body.preparationTime !== undefined)
+      product.preparationTime = Number(req.body.preparationTime);
     if (req.body.status !== undefined) product.status = req.body.status;
     if (req.body.type !== undefined) product.type = req.body.type;
 
