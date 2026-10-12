@@ -428,9 +428,9 @@ exports.getAllProducts = async (req, res) => {
       sortOrder = "desc",
     } = req.query;
 
- const query = {};
+    const query = {};
 
-    // Vendor and category filtering
+    // Filters
     if (vendorId) query.vendorId = vendorId;
     if (category) query.category = category;
     if (subcategory) query.subcategory = subcategory;
@@ -441,7 +441,6 @@ exports.getAllProducts = async (req, res) => {
       query.isAvailable = isAvailable === "true" || isAvailable === true;
     }
 
-    // Search filter across name, category, and tags
     if (search) {
       const regex = new RegExp(search, "i");
       query.$or = [{ name: regex }, { category: regex }, { tags: regex }];
@@ -453,7 +452,7 @@ exports.getAllProducts = async (req, res) => {
     const sort = { [sortBy]: sortOrder === "asc" ? 1 : -1 };
 
     // 1. Fetch Products
-     const [products, total] = await Promise.all([
+    const [products, total] = await Promise.all([
       Product.find(query)
         .populate("vendorId", "name logo status address phone storeType")
         .sort(sort)
@@ -463,7 +462,7 @@ exports.getAllProducts = async (req, res) => {
       Product.countDocuments(query),
     ]);
 
-    // 2. Fetch All Currently Active Deals
+    // 2. Fetch Active Deals
     const now = new Date();
     const activeDeals = await Deal.find({
       isActive: true,
@@ -471,39 +470,47 @@ exports.getAllProducts = async (req, res) => {
       endDate: { $gte: now },
     }).lean();
 
-    // 3. Map Deals onto Products dynamically
+    // 3. Map Active Deals & Calculate Discount Prices + Tags
     const enrichedProducts = products.map((product) => {
       // Find matching deal for this product
       const matchedDeal = activeDeals.find((deal) => {
-        // A. Specific Product Match
+        // A. Specific Products Match
         if (
           deal.appliesTo === "specific_items" &&
+          Array.isArray(deal.applicableProducts) &&
           deal.applicableProducts.some(
-            (pId) => pId.toString() === product._id.toString(),
+            (pId) => pId.toString() === product._id.toString()
           )
         ) {
           return true;
         }
 
-        // B. Category Match
+        // B. Category Match (Handles both String Names and ObjectIds safely)
         if (
           deal.appliesTo === "category" &&
+          Array.isArray(deal.applicableCategories) &&
           deal.applicableCategories.some(
-            (cId) => cId.toString() === product.category?.toString(),
+            (cId) =>
+              cId.toString() === product.category?.toString() ||
+              cId.toString() === product.categoryId?.toString()
           )
         ) {
           return true;
         }
 
-        // C. All Items Match
+        // C. Store-wide / All Items Match
         if (deal.appliesTo === "all_items") {
+          // Vendor-specific check if deal belongs to a vendor
+          if (deal.vendorId) {
+            const prodVendorId = product.vendorId?._id || product.vendorId;
+            return prodVendorId?.toString() === deal.vendorId.toString();
+          }
           return true;
         }
 
         return false;
       });
 
-      // Calculate Applied Price
       let calculatedDiscountPrice = product.price;
       let dealTag = null;
 
@@ -511,16 +518,25 @@ exports.getAllProducts = async (req, res) => {
         const { offerType, discountType, discountValue, dealPrice } =
           matchedDeal.offerDetails;
 
-        if (offerType === "special_price" && dealPrice > 0) {
+        // Discount calculations based on Deal Types
+        if (matchedDeal.dealType === "free_delivery") {
+          dealTag = "FREE DELIVERY";
+          // Price stays same as product price
+        } else if (offerType === "special_price" && dealPrice > 0) {
           calculatedDiscountPrice = dealPrice;
-        } else if (discountType === "percentage") {
-          calculatedDiscountPrice =
-            product.price - (product.price * discountValue) / 100;
-        } else if (discountType === "fixed_amount") {
+          dealTag = `Rs. ${dealPrice} ONLY`;
+        } else if (discountType === "percentage" && discountValue > 0) {
+          calculatedDiscountPrice = Math.max(
+            0,
+            product.price - (product.price * discountValue) / 100
+          );
+          dealTag = `${discountValue}% OFF`;
+        } else if (discountType === "fixed_amount" && discountValue > 0) {
           calculatedDiscountPrice = Math.max(0, product.price - discountValue);
+          dealTag = `Rs. ${discountValue} OFF`;
+        } else {
+          dealTag = matchedDeal.dealName || "SPECIAL DEAL";
         }
-
-        dealTag = matchedDeal.dealName || "Special Deal";
       }
 
       return {
@@ -542,7 +558,7 @@ exports.getAllProducts = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      count: products.length,
+      count: enrichedProducts.length,
       total,
       page: pageNum,
       totalPages: Math.ceil(total / limitNum) || 1,
