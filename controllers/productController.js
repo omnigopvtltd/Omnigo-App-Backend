@@ -470,29 +470,29 @@ exports.getAllProducts = async (req, res) => {
       endDate: { $gte: now },
     }).lean();
 
-    // 3. Map Active Deals & Calculate Discount Prices + Tags
+    // 3. Map Deals onto Products dynamically (Multi-Deal Engine)
     const enrichedProducts = products.map((product) => {
-      // Find matching deal for this product
-      const matchedDeal = activeDeals.find((deal) => {
+      // Filter ALL matching deals for this specific product
+      const matchingDeals = activeDeals.filter((deal) => {
         // A. Specific Products Match
         if (
           deal.appliesTo === "specific_items" &&
           Array.isArray(deal.applicableProducts) &&
           deal.applicableProducts.some(
-            (pId) => pId.toString() === product._id.toString()
+            (pId) => pId.toString() === product._id.toString(),
           )
         ) {
           return true;
         }
 
-        // B. Category Match (Handles both String Names and ObjectIds safely)
+        // B. Category Match
         if (
           deal.appliesTo === "category" &&
           Array.isArray(deal.applicableCategories) &&
           deal.applicableCategories.some(
             (cId) =>
               cId.toString() === product.category?.toString() ||
-              cId.toString() === product.categoryId?.toString()
+              cId.toString() === product.categoryId?.toString(),
           )
         ) {
           return true;
@@ -500,7 +500,6 @@ exports.getAllProducts = async (req, res) => {
 
         // C. Store-wide / All Items Match
         if (deal.appliesTo === "all_items") {
-          // Vendor-specific check if deal belongs to a vendor
           if (deal.vendorId) {
             const prodVendorId = product.vendorId?._id || product.vendorId;
             return prodVendorId?.toString() === deal.vendorId.toString();
@@ -511,46 +510,70 @@ exports.getAllProducts = async (req, res) => {
         return false;
       });
 
-      let calculatedDiscountPrice = product.price;
+      let bestDiscountPrice = product.price;
+      let selectedDeal = null;
       let dealTag = null;
+      let hasFreeDelivery = false;
 
-      if (matchedDeal && matchedDeal.offerDetails) {
-        const { offerType, discountType, discountValue, dealPrice } =
-          matchedDeal.offerDetails;
-
-        // Discount calculations based on Deal Types
-        if (matchedDeal.dealType === "free_delivery") {
-          dealTag = "FREE DELIVERY";
-          // Price stays same as product price
-        } else if (offerType === "special_price" && dealPrice > 0) {
-          calculatedDiscountPrice = dealPrice;
-          dealTag = `Rs. ${dealPrice} ONLY`;
-        } else if (discountType === "percentage" && discountValue > 0) {
-          calculatedDiscountPrice = Math.max(
-            0,
-            product.price - (product.price * discountValue) / 100
-          );
-          dealTag = `${discountValue}% OFF`;
-        } else if (discountType === "fixed_amount" && discountValue > 0) {
-          calculatedDiscountPrice = Math.max(0, product.price - discountValue);
-          dealTag = `Rs. ${discountValue} OFF`;
-        } else {
-          dealTag = matchedDeal.dealName || "SPECIAL DEAL";
+      // Evaluate each matched deal to find the BEST (lowest) price for customer
+      matchingDeals.forEach((deal) => {
+        // Check if any deal grants Free Delivery
+        if (deal.dealType === "free_delivery") {
+          hasFreeDelivery = true;
         }
+
+        let calculatedPrice = product.price;
+        const { offerType, discountType, discountValue, dealPrice } =
+          deal.offerDetails || {};
+
+        if (offerType === "special_price" && dealPrice > 0) {
+          calculatedPrice = dealPrice;
+        } else if (discountType === "percentage" && discountValue > 0) {
+          calculatedPrice = Math.max(
+            0,
+            product.price - (product.price * discountValue) / 100,
+          );
+        } else if (discountType === "fixed_amount" && discountValue > 0) {
+          calculatedPrice = Math.max(0, product.price - discountValue);
+        }
+
+        // Pick the deal that offers the MAX DISCOUNT (Lowest Price)
+        if (calculatedPrice < bestDiscountPrice) {
+          bestDiscountPrice = calculatedPrice;
+          selectedDeal = deal;
+
+          // Construct best deal tag
+          if (discountType === "percentage") dealTag = `${discountValue}% OFF`;
+          else if (discountType === "fixed_amount")
+            dealTag = `Rs. ${discountValue} OFF`;
+          else if (offerType === "special_price")
+            dealTag = `Rs. ${dealPrice} SPECIAL`;
+          else dealTag = deal.dealName || "SPECIAL DEAL";
+        }
+      });
+
+      // Fallback for Tag if only Free Delivery was matched
+      if (!dealTag && hasFreeDelivery) {
+        dealTag = "FREE DELIVERY";
+        selectedDeal = matchingDeals.find(
+          (d) => d.dealType === "free_delivery",
+        );
       }
 
       return {
         ...product,
         originalPrice: product.price,
-        discountPrice: calculatedDiscountPrice,
-        hasActiveDeal: Boolean(matchedDeal),
-        activeDealDetails: matchedDeal
+        discountPrice: bestDiscountPrice,
+        hasActiveDeal: matchingDeals.length > 0,
+        hasFreeDelivery,
+        appliedDealsCount: matchingDeals.length,
+        activeDealDetails: selectedDeal
           ? {
-              dealId: matchedDeal._id,
-              dealName: matchedDeal.dealName,
-              dealType: matchedDeal.dealType,
+              dealId: selectedDeal._id,
+              dealName: selectedDeal.dealName,
+              dealType: selectedDeal.dealType,
               tag: dealTag,
-              offerDetails: matchedDeal.offerDetails,
+              offerDetails: selectedDeal.offerDetails,
             }
           : null,
       };

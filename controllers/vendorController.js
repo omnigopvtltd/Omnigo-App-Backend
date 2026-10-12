@@ -1701,11 +1701,15 @@ exports.updateVendorProfile = async (req, res) => {
     vendor.coverImage = media.coverImage || vendor.coverImage || "";
 
     vendor.cnicNumber = cnicNumber || vendor.cnicNumber || "";
-    vendor.cnicFrontPicture = media.cnicFrontPicture || vendor.cnicFrontPicture || "";
-    vendor.cnicBackPicture = media.cnicBackPicture || vendor.cnicBackPicture || "";
+    vendor.cnicFrontPicture =
+      media.cnicFrontPicture || vendor.cnicFrontPicture || "";
+    vendor.cnicBackPicture =
+      media.cnicBackPicture || vendor.cnicBackPicture || "";
 
-    vendor.incorporationCertificate = media.incorporationCertificate || vendor.incorporationCertificate || "";
-    vendor.foodSafetyLicense = media.foodSafetyLicense || vendor.foodSafetyLicense || "";
+    vendor.incorporationCertificate =
+      media.incorporationCertificate || vendor.incorporationCertificate || "";
+    vendor.foodSafetyLicense =
+      media.foodSafetyLicense || vendor.foodSafetyLicense || "";
     vendor.ntnCertificate = media.ntnCertificate || vendor.ntnCertificate || "";
 
     // 6. Payout Info
@@ -1836,7 +1840,8 @@ exports.updateVendorProfile = async (req, res) => {
 // =======================
 exports.updateVendor = async (req, res) => {
   try {
-    const vendorId = req.user.id || req.user._id || req.params.id || req.params._id;
+    const vendorId =
+      req.user.id || req.user._id || req.params.id || req.params._id;
 
     const {
       storeName,
@@ -2016,8 +2021,10 @@ exports.updateVendor = async (req, res) => {
     // );
     vendor.cnicFrontPicture = media.cnicFrontPicture || vendor.cnicFrontPicture;
     vendor.cnicBackPicture = media.cnicBackPicture || vendor.cnicBackPicture;
-    vendor.incorporationCertificate = media.incorporationCertificate || vendor.incorporationCertificate;
-    vendor.foodSafetyLicense = media.foodSafetyLicense || vendor.foodSafetyLicense;
+    vendor.incorporationCertificate =
+      media.incorporationCertificate || vendor.incorporationCertificate;
+    vendor.foodSafetyLicense =
+      media.foodSafetyLicense || vendor.foodSafetyLicense;
     vendor.ntnCertificate = media.ntnCertificate || vendor.ntnCertificate;
 
     // 6. Payout Info
@@ -2699,35 +2706,35 @@ exports.getVendorDashboardOverview = async (req, res) => {
 };
 
 // ==========================================
-// Vendor Performance
+// Vendor Performance (FULL DYNAMIC & WORKING)
 // ==========================================
 exports.getVendorPerformance = async (req, res) => {
   try {
     const vendorId = req.user?.id || req.user?._id;
-    const { timeframe = "weekly" } = req.query; // weekly, monthly, yearly
+    const { timeframe = "weekly" } = req.query; // daily, weekly, monthly, yearly
 
     if (!vendorId) {
-      return res.status(401).json({
+      return res.status(400).json({
         success: false,
-        message: "Unauthorized access: Vendor ID missing",
+        message: "Vendor authentication token missing",
       });
     }
 
-    const vendor = await Vendor.findById(vendorId);
-    if (!vendor) {
-      return res.status(404).json({
-        success: false,
-        message: "Vendor account not found",
-      });
-    }
+    const vendorObjectId = new mongoose.Types.ObjectId(vendorId);
 
-    // 1. Calculate Date Ranges (Current Period vs Previous Period for growth %)
+    // 1. Calculate Date Ranges (Current vs Previous Period)
     const now = new Date();
-    let currentPeriodStart = new Date();
-    let previousPeriodStart = new Date();
-    let previousPeriodEnd = new Date();
+    let currentPeriodStart = new Date(now);
+    let previousPeriodStart = new Date(now);
+    let previousPeriodEnd = new Date(now);
 
-    if (timeframe === "weekly") {
+    if (timeframe === "daily") {
+      // Current: Today (00:00:00 to now), Previous: Yesterday
+      currentPeriodStart.setHours(0, 0, 0, 0);
+      previousPeriodEnd = new Date(currentPeriodStart);
+      previousPeriodStart = new Date(currentPeriodStart);
+      previousPeriodStart.setDate(previousPeriodStart.getDate() - 1);
+    } else if (timeframe === "weekly") {
       currentPeriodStart.setDate(now.getDate() - 7);
       previousPeriodEnd.setDate(now.getDate() - 7);
       previousPeriodStart.setDate(now.getDate() - 14);
@@ -2741,121 +2748,149 @@ exports.getVendorPerformance = async (req, res) => {
       previousPeriodStart.setFullYear(now.getFullYear() - 2);
     }
 
-    // Helper pipeline to filter vendor's items in orders
-    const getVendorMatchStage = (startDate, endDate) => ({
-      status: { $in: ["delivered", "completed"] },
-      "stops.vendorId": vendor._id,
-      createdAt: { $gte: startDate, $lte: endDate },
-    });
-
-    // 2. Fetch Current Period Metrics
-    const currentMetrics = await Order.aggregate([
-      { $match: getVendorMatchStage(currentPeriodStart, now) },
+    // Helper pipeline stage for vendor order aggregation
+    const getVendorOrdersPipeline = (startDate, endDate) => [
+      { $match: { createdAt: { $gte: startDate,$lte: endDate } } },
       { $unwind: "$items" },
-      { $match: { "items.vendorId": vendor._id } },
+      {
+        $lookup: {
+          from: "products",
+          localField: "items.productId",
+          foreignField: "_id",
+          as: "productDetails",
+        },
+      },
+      { $unwind: { path: "$productDetails", preserveNullAndEmptyArrays: true } },
+      {
+        $match: {
+          status: { $ne: "cancelled" },
+          $or: [
+            { "productDetails.vendorId": vendorObjectId },
+            { "productDetails.vendor": vendorObjectId },
+            { "items.vendorId": vendorObjectId },
+            { vendorId: vendorObjectId },
+          ],
+        },
+      },
       {
         $group: {
-          _id: null,
-          totalOrders: { $addToSet: "$_id" }, // Unique order IDs
-          totalRevenue: {
-            $sum: {
-              $ifNull: [
-                "$items.total",
-                { $multiply: ["$items.price", "$items.quantity"] },
-              ],
+          _id: "$_id",
+          totalAmount: { $first: "$totalAmount" },
+          subtotal: { $first: "$subtotal" },
+          createdAt: { $first: "$createdAt" },
+        },
+      },
+    ];
+
+    // 2. Fetch Current & Previous Period Aggregations Parallelly
+    const [currentMetrics, previousMetrics] = await Promise.all([
+      Order.aggregate([
+        ...getVendorOrdersPipeline(currentPeriodStart, now),
+        {
+          $group: {
+            _id: null,
+            totalOrdersCount: { $sum: 1 },
+            totalRevenue: {
+              $sum: {$ifNull: ["$totalAmount", "$subtotal", 0] },
             },
           },
         },
-      },
-      {
-        $project: {
-          totalOrdersCount: { $size: "$totalOrders" },
-          totalRevenue: 1,
-        },
-      },
-    ]);
-
-    // 3. Fetch Previous Period Metrics (For Growth Percentage)
-    const previousMetrics = await Order.aggregate([
-      { $match: getVendorMatchStage(previousPeriodStart, previousPeriodEnd) },
-      { $unwind: "$items" },
-      { $match: { "items.vendorId": vendor._id } },
-      {
-        $group: {
-          _id: null,
-          totalOrders: { $addToSet: "$_id" },
-          totalRevenue: {
-            $sum: {
-              $ifNull: [
-                "$items.total",
-                { $multiply: ["$items.price", "$items.quantity"] },
-              ],
+      ]),
+      Order.aggregate([
+        ...getVendorOrdersPipeline(previousPeriodStart, previousPeriodEnd),
+        {
+          $group: {
+            _id: null,
+            totalOrdersCount: { $sum: 1 },
+            totalRevenue: {
+              $sum: {$ifNull: ["$totalAmount", "$subtotal", 0] },
             },
           },
         },
-      },
-      {
-        $project: {
-          totalOrdersCount: { $size: "$totalOrders" },
-          totalRevenue: 1,
-        },
-      },
+      ]),
     ]);
 
     const curr = currentMetrics[0] || { totalOrdersCount: 0, totalRevenue: 0 };
     const prev = previousMetrics[0] || { totalOrdersCount: 0, totalRevenue: 0 };
 
-    // 4. Calculate Percentage Growth Function
+    // 3. Growth Percentage Formula
     const calculateGrowth = (currentVal, previousVal) => {
       if (previousVal === 0) return currentVal > 0 ? 100 : 0;
       const growth = ((currentVal - previousVal) / previousVal) * 100;
       return parseFloat(growth.toFixed(1));
     };
 
-    const ordersGrowth = calculateGrowth(
-      curr.totalOrdersCount,
-      prev.totalOrdersCount,
-    );
+    const ordersGrowth = calculateGrowth(curr.totalOrdersCount, prev.totalOrdersCount);
     const revenueGrowth = calculateGrowth(curr.totalRevenue, prev.totalRevenue);
 
-    // 5. Aggregate Sales Chart Points (Day-wise Breakdown)
-    const daysMap = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const rawChartData = await Order.aggregate([
-      { $match: getVendorMatchStage(currentPeriodStart, now) },
-      { $unwind: "$items" },
-      { $match: { "items.vendorId": vendor._id } },
-      {
-        $group: {
-          _id: { $dayOfWeek: "$createdAt" }, // 1 (Sun) to 7 (Sat)
-          totalSales: {
-            $sum: {
-              $ifNull: [
-                "$items.total",
-                { $multiply: ["$items.price", "$items.quantity"] },
-              ],
-            },
+    // 4. Generate Dynamic Chart Data (Handles Daily, Weekly, Monthly, Yearly)
+    let chartDataFormatted = [];
+
+    if (timeframe === "daily") {
+      // Hourly Sales Breakdown for Today (00:00 to 23:00)
+      const rawChartData = await Order.aggregate([
+        ...getVendorOrdersPipeline(currentPeriodStart, now),
+        {
+          $group: {
+            _id: { $hour: "$createdAt" },
+            totalSales: { $sum: {$ifNull: ["$totalAmount", "$subtotal", 0] } },
           },
         },
-      },
-    ]);
+      ]);
 
-    // Map database chart results to fixed days structure (Mon-Sun)
-    const daysOrder = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    const chartDataFormatted = daysOrder.map((dayName) => {
-      const dbDayIndex = daysMap.indexOf(dayName) + 1; // MongoDB $dayOfWeek: 1=Sun, 2=Mon...
-      const found = rawChartData.find((item) => item._id === dbDayIndex);
-      return {
-        day: dayName,
-        sales: found ? found.totalSales : 0,
+      // Hourly slots (e.g., 00:00, 04:00, 08:00, 12:00, 16:00, 20:00)
+      const hoursList = [0, 4, 8, 12, 16, 20];
+      chartDataFormatted = hoursList.map((hr) => {
+        const found = rawChartData.filter(
+          (item) => item._id >= hr && item._id < hr + 4
+        );
+        const sales = found.reduce((sum, item) => sum + item.totalSales, 0);
+        const label = `${String(hr).padStart(2, "0")}:00`;
+        return { day: label, sales };
+      });
+    } else {
+      // Day-of-Week Sales Breakdown
+      const rawChartData = await Order.aggregate([
+        ...getVendorOrdersPipeline(currentPeriodStart, now),
+        {
+          $group: {
+            _id: { $dayOfWeek: "$createdAt" }, // 1=Sun, 2=Mon...
+            totalSales: { $sum: {$ifNull: ["$totalAmount", "$subtotal", 0] } },
+          },
+        },
+      ]);
+
+      const daysLookup = {
+        2: "Mon",
+        3: "Tue",
+        4: "Wed",
+        5: "Thu",
+        6: "Fri",
+        7: "Sat",
+        1: "Sun",
       };
-    });
+
+      const daysOrder = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+      chartDataFormatted = daysOrder.map((dayName) => {
+        const dbDayIndex = Object.keys(daysLookup).find(
+          (key) => daysLookup[key] === dayName
+        );
+        const found = rawChartData.find(
+          (item) => item._id === Number(dbDayIndex)
+        );
+        return {
+          day: dayName,
+          sales: found ? found.totalSales : 0,
+        };
+      });
+    }
 
     const totalSalesForPeriod = chartDataFormatted.reduce(
       (sum, item) => sum + item.sales,
-      0,
+      0
     );
 
-    // 6. Return Structured API Response
+    // 5. Final API Output
     return res.status(200).json({
       success: true,
       message: "Performance data fetched successfully",
@@ -2869,21 +2904,23 @@ exports.getVendorPerformance = async (req, res) => {
         },
         totalRevenue: {
           amount: curr.totalRevenue,
-          formattedAmount: `$${curr.totalRevenue.toLocaleString()}`,
-          currency: "$",
+          formattedAmount: `Rs. ${curr.totalRevenue.toLocaleString()}`,
+          currency: "PKR",
           growthPercentage: Math.abs(revenueGrowth),
           isPositive: revenueGrowth >= 0,
           formattedGrowth: `${revenueGrowth >= 0 ? "+" : "-"}${Math.abs(revenueGrowth)}%`,
         },
         salesPerformance: {
           periodLabel:
-            timeframe === "weekly"
-              ? "This Week"
-              : timeframe === "monthly"
-                ? "This Month"
-                : "This Year",
+            timeframe === "daily"
+              ? "Today"
+              : timeframe === "weekly"
+                ? "This Week"
+                : timeframe === "monthly"
+                  ? "This Month"
+                  : "This Year",
           totalPeriodSales: totalSalesForPeriod,
-          formattedTotalPeriodSales: `$${totalSalesForPeriod.toLocaleString()}`,
+          formattedTotalPeriodSales: `Rs. ${totalSalesForPeriod.toLocaleString()}`,
           chartData: chartDataFormatted,
         },
       },
