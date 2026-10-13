@@ -2935,6 +2935,258 @@ exports.getVendorPerformance = async (req, res) => {
   }
 };
 
+// exports.vendorMenu = async (req, res) => {
+//   try {
+//     let vendorId;
+//     if (!req.params?.vendorId) {
+//       vendorId = req.user?.id || req.user?._id;
+//     } else {
+//       vendorId = req.params?.vendorId;
+//     }
+
+//     if (!vendorId || !mongoose.Types.ObjectId.isValid(vendorId)) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid Vendor ID format",
+//       });
+//     }
+
+//     const vendorObjectId = new mongoose.Types.ObjectId(vendorId);
+
+//     // 1. Fetch Deals, Special Types, Vendor Schema, & Products Grouped by Category
+//     const [
+//       campaignsGrouped,
+//       dealsGrouped,
+//       productsByType,
+//       vendorDoc,
+//       productsByCategory,
+//     ] = await Promise.all([
+//       // Group Active Campaigns by campaignType for this Vendor
+//       Campaign.aggregate([
+//         { $match: { vendorId: vendorObjectId, isActive: true } },
+//         { $sort: { createdAt: -1 } },
+//         {
+//           $group: {
+//             _id: "$campaignType",
+//             items: {
+//               $push: {
+//                 _id: "$_id",
+//                 name: "$campaignName",
+//                 description: "$description",
+//                 banner: "$campaignBanner",
+//                 campaignType: "$campaignType",
+//                 offerType: "$offerDetails.offerType",
+//                 discountType: "$offerDetails.discountType",
+//                 discountValue: "$offerDetails.discountValue",
+//                 originalPrice: "$offerDetails.originalPrice",
+//                 price: "$offerDetails.dealPrice", // Standardizing field as 'price' for UI
+//                 comboName: "$offerDetails.comboName",
+//                 buyQuantity: "$offerDetails.buyQuantity",
+//                 getQuantity: "$offerDetails.getQuantity",
+//                 applicableProducts: "$applicableProducts",
+//                 applicableCategories: "$applicableCategories",
+//               },
+//             },
+//           },
+//         },
+//         { $project: { items: { $slice: ["$items", 10] } } },
+//       ]),
+
+//       // Group Active Deals by dealType for this Vendor
+//       Deal.aggregate([
+//         { $match: { vendorId: vendorObjectId, isActive: true } },
+//         { $sort: { isFeatured: -1, createdAt: -1 } },
+//         {
+//           $group: {
+//             _id: "$dealType",
+//             items: {
+//               $push: {
+//                 _id: "$_id",
+//                 name: "$title",
+//                 image: "$image",
+//                 originalPrice: "$originalPrice",
+//                 discountPrice: "$discountPrice",
+//                 dealType: "$dealType",
+//               },
+//             },
+//           },
+//         },
+//         { $project: { items: { $slice: ["$items", 10] } } },
+//       ]),
+
+//       // Group Special Product Types
+//       Product.aggregate([
+//         {
+//           $match: {
+//             vendorId: vendorObjectId,
+//             type: { $in: ["special", "popular", "featured", "new"] },
+//           },
+//         },
+//         {
+//           $group: {
+//             _id: "$type",
+//             items: {
+//               $push: {
+//                 _id: "$_id",
+//                 name: "$name",
+//                 description: "$description",
+//                 price: "$price",
+//                 images: "$images",
+//                 isFavourite: "$isFavourite",
+//                 rating: "$rating",
+//               },
+//             },
+//           },
+//         },
+//         { $project: { items: { $slice: ["$items", 10] } } },
+//       ]),
+
+//       // Fetch Vendor Document
+//       Vendor.findById(vendorObjectId).select("categories").lean(),
+
+//       // Fetch ALL Regular Products Grouped by Category in Database
+//       Product.aggregate([
+//         { $match: { vendorId: vendorObjectId } },
+//         {
+//           $group: {
+//             _id: "$category",
+//             products: {
+//               $push: {
+//                 _id: "$_id",
+//                 name: "$name",
+//                 description: "$description",
+//                 price: "$price",
+//                 images: "$images",
+//                 isFavourite: "$isFavourite",
+//                 rating: "$rating",
+//               },
+//             },
+//           },
+//         },
+//       ]),
+//     ]);
+
+//     // 2. Maps for quick lookups
+//     const dealMap = {};
+//     dealsGrouped.forEach((d) => (dealMap[d._id] = d.items));
+
+//     const campaignMap = {};
+//     campaignsGrouped.forEach((c) => (campaignMap[c._id] = c.items));
+
+//     const productTypeMap = {};
+//     productsByType.forEach((p) => (productTypeMap[p._id] = p.items));
+
+//     const categoryProductMap = {};
+//     productsByCategory.forEach((c) => {
+//       if (c._id) categoryProductMap[c._id.toString()] = c.products;
+//     });
+
+//     const categoriesResponse = [];
+
+//     // 3. Section 1: Deals
+//     const dealTypes = [
+//       { key: "Offer Deal", label: "Offer Deals" },
+//       { key: "Bogo Deal", label: "Bogo Deals" },
+//       { key: "Combo Deal", label: "Combo Deals" },
+//       { key: "Flash Deal", label: "Flash Deals" },
+//       { key: "Seasonal Deal", label: "Seasonal Deals" },
+//       { key: "Free Delivery Deal", label: "Free Delivery Deals" },
+//       { key: "Daily Deal", label: "Daily Deals" },
+//     ];
+
+//     dealTypes.forEach(({ key, label }) => {
+//       if (dealMap[key] && dealMap[key].length > 0) {
+//         categoriesResponse.push({
+//           _id: new mongoose.Types.ObjectId(),
+//           categoryName: label,
+//           products: dealMap[key],
+//         });
+//       }
+//     });
+
+//     // 3. Section 1: Deals
+//     const campaignType = [
+//       { key: "flash_deal", label: "Flash Deals" },
+//       { key: "bogo_deal", label: "Bogo Deals" },
+//       { key: "combo_deal", label: "Combo Deals" },
+//       { key: "discount_deal", label: "Discount Deals" },
+//       { key: "free_delivery_deal", label: "Free Delivery Deals" },
+//       { key: "payment_card_deal", label: "Payment Card Deals" },
+//       { key: "custom_deal", label: "Custom Deals" },
+//     ];
+
+//     campaignType.forEach(({ key, label }) => {
+//       if (campaignMap[key] && campaignMap[key].length > 0) {
+//         categoriesResponse.push({
+//           _id: new mongoose.Types.ObjectId(),
+//           categoryName: label,
+//           products: campaignMap[key],
+//         });
+//       }
+//     });
+
+//     // 4. Section 2: Special Product Types
+//     const productTypes = [
+//       { key: "special", label: "Special Items" },
+//       { key: "popular", label: "Popular Items" },
+//       { key: "featured", label: "Featured Items" },
+//       { key: "new", label: "New Items" },
+//     ];
+
+//     productTypes.forEach(({ key, label }) => {
+//       if (productTypeMap[key] && productTypeMap[key].length > 0) {
+//         categoriesResponse.push({
+//           _id: new mongoose.Types.ObjectId(),
+//           categoryName: label,
+//           products: productTypeMap[key],
+//         });
+//       }
+//     });
+
+//     // 5. Section 3: Vendor Categories (With Dynamic Fallback)
+//     const storeCategories = vendorDoc?.categories || [];
+//     const addedCategories = new Set();
+
+//     if (storeCategories.length > 0) {
+//       storeCategories.forEach((cat) => {
+//         const catName =
+//           typeof cat === "string" ? cat : cat.categoryName || cat.name;
+//         if (catName) {
+//           addedCategories.add(catName.toString());
+//           categoriesResponse.push({
+//             _id: cat._id || new mongoose.Types.ObjectId(),
+//             categoryName: catName,
+//             products: categoryProductMap[catName.toString()] || [],
+//           });
+//         }
+//       });
+//     }
+
+//     // Auto-Fallback: Push remaining product categories directly from Product collection
+//     Object.keys(categoryProductMap).forEach((catName) => {
+//       if (!addedCategories.has(catName)) {
+//         categoriesResponse.push({
+//           _id: new mongoose.Types.ObjectId(),
+//           categoryName: catName,
+//           products: categoryProductMap[catName],
+//         });
+//       }
+//     });
+
+//     return res.status(200).json({
+//       success: true,
+//       vendorId: vendorId.toString(),
+//       categories: categoriesResponse,
+//     });
+//   } catch (err) {
+//     console.error("GET VENDOR MENU ERROR:", err);
+//     return res.status(500).json({
+//       success: false,
+//       message: err.message,
+//     });
+//   }
+// };
+
 exports.vendorMenu = async (req, res) => {
   try {
     let vendorId;
@@ -2952,21 +3204,22 @@ exports.vendorMenu = async (req, res) => {
     }
 
     const vendorObjectId = new mongoose.Types.ObjectId(vendorId);
+    const now = new Date();
 
-    // 1. Fetch Deals, Special Types, Vendor Schema, & Products Grouped by Category
+    // 1. Parallel Fetching with Safe Conditions
     const [
       campaignsGrouped,
       dealsGrouped,
       productsByType,
       vendorDoc,
       productsByCategory,
+      activeDeals,
+      activeCampaigns,
     ] = await Promise.all([
-      // Group Active Campaigns by campaignType for this Vendor
+      // Group Active Campaigns by campaignType
       Campaign.aggregate([
         { $match: { vendorId: vendorObjectId, isActive: true } },
-        { $sort: { createdAt: -1 } },
-        {
-          $group: {
+        { $sort: { createdAt: -1 } },         {$group: {
             _id: "$campaignType",
             items: {
               $push: {
@@ -2979,7 +3232,7 @@ exports.vendorMenu = async (req, res) => {
                 discountType: "$offerDetails.discountType",
                 discountValue: "$offerDetails.discountValue",
                 originalPrice: "$offerDetails.originalPrice",
-                price: "$offerDetails.dealPrice", // Standardizing field as 'price' for UI
+                price: "$offerDetails.dealPrice",
                 comboName: "$offerDetails.comboName",
                 buyQuantity: "$offerDetails.buyQuantity",
                 getQuantity: "$offerDetails.getQuantity",
@@ -2992,20 +3245,18 @@ exports.vendorMenu = async (req, res) => {
         { $project: { items: { $slice: ["$items", 10] } } },
       ]),
 
-      // Group Active Deals by dealType for this Vendor
+      // Group Active Deals by dealType
       Deal.aggregate([
         { $match: { vendorId: vendorObjectId, isActive: true } },
-        { $sort: { isFeatured: -1, createdAt: -1 } },
-        {
-          $group: {
+        { $sort: { isFeatured: -1, createdAt: -1 } },         {$group: {
             _id: "$dealType",
             items: {
               $push: {
                 _id: "$_id",
-                name: "$title",
-                image: "$image",
-                originalPrice: "$originalPrice",
-                discountPrice: "$discountPrice",
+                name: "$dealName",
+                image: "$dealBanner",
+                originalPrice: "$offerDetails.originalPrice",
+                discountPrice: "$offerDetails.dealPrice",
                 dealType: "$dealType",
               },
             },
@@ -3031,6 +3282,7 @@ exports.vendorMenu = async (req, res) => {
                 name: "$name",
                 description: "$description",
                 price: "$price",
+                category: "$category",
                 images: "$images",
                 isFavourite: "$isFavourite",
                 rating: "$rating",
@@ -3044,7 +3296,7 @@ exports.vendorMenu = async (req, res) => {
       // Fetch Vendor Document
       Vendor.findById(vendorObjectId).select("categories").lean(),
 
-      // Fetch ALL Regular Products Grouped by Category in Database
+      // Fetch ALL Regular Products Grouped by Category
       Product.aggregate([
         { $match: { vendorId: vendorObjectId } },
         {
@@ -3056,6 +3308,7 @@ exports.vendorMenu = async (req, res) => {
                 name: "$name",
                 description: "$description",
                 price: "$price",
+                category: "$category",
                 images: "$images",
                 isFavourite: "$isFavourite",
                 rating: "$rating",
@@ -3064,9 +3317,142 @@ exports.vendorMenu = async (req, res) => {
           },
         },
       ]),
+
+      // Active Deals Query
+      Deal.find({
+        isActive: true,
+        startDate: { $lte: now },
+        endDate: { $gte: now },
+      }).lean(),
+
+      // Active Campaigns Query
+      Campaign.find({
+        isActive: true,
+        startDate: { $lte: now },
+        endDate: { $gte: now },
+      }).lean(),
     ]);
 
-    // 2. Maps for quick lookups
+    // Combine active Deals and Campaigns for Product Enrichment
+    const allPromotions = [...activeDeals, ...activeCampaigns];
+
+    // Helper: Enrich Products with Matching Deals/Campaigns
+    const enrichProductWithDeals = (product) => {
+      const matchingPromos = allPromotions.filter((promo) => {
+        const vendorMatch =
+          !promo.vendorId ||
+          promo.vendorId.toString() === vendorObjectId.toString();
+
+        if (!vendorMatch) return false;
+
+        // A. Specific Product Match
+        if (
+          Array.isArray(promo.applicableProducts) &&
+          promo.applicableProducts.some(
+            (pId) => pId.toString() === product._id.toString()
+          )
+        ) {
+          return true;
+        }
+
+        // B. Category Match (Handles both String Names and ObjectIds)
+        if (
+          Array.isArray(promo.applicableCategories) &&
+          promo.applicableCategories.some(
+            (cId) =>
+              cId.toString().toLowerCase() === product.category?.toString().toLowerCase() ||
+              cId.toString() === product.categoryId?.toString()
+          )
+        ) {
+          return true;
+        }
+
+        // C. All Items Match (Applies if appliesTo is 'all_items' OR arrays are empty)
+        if (
+          promo.appliesTo === "all_items" ||
+          (!promo.appliesTo &&
+            (!promo.applicableProducts || promo.applicableProducts.length === 0) &&
+            (!promo.applicableCategories || promo.applicableCategories.length === 0))
+        ) {
+          return true;
+        }
+
+        return false;
+      });
+
+      let bestDiscountPrice = product.price;
+      let selectedPromo = null;
+      let dealTag = null;
+      let hasFreeDelivery = false;
+
+      matchingPromos.forEach((promo) => {
+        if (
+          promo.dealType === "free_delivery" ||
+          promo.campaignType === "free_delivery_deal"
+        ) {
+          hasFreeDelivery = true;
+        }
+
+        let calculatedPrice = product.price;
+        const offer = promo.offerDetails || {};
+        const discountType = offer.discountType || promo.discountType;
+        const discountValue =
+          offer.discountValue !== undefined
+            ? offer.discountValue
+            : promo.discountValue;
+
+        if (offer.offerType === "special_price" && offer.dealPrice > 0) {
+          calculatedPrice = offer.dealPrice;
+        } else if (discountType === "percentage" && discountValue > 0) {
+          calculatedPrice = Math.max(
+            0,
+            product.price - (product.price * discountValue) / 100
+          );
+        } else if (discountType === "fixed_amount" && discountValue > 0) {
+          calculatedPrice = Math.max(0, product.price - discountValue);
+        }
+
+        if (calculatedPrice < bestDiscountPrice) {
+          bestDiscountPrice = calculatedPrice;
+          selectedPromo = promo;
+
+          if (discountType === "percentage") dealTag = `${discountValue}% OFF`;
+          else if (discountType === "fixed_amount")
+            dealTag = `Rs. ${discountValue} OFF`;
+          else if (offer.offerType === "special_price")
+            dealTag = `Rs. ${offer.dealPrice} SPECIAL`;
+          else dealTag = promo.dealName || promo.campaignName || "SPECIAL DEAL";
+        }
+      });
+
+      if (!dealTag && hasFreeDelivery) {
+        dealTag = "FREE DELIVERY";
+        selectedPromo = matchingPromos.find(
+          (p) =>
+            p.dealType === "free_delivery" ||
+            p.campaignType === "free_delivery_deal"
+        );
+      }
+
+      return {
+        ...product,
+        originalPrice: product.price,
+        discountPrice: bestDiscountPrice,
+        hasActiveDeal: matchingPromos.length > 0,
+        hasFreeDelivery,
+        activeDealDetails: selectedPromo
+          ? {
+              dealId: selectedPromo._id,
+              dealName: selectedPromo.dealName || selectedPromo.campaignName,
+              dealType: selectedPromo.dealType || selectedPromo.campaignType,
+              tag: dealTag,
+              offerDetails: selectedPromo.offerDetails || {},
+            }
+          : null,
+      };
+    };
+
+    // 2. Build Response Structure
     const dealMap = {};
     dealsGrouped.forEach((d) => (dealMap[d._id] = d.items));
 
@@ -3074,24 +3460,28 @@ exports.vendorMenu = async (req, res) => {
     campaignsGrouped.forEach((c) => (campaignMap[c._id] = c.items));
 
     const productTypeMap = {};
-    productsByType.forEach((p) => (productTypeMap[p._id] = p.items));
+    productsByType.forEach(
+      (p) => (productTypeMap[p._id] = p.items.map(enrichProductWithDeals))
+    );
 
     const categoryProductMap = {};
     productsByCategory.forEach((c) => {
-      if (c._id) categoryProductMap[c._id.toString()] = c.products;
+      if (c._id) {
+        categoryProductMap[c._id.toString()] = c.products.map(
+          enrichProductWithDeals
+        );
+      }
     });
 
     const categoriesResponse = [];
 
-    // 3. Section 1: Deals
+    // Deals Section
     const dealTypes = [
-      { key: "Offer Deal", label: "Offer Deals" },
-      { key: "Bogo Deal", label: "Bogo Deals" },
-      { key: "Combo Deal", label: "Combo Deals" },
-      { key: "Flash Deal", label: "Flash Deals" },
-      { key: "Seasonal Deal", label: "Seasonal Deals" },
-      { key: "Free Delivery Deal", label: "Free Delivery Deals" },
-      { key: "Daily Deal", label: "Daily Deals" },
+      { key: "flash_deal", label: "Flash Deals" },
+      { key: "discount_deal", label: "Discount Deals" },
+      { key: "bogo_deal", label: "Bogo Deals" },
+      { key: "combo_deal", label: "Combo Deals" },
+      { key: "free_delivery", label: "Free Delivery Deals" },
     ];
 
     dealTypes.forEach(({ key, label }) => {
@@ -3104,28 +3494,29 @@ exports.vendorMenu = async (req, res) => {
       }
     });
 
-    // 3. Section 1: Deals
-    const campaignType = [
+    // Campaigns Section
+    const campaignTypes = [
       { key: "flash_deal", label: "Flash Deals" },
       { key: "bogo_deal", label: "Bogo Deals" },
       { key: "combo_deal", label: "Combo Deals" },
       { key: "discount_deal", label: "Discount Deals" },
       { key: "free_delivery_deal", label: "Free Delivery Deals" },
-      { key: "payment_card_deal", label: "Payment Card Deals" },
-      { key: "custom_deal", label: "Custom Deals" },
     ];
 
-    campaignType.forEach(({ key, label }) => {
+    campaignTypes.forEach(({ key, label }) => {
       if (campaignMap[key] && campaignMap[key].length > 0) {
-        categoriesResponse.push({
-          _id: new mongoose.Types.ObjectId(),
-          categoryName: label,
-          products: campaignMap[key],
-        });
+        // Prevent duplicate category names if already pushed
+        if (!categoriesResponse.some((c) => c.categoryName === label)) {
+          categoriesResponse.push({
+            _id: new mongoose.Types.ObjectId(),
+            categoryName: label,
+            products: campaignMap[key],
+          });
+        }
       }
     });
 
-    // 4. Section 2: Special Product Types
+    // Special Product Types Section
     const productTypes = [
       { key: "special", label: "Special Items" },
       { key: "popular", label: "Popular Items" },
@@ -3143,7 +3534,7 @@ exports.vendorMenu = async (req, res) => {
       }
     });
 
-    // 5. Section 3: Vendor Categories (With Dynamic Fallback)
+    // Vendor Standard Categories Section
     const storeCategories = vendorDoc?.categories || [];
     const addedCategories = new Set();
 
@@ -3162,7 +3553,7 @@ exports.vendorMenu = async (req, res) => {
       });
     }
 
-    // Auto-Fallback: Push remaining product categories directly from Product collection
+    // Push Remaining Categories directly from Product Collection
     Object.keys(categoryProductMap).forEach((catName) => {
       if (!addedCategories.has(catName)) {
         categoriesResponse.push({
@@ -3459,6 +3850,54 @@ exports.toggleRushMode = async (req, res) => {
     });
   } catch (err) {
     console.error("TOGGLE RUSH MODE ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+exports.toggleAvailability = async (req, res) => {
+  try {
+    const vendorId = req.user?.id || req.user?._id;
+
+    if (!vendorId) {
+      return res.status(400).json({
+        success: false,
+        message: "Vendor ID missing from authentication token",
+      });
+    }
+
+    // 1. Fetch current status & businessName
+    const vendor = await Vendor.findById(vendorId).select("isActive businessName");
+
+    if (!vendor) {
+      return res.status(404).json({
+        success: false,
+        message: "Vendor account not found",
+      });
+    }
+
+    // 2. Toggle isActive status atomically
+    const updatedVendor = await Vendor.findByIdAndUpdate(
+      vendor._id,
+      { $set: { isActive: !vendor.isActive } },
+      { new: true, runValidators: true }
+    ).select("isActive businessName");
+
+    return res.status(200).json({
+      success: true,
+      message: `Availability successfully ${
+        updatedVendor.isActive ? "activated" : "deactivated"
+      }`,
+      vendor: {
+        id: updatedVendor._id,
+        businessName: updatedVendor.businessName || "",
+        isActive: updatedVendor.isActive,
+      },
+    });
+  } catch (err) {
+    console.error("TOGGLE AVAILABILITY ERROR:", err);
     return res.status(500).json({
       success: false,
       message: err.message,
