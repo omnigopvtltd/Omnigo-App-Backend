@@ -56,7 +56,6 @@ const sendVendorResponse = (res, message, payload, statusCode = 200) => {
     vendor: {
       id: vendorObj._id || vendorObj.id,
       businessName: vendorObj.businessName || "",
-      branchName: vendorObj.branchName || "",
       businessEmail: vendorObj.businessEmail || "",
       businessPhone: vendorObj.businessPhone || "",
       role: "vendor",
@@ -92,24 +91,6 @@ const sendVendorResponse = (res, message, payload, statusCode = 200) => {
       businessRegistrationNumber: vendorObj.businessRegistrationNumber || "",
       taxNumber: vendorObj.taxNumber || "",
       foodLicenseNumber: vendorObj.foodLicenseNumber || "",
-
-      // Address & Location
-      address: vendorObj.address || "",
-      area: vendorObj.area || "",
-      city: vendorObj.city || "",
-      zipCode: vendorObj.zipCode || "",
-      country: vendorObj.country || "",
-      location: vendorObj.location || { type: "Point", coordinates: [0, 0] },
-      coordinates: vendorObj.coordinates || [0, 0],
-
-      openingHours: vendorObj.openingHours || [],
-
-      isOpen: vendorObj.isOpen || false,
-      isSponsored: vendorObj.isSponsored || false,
-      isFreeDelivery: vendorObj.isFreeDelivery || true,
-      commissionRate: vendorObj.commissionRate || 6, // %
-      isRushMode: vendorObj.isRushMode || false,
-      wallet: vendorObj.wallet || { balance: 0 },
 
       branches: vendorObj.branches || [],
 
