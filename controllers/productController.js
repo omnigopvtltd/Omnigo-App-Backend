@@ -10,132 +10,122 @@ const Campaign = require("../models/Campaign");
 const { handleImageUploads } = require("../utils/cloudinaryUpload");
 const Deal = require("../models/Deal");
 
-// exports.createProduct = async (req, res) => {
-//   try {
-//     const {
-//       name,
-//       description,
-//       images,
-//       weight,
-//       quantity,
-//       belongsTo,
-//       vendorId,
-//       category,
-//       subcategory,
-//       price,
-//       discountPrice,
-//       variations,
-//       serving,
-//       addOns,
-//       isVeg,
-//       tags,
-//       isAvailable,
-//       preparationTime,
-//       rating,
-//       isFavourite,
-//       likes,
-//       status,
-//       type,
-//     } = req.body;
+// Helper: Evaluates Best Storewide All-Items Deal for a given product
+const applyUniversalDealToProduct = (productObj, activePromos = []) => {
+  const prodVendorId = productObj.vendorId?._id
+    ? productObj.vendorId._id.toString()
+    : productObj.vendorId
+    ? productObj.vendorId.toString()
+    : null;
 
-//     // 1. Mandatory Input Validations
-//     if (!name) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Product name is required",
-//       });
-//     }
+  const prodIdStr = productObj._id ? productObj._id.toString() : null;
+  const prodCatStr = (productObj.category?.name || productObj.category || "")
+    .toString()
+    .toLowerCase();
 
-//     if (!vendorId) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "vendorId is required",
-//       });
-//     }
+  if (!prodVendorId || !activePromos.length) {
+    return {
+      discountPrice: productObj.discountPrice || 0,
+      hasActiveDeal: false,
+      tag: null,
+    };
+  }
 
-//     if (price === undefined || price === null) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Price is required",
-//       });
-//     }
+  // 1. Filter deals applicable to this vendor
+  const vendorPromos = activePromos.filter((promo) => {
+    const pVendorId = promo.vendorId?._id
+      ? promo.vendorId._id.toString()
+      : promo.vendorId
+      ? promo.vendorId.toString()
+      : null;
 
-//     if (!category) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Category is required",
-//       });
-//     }
+    // Filter by Vendor (or global vendor-less deal)
+    return !pVendorId || pVendorId === prodVendorId;
+  });
 
-//     // 2. Validate Vendor existence in DB
-//     const vendor = await Vendor.findById(vendorId);
-//     if (!vendor) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Vendor account not found",
-//       });
-//     }
+  // 2. Separate matching deals by precedence scope
+  const itemSpecificPromos = [];
+  const categoryPromos = [];
+  const storeWidePromos = [];
 
-//     // 3. Create Product with all mapped fields
-//     const product = await Product.create({
-//       name,
-//       description,
-//       images: Array.isArray(images) ? images : [],
-//       weight,
-//       quantity,
-//       belongsTo,
-//       vendorId,
-//       category,
-//       subcategory,
-//       price,
-//       discountPrice: discountPrice || null,
-//       variations: Array.isArray(variations) ? variations : [],
-//       serving,
-//       addOns: Array.isArray(addOns) ? addOns : [],
-//       isVeg: isVeg ?? true,
-//       tags: Array.isArray(tags) ? tags : [],
-//       isAvailable: isAvailable ?? true,
-//       isFavourite: isFavourite ?? false,
-//       preparationTime,
-//       rating: rating || 0,
-//       status: status || "active",
-//       type,
-//       likes: Array.isArray(likes) ? likes : [],
-//     });
+  vendorPromos.forEach((promo) => {
+    const appliesTo = promo.appliesTo || "all_items";
 
-//     // 4. Trigger Real-time Socket IO Notifications
-//     const io = req.app.get("io");
+    // A. Specific Product Match
+    if (appliesTo === "specific_items") {
+      const itemsList = promo.applicableProducts || promo.applicableItems || [];
+      const isMatched = itemsList.some((item) => {
+        const itemId = item._id ? item._id.toString() : item.toString();
+        return itemId === prodIdStr;
+      });
+      if (isMatched) itemSpecificPromos.push(promo);
+    }
+    // B. Category Match
+    else if (appliesTo === "category") {
+      const catList = promo.applicableCategories || [];
+      const isMatched = catList.some((cat) => {
+        const catNameOrId = (cat.name || cat.categoryName || cat).toString().toLowerCase();
+        return catNameOrId === prodCatStr;
+      });
+      if (isMatched) categoryPromos.push(promo);
+    }
+    // C. Storewide Match
+    else if (appliesTo === "all_items") {
+      storeWidePromos.push(promo);
+    }
+  });
 
-//     if (io) {
-//       // Emit to the specific Vendor's active socket room
-//       io.to(`vendor:${vendorId}`).emit("vendorProductCreated", {
-//         vendorId,
-//         product,
-//         message: "New product successfully added to your catalog",
-//       });
+  // 📌 GOLDEN PRECEDENCE RULE: Item > Category > Storewide
+  let candidatePromos = [];
+  if (itemSpecificPromos.length > 0) {
+    candidatePromos = itemSpecificPromos;
+  } else if (categoryPromos.length > 0) {
+    candidatePromos = categoryPromos;
+  } else {
+    candidatePromos = storeWidePromos;
+  }
 
-//       // Broadcast to Customers listening for live vendor menu updates
-//       io.to(`vendorCatalog:${vendorId}`).emit("menuCatalogUpdated", {
-//         vendorId,
-//         action: "ADD_PRODUCT",
-//         product,
-//       });
-//     }
+  // 3. Calculate Best Discount from Eligible Candidates
+  let bestDiscountPrice = productObj.price;
+  let hasActiveDeal = false;
+  let dealTag = null;
 
-//     return res.status(201).json({
-//       success: true,
-//       message: "Product created successfully",
-//       product,
-//     });
-//   } catch (err) {
-//     console.error("CREATE PRODUCT ERROR:", err);
+  candidatePromos.forEach((promo) => {
+    const offer = promo.offerDetails || {};
+    const discountType = offer.discountType || promo.discountType || "percentage";
+    const discountVal = Number(offer.discountValue !== undefined ? offer.discountValue : promo.discountValue || 0);
+    const maxCap = Number(offer.maxDiscountAmount || 0);
 
-//     return res.status(500).json({
-//       success: false,
-//       message: err.message,
-//     });
-//   }
-// };
+    let calculatedPrice = productObj.price;
+    let tagString = null;
+
+    if (offer.offerType === "special_price" && offer.dealPrice > 0) {
+      calculatedPrice = offer.dealPrice;
+      tagString = `Rs. ${offer.dealPrice} SPECIAL`;
+    } else if (discountType === "percentage" && discountVal > 0) {
+      let rawDiscount = (productObj.price * discountVal) / 100;
+      if (maxCap > 0) rawDiscount = Math.min(rawDiscount, maxCap);
+      calculatedPrice = Math.max(0, Math.round(productObj.price - rawDiscount));
+      tagString = `${discountVal}% OFF`;
+    } else if ((discountType === "fixed_amount" || discountType === "fixed") && discountVal > 0) {
+      calculatedPrice = Math.max(0, productObj.price - discountVal);
+      tagString = `Rs. ${discountVal} OFF`;
+    }
+
+    if (calculatedPrice < bestDiscountPrice) {
+      bestDiscountPrice = calculatedPrice;
+      hasActiveDeal = true;
+      dealTag = tagString || promo.dealName || promo.campaignName || "DEAL";
+    }
+  });
+
+  return {
+    discountPrice: bestDiscountPrice,
+    hasActiveDeal,
+    tag: dealTag,
+  };
+};
+
 
 exports.createProduct = async (req, res) => {
   try {
@@ -756,23 +746,162 @@ exports.getOmnigoMartProductsCategries = async (req, res) => {
   }
 };
 
+// // =====================================
+// // GET PRODUCTS BY CATEGORY
+// // =====================================
+// exports.getProductsByCategory = async (req, res) => {
+//   try {
+//     const { category, subcategory, search } = req.query;
+
+//     // const query = {};
+
+//     const query = {
+//       vendorId: { $exists: true, $ne: null },
+//     };
+
+//     // Helper to build a case-insensitive regex pattern handling spaces/dashes (e.g. "fast food" or "fast-food")
+//     const createFlexibleRegex = (input) => {
+//       if (!input) return null;
+//       // Convert hyphens/multiple spaces to a flexible whitespace pattern
+//       const sanitized = input
+//         .trim()
+//         .toLowerCase()
+//         .replace(/[-_\s]+/g, "[-\\s_]*");
+//       return new RegExp(`^${sanitized}$`, "i");
+//     };
+
+//     if (category) {
+//       query.category = createFlexibleRegex(category);
+//     }
+
+//     if (subcategory) {
+//       query.subcategory = createFlexibleRegex(subcategory);
+//     }
+
+//     if (search) {
+//       const regex = new RegExp(search, "i");
+//       query.$or = [{ name: regex }, { category: regex }, { tags: regex }];
+//     }
+
+//     // 1. Query products matching category/subcategory
+//     const products = await Product.find(query).select(
+//       "name images price tags discountPrice category subcategory rating isAvailable isFavourite vendorId belongsTo chefId",
+//     );
+
+//     // 2. Extract restaurant IDs safely
+//     const vendorIds = products.map((p) => p.vendorId).filter(Boolean);
+
+//     // 3. Query associated restaurants
+//     const vendors = await Vendor.find({
+//       _id: { $in: vendorIds },
+//     }).select("_id businessName logo");
+
+//     // 4. Map restaurant data into product objects
+//     const vendorMap = new Map(vendors.map((r) => [r._id.toString(), r]));
+
+//     const productsWithVendor = products.map((productDoc) => {
+//       const product = productDoc.toObject();
+//       const vendor = product.vendorId
+//         ? vendorMap.get(product.vendorId.toString())
+//         : null;
+
+//       return {
+//         ...product,
+//         vendor: vendors || null,
+//       };
+//     });
+
+//     return res.status(200).json({
+//       success: true,
+//       count: productsWithVendor.length,
+//       data: productsWithVendor,
+//     });
+//   } catch (err) {
+//     console.error("GET PRODUCTS ERROR:", err);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: err.message,
+//     });
+//   }
+// };
+
+// // =====================================
+// // GET PRODUCTS BY TYPE (popular, featured, new)
+// // =====================================
+// exports.getProductsByType = async (req, res) => {
+//   try {
+//     const { type } = req.query;
+
+//     // 1. Strict Query: Sirf wohi products layen jin me vendorId present aur non-null ho
+//     const query = {
+//       vendorId: { $exists: true, $ne: null },
+//     };
+
+//     if (type) query.type = type.toLowerCase();
+
+//     // 2. Fetch products & populate vendorId
+//     const products = await Product.find(query)
+//       .populate("vendorId", "businessName logo deliveryTime")
+//       .select(
+//         "name images price discountPrice rating vendorId homeChefId belongsTo type isFavourite",
+//       );
+
+//     // 3. Map through products and filter out invalid/deleted sellers
+//     const formattedProducts = products
+//       .map((product) => {
+//         const seller = product.vendorId || product.homeChefId;
+
+//         // Agar DB me vendorId id attach thi par vendor document delete ho chuka ho
+//         if (!seller || !seller._id) return null;
+
+//         return {
+//           _id: product._id,
+//           name: product.name,
+//           images: product.images,
+//           price: product.price,
+//           discountPrice: product.discountPrice,
+//           rating: product.rating,
+//           type: product.type,
+//           vendor: {
+//             _id: seller._id,
+//             name: seller.businessName,
+//             logo: seller.logo,
+//             deliveryTime: seller.deliveryTime,
+//           },
+//         };
+//       })
+//       .filter(Boolean); // Null items ko array se drop kar dega
+
+//     return res.status(200).json({
+//       success: true,
+//       count: formattedProducts.length,
+//       data: formattedProducts,
+//     });
+//   } catch (err) {
+//     console.log("GET PRODUCTS ERROR:", err);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: err.message,
+//     });
+//   }
+// };
+
 // =====================================
 // GET PRODUCTS BY CATEGORY
 // =====================================
 exports.getProductsByCategory = async (req, res) => {
   try {
     const { category, subcategory, search } = req.query;
-
-    // const query = {};
+    const now = new Date();
 
     const query = {
-      vendorId: { $exists: true, $ne: null },
+      vendorId: { $exists: true,$ne: null },
     };
 
-    // Helper to build a case-insensitive regex pattern handling spaces/dashes (e.g. "fast food" or "fast-food")
     const createFlexibleRegex = (input) => {
       if (!input) return null;
-      // Convert hyphens/multiple spaces to a flexible whitespace pattern
       const sanitized = input
         .trim()
         .toLowerCase()
@@ -793,31 +922,66 @@ exports.getProductsByCategory = async (req, res) => {
       query.$or = [{ name: regex }, { category: regex }, { tags: regex }];
     }
 
-    // 1. Query products matching category/subcategory
+    // 1. Fetch products
     const products = await Product.find(query).select(
-      "name images price tags discountPrice category subcategory rating isAvailable isFavourite vendorId belongsTo chefId",
+      "name images price discountPrice tags category subcategory rating isAvailable isFavourite vendorId belongsTo chefId"
     );
 
-    // 2. Extract restaurant IDs safely
     const vendorIds = products.map((p) => p.vendorId).filter(Boolean);
 
-    // 3. Query associated restaurants
-    const vendors = await Vendor.find({
-      _id: { $in: vendorIds },
-    }).select("_id businessName logo");
+    // 2. Fetch Vendors & ALL Active Deals/Campaigns
+    const [vendors, activeDeals, activeCampaigns] = await Promise.all([
+      Vendor.find({ _id: { $in: vendorIds } }).select("_id businessName logo"),
 
-    // 4. Map restaurant data into product objects
+      Deal.find({
+        isActive: true,
+        $or: [
+          { startDate: { $lte: now }, endDate: {$gte: now } },
+          { startDateTime: { $lte: now }, endDateTime: {$gte: now } },
+        ],
+      }).lean(),
+
+      Campaign.find({
+        isActive: true,
+        $or: [
+          { startDate: { $lte: now }, endDate: {$gte: now } },
+          { startDateTime: { $lte: now }, endDateTime: {$gte: now } },
+        ],
+      }).lean(),
+    ]);
+
+    const activePromos = [...activeDeals, ...activeCampaigns];
     const vendorMap = new Map(vendors.map((r) => [r._id.toString(), r]));
 
+    // 3. Map products with Universal Deal Calculations
     const productsWithVendor = products.map((productDoc) => {
       const product = productDoc.toObject();
       const vendor = product.vendorId
         ? vendorMap.get(product.vendorId.toString())
         : null;
 
+      const dealData = applyUniversalDealToProduct(product, activePromos);
+
       return {
-        ...product,
-        vendor: vendors || null,
+        _id: product._id,
+        name: product.name,
+        images: product.images || [],
+        price: product.price,
+        discountPrice: dealData.hasActiveDeal == true ? dealData.discountPrice : product.discountPrice || 0,
+        hasActiveDeal: dealData.hasActiveDeal,
+        tag: dealData.tag,
+        category: product.category,
+        subcategory: product.subcategory,
+        rating: product.rating,
+        isAvailable: product.isAvailable,
+        isFavourite: Boolean(product.isFavourite),
+        vendor: vendor
+          ? {
+              _id: vendor._id,
+              name: vendor.businessName,
+              logo: vendor.logo,
+            }
+          : null,
       };
     });
 
@@ -828,7 +992,6 @@ exports.getProductsByCategory = async (req, res) => {
     });
   } catch (err) {
     console.error("GET PRODUCTS ERROR:", err);
-
     return res.status(500).json({
       success: false,
       message: err.message,
@@ -842,37 +1005,63 @@ exports.getProductsByCategory = async (req, res) => {
 exports.getProductsByType = async (req, res) => {
   try {
     const { type } = req.query;
+    const now = new Date();
 
-    // 1. Strict Query: Sirf wohi products layen jin me vendorId present aur non-null ho
     const query = {
-      vendorId: { $exists: true, $ne: null },
+      vendorId: { $exists: true,$ne: null },
     };
 
     if (type) query.type = type.toLowerCase();
 
-    // 2. Fetch products & populate vendorId
+    // 1. Fetch products
     const products = await Product.find(query)
       .populate("vendorId", "businessName logo deliveryTime")
       .select(
-        "name images price discountPrice rating vendorId homeChefId belongsTo type isFavourite",
+        "name images price discountPrice rating vendorId homeChefId belongsTo type isFavourite category"
       );
 
-    // 3. Map through products and filter out invalid/deleted sellers
+    // 2. Fetch ALL Active Deals & Campaigns
+    const [activeDeals, activeCampaigns] = await Promise.all([
+      Deal.find({
+        isActive: true,
+        $or: [
+          { startDate: { $lte: now }, endDate: {$gte: now } },
+          { startDateTime: { $lte: now }, endDateTime: {$gte: now } },
+        ],
+      }).lean(),
+
+      Campaign.find({
+        isActive: true,
+        $or: [
+          { startDate: { $lte: now }, endDate: {$gte: now } },
+          { startDateTime: { $lte: now }, endDateTime: {$gte: now } },
+        ],
+      }).lean(),
+    ]);
+
+    const activePromos = [...activeDeals, ...activeCampaigns];
+
+    // 3. Map through products
     const formattedProducts = products
-      .map((product) => {
+      .map((productDoc) => {
+        const product = productDoc.toObject();
         const seller = product.vendorId || product.homeChefId;
 
-        // Agar DB me vendorId id attach thi par vendor document delete ho chuka ho
         if (!seller || !seller._id) return null;
+
+        const dealData = applyUniversalDealToProduct(product, activePromos);
 
         return {
           _id: product._id,
           name: product.name,
-          images: product.images,
+          images: product.images || [],
           price: product.price,
-          discountPrice: product.discountPrice,
+          discountPrice: dealData.discountPrice,
+          hasActiveDeal: dealData.hasActiveDeal,
+          tag: dealData.tag,
           rating: product.rating,
           type: product.type,
+          isFavourite: Boolean(product.isFavourite),
           vendor: {
             _id: seller._id,
             name: seller.businessName,
@@ -881,7 +1070,7 @@ exports.getProductsByType = async (req, res) => {
           },
         };
       })
-      .filter(Boolean); // Null items ko array se drop kar dega
+      .filter(Boolean);
 
     return res.status(200).json({
       success: true,
@@ -889,15 +1078,13 @@ exports.getProductsByType = async (req, res) => {
       data: formattedProducts,
     });
   } catch (err) {
-    console.log("GET PRODUCTS ERROR:", err);
-
+    console.error("GET PRODUCTS ERROR:", err);
     return res.status(500).json({
       success: false,
       message: err.message,
     });
   }
 };
-
 // =====================================
 // GET PRODUCTS BY VENDOR
 // =====================================
