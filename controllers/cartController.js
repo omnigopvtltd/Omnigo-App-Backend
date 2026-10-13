@@ -5,6 +5,8 @@ const Product = require("../models/Product");
 // const Product = require("../models/Product");
 const Deal = require("../models/Deal");
 const Campaign = require("../models/Campaign");
+const mongoose = require("mongoose");
+
 
 // ================= ADD TO CART =================
 // exports.addToCart = async (req, res) => {
@@ -197,12 +199,6 @@ const Campaign = require("../models/Campaign");
 //     });
 //   }
 // };
-
-const mongoose = require("mongoose");
-const Cart = require("../models/Cart");
-const Product = require("../models/Product");
-const Deal = require("../models/Deal");
-const Campaign = require("../models/Campaign");
 
 exports.addToCart = async (req, res) => {
   try {
