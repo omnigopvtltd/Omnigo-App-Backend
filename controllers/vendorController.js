@@ -3207,20 +3207,19 @@ exports.vendorMenu = async (req, res) => {
     const vendorObjectId = new mongoose.Types.ObjectId(vendorId);
     const now = new Date();
 
-    // 1. Parallel Fetching with Safe Conditions
+    // 1. Fetch Parallel Data
     const [
       campaignsGrouped,
       dealsGrouped,
       productsByType,
       vendorDoc,
       productsByCategory,
-      activeDeals,
-      activeCampaigns,
+      activeStorewidePromos,
     ] = await Promise.all([
-      // Group Active Campaigns by campaignType
+      // Group Active Campaigns
       Campaign.aggregate([
         { $match: { vendorId: vendorObjectId, isActive: true } },
-        { $sort: { createdAt: -1 } },         {$group: {
+        { $sort: { createdAt: -1 } }, {$group: {
             _id: "$campaignType",
             items: {
               $push: {
@@ -3229,16 +3228,8 @@ exports.vendorMenu = async (req, res) => {
                 description: "$description",
                 banner: "$campaignBanner",
                 campaignType: "$campaignType",
-                offerType: "$offerDetails.offerType",
-                discountType: "$offerDetails.discountType",
-                discountValue: "$offerDetails.discountValue",
-                originalPrice: "$offerDetails.originalPrice",
                 price: "$offerDetails.dealPrice",
-                comboName: "$offerDetails.comboName",
-                buyQuantity: "$offerDetails.buyQuantity",
-                getQuantity: "$offerDetails.getQuantity",
-                applicableProducts: "$applicableProducts",
-                applicableCategories: "$applicableCategories",
+                discountValue: "$offerDetails.discountValue",
               },
             },
           },
@@ -3246,18 +3237,17 @@ exports.vendorMenu = async (req, res) => {
         { $project: { items: { $slice: ["$items", 10] } } },
       ]),
 
-      // Group Active Deals by dealType
+      // Group Active Deals
       Deal.aggregate([
         { $match: { vendorId: vendorObjectId, isActive: true } },
-        { $sort: { isFeatured: -1, createdAt: -1 } },         {$group: {
+        { $sort: { isFeatured: -1, createdAt: -1 } }, {$group: {
             _id: "$dealType",
             items: {
               $push: {
                 _id: "$_id",
                 name: "$dealName",
                 image: "$dealBanner",
-                originalPrice: "$offerDetails.originalPrice",
-                discountPrice: "$offerDetails.dealPrice",
+                price: "$offerDetails.dealPrice",
                 dealType: "$dealType",
               },
             },
@@ -3283,10 +3273,10 @@ exports.vendorMenu = async (req, res) => {
                 name: "$name",
                 description: "$description",
                 price: "$price",
-                category: "$category",
                 images: "$images",
                 isFavourite: "$isFavourite",
                 rating: "$rating",
+                category: "$category",
               },
             },
           },
@@ -3297,7 +3287,7 @@ exports.vendorMenu = async (req, res) => {
       // Fetch Vendor Document
       Vendor.findById(vendorObjectId).select("categories").lean(),
 
-      // Fetch ALL Regular Products Grouped by Category
+      // Group Products by Category
       Product.aggregate([
         { $match: { vendorId: vendorObjectId } },
         {
@@ -3309,151 +3299,95 @@ exports.vendorMenu = async (req, res) => {
                 name: "$name",
                 description: "$description",
                 price: "$price",
-                category: "$category",
                 images: "$images",
                 isFavourite: "$isFavourite",
                 rating: "$rating",
+                category: "$category",
               },
             },
           },
         },
       ]),
 
-      // Active Deals Query
-      Deal.find({
-        isActive: true,
-        startDate: { $lte: now },
-        endDate: { $gte: now },
-      }).lean(),
-
-      // Active Campaigns Query
-      Campaign.find({
-        isActive: true,
-        startDate: { $lte: now },
-        endDate: { $gte: now },
-      }).lean(),
+      // 📌 FETCH ACTIVE STORE-WIDE FLASH DEALS & DISCOUNT DEALS ONLY
+      Promise.all([
+        Deal.find({
+          vendorId: vendorObjectId,
+          isActive: true,
+          appliesTo: "all_items",
+          dealType: { $in: ["flash_deal", "discount_deal"] },
+          startDate: { $lte: now },
+          endDate: { $gte: now },
+        }).lean(),
+        Campaign.find({
+          vendorId: vendorObjectId,
+          isActive: true,
+          appliesTo: "all_items",
+          campaignType: { $in: ["flash_deal", "discount_deal"] },
+          startDate: { $lte: now },
+          endDate: { $gte: now },
+        }).lean(),
+      ]).then(([d, c]) => [...d, ...c]),
     ]);
 
-    // Combine active Deals and Campaigns for Product Enrichment
-    const allPromotions = [...activeDeals, ...activeCampaigns];
+    // 2. Determine Best Active Storewide Discount (If Any)
+    let activeStorewideDeal = null;
+    let maxDiscountPercent = 0;
 
-    // Helper: Enrich Products with Matching Deals/Campaigns
-    const enrichProductWithDeals = (product) => {
-      const matchingPromos = allPromotions.filter((promo) => {
-        const vendorMatch =
-          !promo.vendorId ||
-          promo.vendorId.toString() === vendorObjectId.toString();
+    activeStorewidePromos.forEach((promo) => {
+      const offer = promo.offerDetails || {};
+      const val = Number(offer.discountValue || promo.discountValue || 0);
 
-        if (!vendorMatch) return false;
+      if (val > maxDiscountPercent) {
+        maxDiscountPercent = val;
+        activeStorewideDeal = promo;
+      }
+    });
 
-        // A. Specific Product Match
-        if (
-          Array.isArray(promo.applicableProducts) &&
-          promo.applicableProducts.some(
-            (pId) => pId.toString() === product._id.toString()
-          )
-        ) {
-          return true;
+    // Helper: Enrich product card ONLY if storewide deal is active
+    const applyStorewideDeal = (product) => {
+      let discountPrice = product.price;
+      let hasActiveDeal = false;
+      let tag = null;
+
+      if (activeStorewideDeal && maxDiscountPercent > 0) {
+        const offer = activeStorewideDeal.offerDetails || {};
+        const discountType = offer.discountType || activeStorewideDeal.discountType || "percentage";
+        const maxCap = Number(offer.maxDiscountAmount || 0);
+
+        if (discountType === "percentage") {
+          let calculatedDiscount = (product.price * maxDiscountPercent) / 100;
+          if (maxCap > 0) calculatedDiscount = Math.min(calculatedDiscount, maxCap);
+
+          discountPrice = Math.max(0, Math.round(product.price - calculatedDiscount));
+          tag = `${maxDiscountPercent}% OFF`;
+          hasActiveDeal = true;
+        } else if (discountType === "fixed_amount" || discountType === "fixed") {
+          const fixVal = Number(offer.discountValue || activeStorewideDeal.discountValue || 0);
+          if (fixVal > 0) {
+            discountPrice = Math.max(0, product.price - fixVal);
+            tag = `Rs. ${fixVal} OFF`;
+            hasActiveDeal = true;
+          }
         }
-
-        // B. Category Match (Handles both String Names and ObjectIds)
-        if (
-          Array.isArray(promo.applicableCategories) &&
-          promo.applicableCategories.some(
-            (cId) =>
-              cId.toString().toLowerCase() === product.category?.toString().toLowerCase() ||
-              cId.toString() === product.categoryId?.toString()
-          )
-        ) {
-          return true;
-        }
-
-        // C. All Items Match (Applies if appliesTo is 'all_items' OR arrays are empty)
-        if (
-          promo.appliesTo === "all_items" ||
-          (!promo.appliesTo &&
-            (!promo.applicableProducts || promo.applicableProducts.length === 0) &&
-            (!promo.applicableCategories || promo.applicableCategories.length === 0))
-        ) {
-          return true;
-        }
-
-        return false;
-      });
-
-      let bestDiscountPrice = product.price;
-      let selectedPromo = null;
-      let dealTag = null;
-      let hasFreeDelivery = false;
-
-      matchingPromos.forEach((promo) => {
-        if (
-          promo.dealType === "free_delivery" ||
-          promo.campaignType === "free_delivery_deal"
-        ) {
-          hasFreeDelivery = true;
-        }
-
-        let calculatedPrice = product.price;
-        const offer = promo.offerDetails || {};
-        const discountType = offer.discountType || promo.discountType;
-        const discountValue =
-          offer.discountValue !== undefined
-            ? offer.discountValue
-            : promo.discountValue;
-
-        if (offer.offerType === "special_price" && offer.dealPrice > 0) {
-          calculatedPrice = offer.dealPrice;
-        } else if (discountType === "percentage" && discountValue > 0) {
-          calculatedPrice = Math.max(
-            0,
-            product.price - (product.price * discountValue) / 100
-          );
-        } else if (discountType === "fixed_amount" && discountValue > 0) {
-          calculatedPrice = Math.max(0, product.price - discountValue);
-        }
-
-        if (calculatedPrice < bestDiscountPrice) {
-          bestDiscountPrice = calculatedPrice;
-          selectedPromo = promo;
-
-          if (discountType === "percentage") dealTag = `${discountValue}% OFF`;
-          else if (discountType === "fixed_amount")
-            dealTag = `Rs. ${discountValue} OFF`;
-          else if (offer.offerType === "special_price")
-            dealTag = `Rs. ${offer.dealPrice} SPECIAL`;
-          else dealTag = promo.dealName || promo.campaignName || "SPECIAL DEAL";
-        }
-      });
-
-      if (!dealTag && hasFreeDelivery) {
-        dealTag = "FREE DELIVERY";
-        selectedPromo = matchingPromos.find(
-          (p) =>
-            p.dealType === "free_delivery" ||
-            p.campaignType === "free_delivery_deal"
-        );
       }
 
+      // Short & Clean Item JSON Output
       return {
-        ...product,
-        originalPrice: product.price,
-        discountPrice: bestDiscountPrice,
-        hasActiveDeal: matchingPromos.length > 0,
-        hasFreeDelivery,
-        activeDealDetails: selectedPromo
-          ? {
-              dealId: selectedPromo._id,
-              dealName: selectedPromo.dealName || selectedPromo.campaignName,
-              dealType: selectedPromo.dealType || selectedPromo.campaignType,
-              tag: dealTag,
-              offerDetails: selectedPromo.offerDetails || {},
-            }
-          : null,
+        _id: product._id,
+        name: product.name,
+        description: product.description || "",
+        price: product.price,
+        discountPrice,
+        hasActiveDeal,
+        tag,
+        images: product.images || [],
+        isFavourite: Boolean(product.isFavourite),
+        rating: product.rating || { average: 0, count: 0 },
       };
     };
 
-    // 2. Build Response Structure
+    // 3. Construct Final Category Response List
     const dealMap = {};
     dealsGrouped.forEach((d) => (dealMap[d._id] = d.items));
 
@@ -3462,21 +3396,19 @@ exports.vendorMenu = async (req, res) => {
 
     const productTypeMap = {};
     productsByType.forEach(
-      (p) => (productTypeMap[p._id] = p.items.map(enrichProductWithDeals))
+      (p) => (productTypeMap[p._id] = p.items.map(applyStorewideDeal))
     );
 
     const categoryProductMap = {};
     productsByCategory.forEach((c) => {
       if (c._id) {
-        categoryProductMap[c._id.toString()] = c.products.map(
-          enrichProductWithDeals
-        );
+        categoryProductMap[c._id.toString()] = c.products.map(applyStorewideDeal);
       }
     });
 
     const categoriesResponse = [];
 
-    // Deals Section
+    // Section A: Deals
     const dealTypes = [
       { key: "flash_deal", label: "Flash Deals" },
       { key: "discount_deal", label: "Discount Deals" },
@@ -3495,7 +3427,7 @@ exports.vendorMenu = async (req, res) => {
       }
     });
 
-    // Campaigns Section
+    // Section B: Campaigns
     const campaignTypes = [
       { key: "flash_deal", label: "Flash Deals" },
       { key: "bogo_deal", label: "Bogo Deals" },
@@ -3506,7 +3438,6 @@ exports.vendorMenu = async (req, res) => {
 
     campaignTypes.forEach(({ key, label }) => {
       if (campaignMap[key] && campaignMap[key].length > 0) {
-        // Prevent duplicate category names if already pushed
         if (!categoriesResponse.some((c) => c.categoryName === label)) {
           categoriesResponse.push({
             _id: new mongoose.Types.ObjectId(),
@@ -3517,7 +3448,7 @@ exports.vendorMenu = async (req, res) => {
       }
     });
 
-    // Special Product Types Section
+    // Section C: Special Items
     const productTypes = [
       { key: "special", label: "Special Items" },
       { key: "popular", label: "Popular Items" },
@@ -3535,14 +3466,13 @@ exports.vendorMenu = async (req, res) => {
       }
     });
 
-    // Vendor Standard Categories Section
+    // Section D: Vendor Categories
     const storeCategories = vendorDoc?.categories || [];
     const addedCategories = new Set();
 
     if (storeCategories.length > 0) {
       storeCategories.forEach((cat) => {
-        const catName =
-          typeof cat === "string" ? cat : cat.categoryName || cat.name;
+        const catName = typeof cat === "string" ? cat : cat.categoryName || cat.name;
         if (catName) {
           addedCategories.add(catName.toString());
           categoriesResponse.push({
@@ -3554,7 +3484,7 @@ exports.vendorMenu = async (req, res) => {
       });
     }
 
-    // Push Remaining Categories directly from Product Collection
+    // Auto Fallback for uncategorized products
     Object.keys(categoryProductMap).forEach((catName) => {
       if (!addedCategories.has(catName)) {
         categoriesResponse.push({
@@ -3577,7 +3507,7 @@ exports.vendorMenu = async (req, res) => {
       message: err.message,
     });
   }
-};
+};``
 
 exports.vendorMenuProducts = async (req, res) => {
   try {
