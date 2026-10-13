@@ -1601,6 +1601,7 @@ exports.updateVendorProfile = async (req, res) => {
       payoutWalletNumber,
       branchData,
       storeHours,
+      openingHours,
     } = req.body;
 
     // File Upload Processing (Multer compatibility)
@@ -1735,14 +1736,14 @@ exports.updateVendorProfile = async (req, res) => {
         typeof branchData === "string" ? JSON.parse(branchData) : branchData;
       parsedBranches = Array.isArray(rawData) ? rawData : [rawData];
     }
-
+console.log("Parsed Branches:", parsedBranches);
     let updatedBranches = [];
 
     if (parsedBranches.length > 0) {
       updatedBranches = await Promise.all(
         parsedBranches.map(async (branch) => {
           const targetBranchName =
-            branch.branchName || `${vendor.businessName} Branch`;
+            branch.branchName;
           const targetBranchPhone = branch.phone || vendor.businessPhone;
           const branchOpeningHours =
             formatOpeningHours(branch.openingHours || branch.storeHours) ||
@@ -2050,14 +2051,14 @@ exports.updateVendor = async (req, res) => {
         typeof branchData === "string" ? JSON.parse(branchData) : branchData;
       parsedBranches = Array.isArray(rawData) ? rawData : [rawData];
     }
-
+console.log("Parsed Branches:", parsedBranches);
     let updatedBranches = [];
 
     if (parsedBranches.length > 0) {
       updatedBranches = await Promise.all(
         parsedBranches.map(async (branch) => {
           const targetBranchName =
-            branch.branchName || `${vendor.businessName} Branch`;
+            branch.branchName;
           const targetBranchPhone = branch.phone || vendor.businessPhone;
           const branchOpeningHours =
             formatOpeningHours(branch.openingHours || branch.storeHours) ||
@@ -3868,8 +3869,10 @@ exports.toggleAvailability = async (req, res) => {
       });
     }
 
-    // 1. Fetch current status & businessName
-    const vendor = await Vendor.findById(vendorId).select("isActive isOpen businessName");
+    // 1. Fetch main Vendor details for metadata
+    const vendor = await Vendor.findById(vendorId).select(
+      "businessName isActive",
+    );
 
     if (!vendor) {
       return res.status(404).json({
@@ -3878,32 +3881,125 @@ exports.toggleAvailability = async (req, res) => {
       });
     }
 
-    // 2. Toggle isActive status atomically
-    const updatedVendor = await Vendor.findByIdAndUpdate(
-      vendor._id,
-      { $set: { isOpen: !vendor.isOpen } },
-      { new: true, runValidators: true }
-    ).select("isOpen businessName");
+    // 2. Fetch current VendorBranch state (using vendorId ref or direct ID)
+    let branch = await VendorBranch.findOne({ vendorId: vendorId }).select(
+      "isOpen",
+    );
+
+    // Fallback: If vendorId is itself the Branch ID
+    if (!branch) {
+      branch = await VendorBranch.findById(vendorId).select("isOpen");
+    }
+
+    if (!branch) {
+      return res.status(404).json({
+        success: false,
+        message: "Vendor branch not found",
+      });
+    }
+
+    // 3. Determine target status
+    const currentRushState = Boolean(branch.isOpen);
+
+    let targetRushState;
+    if (req.body && typeof req.body.isOpen === "boolean") {
+      targetRushState = req.body.isOpen;
+    } else if (req.body && typeof req.body.rushMode === "boolean") {
+      targetRushState = req.body.rushMode;
+    } else {
+      targetRushState = !currentRushState;
+    }
+
+    // 4. Update VendorBranch atomically
+    const updatedBranch = await VendorBranch.findByIdAndUpdate(
+      branch._id,
+      { $set: { isOpen: targetRushState } },
+      { new: true, runValidators: true },
+    ).select("isOpen");
+
+    // 5. Real-time updates via Socket IO
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`vendor:${vendorId}`).emit("rushModeToggled", {
+        vendorId,
+        isOpen: updatedBranch.isOpen,
+        message: `Rush mode is now ${updatedBranch.isOpen ? "ENABLED" : "DISABLED"}`,
+      });
+
+      io.to(`vendorCatalog:${vendorId}`).emit("vendorRushModeUpdated", {
+        vendorId,
+        isOpen: updatedBranch.isOpen,
+      });
+    }
 
     return res.status(200).json({
       success: true,
-      message: `Availability successfully ${
-        updatedVendor.isOpen ? "activated" : "deactivated"
+      message: `Rush mode successfully ${
+        updatedBranch.isOpen ? "activated" : "deactivated"
       }`,
       vendor: {
-        id: updatedVendor._id,
-        businessName: updatedVendor.businessName || "",
-        isOpen: updatedVendor.isOpen,
+        vendorId : vendorId.toString(),
+        businessName: vendor.businessName,
+        isOpen: Boolean(updatedBranch.isOpen),
+        // isActive: vendor.isActive,
       },
     });
   } catch (err) {
-    console.error("TOGGLE AVAILABILITY ERROR:", err);
+    console.error("TOGGLE RUSH MODE ERROR:", err);
     return res.status(500).json({
       success: false,
       message: err.message,
     });
   }
 };
+
+// exports.toggleAvailability = async (req, res) => {
+//   try {
+//     const vendorId = req.user?.id || req.user?._id;
+
+//     if (!vendorId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Vendor ID missing from authentication token",
+//       });
+//     }
+
+//     // 1. Fetch current status & businessName
+//     const vendor = await Vendor.findById(vendorId).select("isActive isOpen businessName");
+
+//     if (!vendor) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Vendor account not found",
+//       });
+//     }
+
+//     // 2. Toggle isActive status atomically
+//     const updatedVendor = await Vendor.findByIdAndUpdate(
+//       vendor._id,
+//       { $set: { isOpen: !vendor.isOpen } },
+//       { new: true, runValidators: true }
+//     ).select("isOpen businessName");
+
+//     return res.status(200).json({
+//       success: true,
+//       message: `Availability successfully ${
+//         updatedVendor.isOpen ? "activated" : "deactivated"
+//       }`,
+//       vendor: {
+//         id: updatedVendor._id,
+//         businessName: updatedVendor.businessName || "",
+//         isOpen: updatedVendor?.isOpen,
+//       },
+//     });
+//   } catch (err) {
+//     console.error("TOGGLE AVAILABILITY ERROR:", err);
+//     return res.status(500).json({
+//       success: false,
+//       message: err.message,
+//     });
+//   }
+// };
 
 // =====================================
 // GET ALL RESTAURANT BRANDS (filter, search, paginate)
