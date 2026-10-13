@@ -1056,7 +1056,7 @@ exports.getProductsByType = async (req, res) => {
           name: product.name,
           images: product.images || [],
           price: product.price,
-          discountPrice: dealData.discountPrice,
+          discountPrice: dealData.hasActiveDeal == true ? dealData.discountPrice : product.discountPrice || 0,
           hasActiveDeal: dealData.hasActiveDeal,
           tag: dealData.tag,
           rating: product.rating,
