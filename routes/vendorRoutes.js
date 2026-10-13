@@ -35,6 +35,7 @@ const {
   getVendors,
   vendorSocialLogin,
   deleteAccount,
+  toggleAvailability,
 } = require("../controllers/vendorController");
 const { saveFcmToken } = require("../controllers/vendorController");
 const upload = require("../middleware/upload");
@@ -142,6 +143,7 @@ router.put(
 
 router.patch("/update/:id/status", auth, updateVendorStatus);
 router.patch("/toggle-rushmode", auth, toggleRushMode);
+router.patch("/toggle-availability", auth, toggleAvailability);
 
 router.delete("/delete/:id", auth, role("admin"), deleteVendor);
 
