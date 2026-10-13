@@ -1601,6 +1601,7 @@ exports.updateVendorProfile = async (req, res) => {
       payoutWalletNumber,
       branchData,
       storeHours,
+      openingHours,
     } = req.body;
 
     // File Upload Processing (Multer compatibility)
@@ -1735,14 +1736,14 @@ exports.updateVendorProfile = async (req, res) => {
         typeof branchData === "string" ? JSON.parse(branchData) : branchData;
       parsedBranches = Array.isArray(rawData) ? rawData : [rawData];
     }
-
+console.log("Parsed Branches:", parsedBranches);
     let updatedBranches = [];
 
     if (parsedBranches.length > 0) {
       updatedBranches = await Promise.all(
         parsedBranches.map(async (branch) => {
           const targetBranchName =
-            branch.branchName || `${vendor.businessName} Branch`;
+            branch.branchName;
           const targetBranchPhone = branch.phone || vendor.businessPhone;
           const branchOpeningHours =
             formatOpeningHours(branch.openingHours || branch.storeHours) ||
@@ -2050,14 +2051,14 @@ exports.updateVendor = async (req, res) => {
         typeof branchData === "string" ? JSON.parse(branchData) : branchData;
       parsedBranches = Array.isArray(rawData) ? rawData : [rawData];
     }
-
+console.log("Parsed Branches:", parsedBranches);
     let updatedBranches = [];
 
     if (parsedBranches.length > 0) {
       updatedBranches = await Promise.all(
         parsedBranches.map(async (branch) => {
           const targetBranchName =
-            branch.branchName || `${vendor.businessName} Branch`;
+            branch.branchName;
           const targetBranchPhone = branch.phone || vendor.businessPhone;
           const branchOpeningHours =
             formatOpeningHours(branch.openingHours || branch.storeHours) ||
