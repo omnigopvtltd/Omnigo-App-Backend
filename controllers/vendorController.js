@@ -56,6 +56,7 @@ const sendVendorResponse = (res, message, payload, statusCode = 200) => {
     vendor: {
       id: vendorObj._id || vendorObj.id,
       businessName: vendorObj.businessName || "",
+      branchName: vendorObj.branchName || "",
       businessEmail: vendorObj.businessEmail || "",
       businessPhone: vendorObj.businessPhone || "",
       role: "vendor",
@@ -91,6 +92,24 @@ const sendVendorResponse = (res, message, payload, statusCode = 200) => {
       businessRegistrationNumber: vendorObj.businessRegistrationNumber || "",
       taxNumber: vendorObj.taxNumber || "",
       foodLicenseNumber: vendorObj.foodLicenseNumber || "",
+
+      // Address & Location
+      address: vendorObj.address || "",
+      area: vendorObj.area || "",
+      city: vendorObj.city || "",
+      zipCode: vendorObj.zipCode || "",
+      country: vendorObj.country || "",
+      location: vendorObj.location || { type: "Point", coordinates: [0, 0] },
+      coordinates: vendorObj.coordinates || [0, 0],
+
+      openingHours: vendorObj.openingHours || [],
+
+      isOpen: vendorObj.isOpen || false,
+      isSponsored: vendorObj.isSponsored || false,
+      isFreeDelivery: vendorObj.isFreeDelivery || true,
+      commissionRate: vendorObj.commissionRate || 6, // %
+      isRushMode: vendorObj.isRushMode || false,
+      wallet: vendorObj.wallet || { balance: 0 },
 
       branches: vendorObj.branches || [],
 
@@ -3869,7 +3888,7 @@ exports.toggleAvailability = async (req, res) => {
     }
 
     // 1. Fetch current status & businessName
-    const vendor = await Vendor.findById(vendorId).select("isActive businessName");
+    const vendor = await Vendor.findById(vendorId).select("isActive isOpen businessName");
 
     if (!vendor) {
       return res.status(404).json({
@@ -3881,19 +3900,19 @@ exports.toggleAvailability = async (req, res) => {
     // 2. Toggle isActive status atomically
     const updatedVendor = await Vendor.findByIdAndUpdate(
       vendor._id,
-      { $set: { isActive: !vendor.isActive } },
+      { $set: { isOpen: !vendor.isOpen } },
       { new: true, runValidators: true }
-    ).select("isActive businessName");
+    ).select("isOpen businessName");
 
     return res.status(200).json({
       success: true,
       message: `Availability successfully ${
-        updatedVendor.isActive ? "activated" : "deactivated"
+        updatedVendor.isOpen ? "activated" : "deactivated"
       }`,
       vendor: {
         id: updatedVendor._id,
         businessName: updatedVendor.businessName || "",
-        isActive: updatedVendor.isActive,
+        isOpen: updatedVendor.isOpen,
       },
     });
   } catch (err) {
