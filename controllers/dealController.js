@@ -533,6 +533,80 @@ exports.createDeal = async (req, res) => {
   }
 };
 // Get All Deals (Identical response structure to getAllCampaigns)
+// exports.getAllDeals = async (req, res) => {
+//   try {
+//     const {
+//       search,
+//       isActive,
+//       dealType,
+//       branchId,
+//       page = 1,
+//       limit = 20,
+//     } = req.query;
+
+//     const query = {};
+
+//     if (search) {
+//       query.$or = [
+//         { dealName: new RegExp(search, "i") },
+//         { "offerDetails.dealTitle": new RegExp(search, "i") },
+//       ];
+//     }
+
+//     if (isActive !== undefined) query.isActive = isActive === "true";
+//     if (dealType && dealType !== "all") query.dealType = dealType;
+//     if (branchId) query.branchId = branchId;
+
+//     const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+//     const limitNum = Math.max(parseInt(limit, 10) || 20, 1);
+//     const skip = (pageNum - 1) * limitNum;
+
+//     if (endDate) {
+//     }
+
+//     const [deals, total] = await Promise.all([
+//       Deal.find(query)
+//         .populate("vendorId", "businessName logo rating")
+//         .populate(
+//           "branchId",
+//           "branchName address area city phone isOpen isActive",
+//         )
+//         .populate("offerDetails.freeItemId", "name price image")
+//         .populate("offerDetails.comboItems", "name price image")
+//         .populate("offerDetails.itemsIncluded.product", "name price image")
+//         .populate("applicableCategories", "name")
+//         .populate("applicableProducts", "name price image")
+//         .sort({ createdAt: -1 })
+//         .skip(skip)
+//         .limit(limitNum)
+//         .lean(),
+//       Deal.countDocuments(query),
+//     ]);
+
+//     const vendorIds = [
+//       ...new Set(
+//         deals.map((d) => d.vendorId?._id || d.vendorId).filter(Boolean),
+//       ),
+//     ];
+//     const vendorBranches = await VendorBranch.find({
+//       vendorId: { $in: vendorIds },
+//     }).lean();
+
+//     return res.status(200).json({
+//       success: true,
+//       count: deals.length,
+//       total,
+//       page: pageNum,
+//       totalPages: Math.ceil(total / limitNum) || 1,
+//       deals,
+//       vendorBranches, // Exact top-level key like campaigns response
+//     });
+//   } catch (err) {
+//     console.error("GET DEALS ERROR:", err);
+//     return res.status(500).json({ success: false, message: err.message });
+//   }
+// };
+
 exports.getAllDeals = async (req, res) => {
   try {
     const {
@@ -540,11 +614,18 @@ exports.getAllDeals = async (req, res) => {
       isActive,
       dealType,
       branchId,
+      includeExpired, // Optional: pass true from admin if you want to see expired deals too
       page = 1,
       limit = 20,
     } = req.query;
 
     const query = {};
+    const now = new Date();
+
+    // 1. Filter out expired deals by default (unless includeExpired=true is passed)
+    if (includeExpired !== "true") {
+      query.endDate = { $gte: now };
+    }
 
     if (search) {
       query.$or = [
@@ -560,9 +641,6 @@ exports.getAllDeals = async (req, res) => {
     const pageNum = Math.max(parseInt(page, 10) || 1, 1);
     const limitNum = Math.max(parseInt(limit, 10) || 20, 1);
     const skip = (pageNum - 1) * limitNum;
-
-    if (endDate) {
-    }
 
     const [deals, total] = await Promise.all([
       Deal.find(query)
@@ -599,7 +677,7 @@ exports.getAllDeals = async (req, res) => {
       page: pageNum,
       totalPages: Math.ceil(total / limitNum) || 1,
       deals,
-      vendorBranches, // Exact top-level key like campaigns response
+      vendorBranches,
     });
   } catch (err) {
     console.error("GET DEALS ERROR:", err);
