@@ -402,7 +402,11 @@ const parseObjectIdArray = (val) => {
   const parsed = parseJsonField(val, []);
   if (!Array.isArray(parsed)) return [];
   return parsed
-    .map((id) => (typeof id === "string" ? id.trim().replace(/^['"\[\]]+|['"\[\]]+$/g, "") : id))
+    .map((id) =>
+      typeof id === "string"
+        ? id.trim().replace(/^['"\[\]]+|['"\[\]]+$/g, "")
+        : id,
+    )
     .filter((id) => typeof id === "string" && id.length === 24);
 };
 
@@ -410,29 +414,19 @@ const parseObjectIdArray = (val) => {
 exports.createDeal = async (req, res) => {
   try {
     const vendorId = req.vendor?._id || req.user?._id || req.body.vendorId;
-
     const { dealName, dealType, startDate, endDate } = req.body;
 
     if (!dealName || !dealType || !startDate || !endDate) {
       return res.status(400).json({
         success: false,
-        message:
-          "dealName, dealType, startDate, and endDate are required fields.",
+        message: "dealName, dealType, startDate, and endDate are required fields.",
       });
     }
 
-    // Safe Banner Image Upload (Maintains Existing Upload Pipeline)
     let bannerImage = "";
-
     if (typeof handleImageUploads === "function") {
-      const uploadedImages = await handleImageUploads(
-        req,
-        "dealBanner",
-        "deals"
-      );
-      if (uploadedImages && uploadedImages.length > 0) {
-        bannerImage = uploadedImages[0];
-      }
+      const uploadedImages = await handleImageUploads(req, "dealBanner", "deals");
+      if (uploadedImages && uploadedImages.length > 0) bannerImage = uploadedImages[0];
     } else if (typeof uploadSingleToCloudinary === "function") {
       const fileObj =
         req.file ||
@@ -446,10 +440,8 @@ exports.createDeal = async (req, res) => {
       }
     }
 
-    // 1. Safely Parse offerDetails (Handles stringified JSON & Object types)
     let rawOfferDetails = parseJsonField(req.body.offerDetails, {});
 
-    // 2. Ensure itemsIncluded is properly sanitized and variations/addOns are preserved
     const sanitizedItemsIncluded = Array.isArray(rawOfferDetails.itemsIncluded)
       ? rawOfferDetails.itemsIncluded.map((item) => ({
           product: item.product || item.productId || null,
@@ -483,7 +475,30 @@ exports.createDeal = async (req, res) => {
       maxDeliveryDiscount: Number(rawOfferDetails.maxDeliveryDiscount) || 0,
     };
 
-    // Format & Sanitize Final Deal Data Body
+    // Sanitize applicableProducts array if passed in root body
+    const rawAppProducts = parseJsonField(req.body.applicableProducts, []);
+    const sanitizedApplicableProducts = Array.isArray(rawAppProducts)
+      ? rawAppProducts.map((item) => ({
+          product: item.product || item.productId || item,
+          customItemName: item.customItemName || "",
+          quantity: Number(item.quantity) || 1,
+          allowedVariations: Array.isArray(item.allowedVariations)
+            ? item.allowedVariations.map((v) => ({
+                title: v.title || "",
+                selectedOption: v.selectedOption || v.name || "",
+                price: Number(v.price) || 0,
+              }))
+            : [],
+          allowedAddOns: Array.isArray(item.allowedAddOns)
+            ? item.allowedAddOns.map((a) => ({
+                name: a.name || "",
+                price: Number(a.price) || 0,
+                isMandatory: a.isMandatory !== undefined ? String(a.isMandatory) === "true" : false,
+              }))
+            : [],
+        }))
+      : [];
+
     const dealData = {
       ...req.body,
       vendorId,
@@ -493,22 +508,16 @@ exports.createDeal = async (req, res) => {
       dealBanner: bannerImage || req.body.dealBanner || "",
       offerDetails: formattedOfferDetails,
       applicableCategories: parseObjectIdArray(req.body.applicableCategories),
-      applicableProducts: parseObjectIdArray(req.body.applicableProducts),
+      applicableProducts: sanitizedApplicableProducts,
       eligibleCustomers:
-        typeof req.body.eligibleCustomers === "string" &&
-        !req.body.eligibleCustomers.startsWith("[")
+        typeof req.body.eligibleCustomers === "string" && !req.body.eligibleCustomers.startsWith("[")
           ? req.body.eligibleCustomers
           : parseJsonField(req.body.eligibleCustomers, "all"),
       minOrderAmount: Number(req.body.minOrderAmount) || 0,
       maxDiscountAmount: Number(req.body.maxDiscountAmount) || 0,
       usageLimit: req.body.usageLimit ? Number(req.body.usageLimit) : null,
-      perCustomerLimit: req.body.perCustomerLimit
-        ? Number(req.body.perCustomerLimit)
-        : null,
-      isActive:
-        req.body.isActive !== undefined
-          ? String(req.body.isActive) === "true"
-          : true,
+      perCustomerLimit: req.body.perCustomerLimit ? Number(req.body.perCustomerLimit) : null,
+      isActive: req.body.isActive !== undefined ? String(req.body.isActive) === "true" : true,
     };
 
     const deal = await Deal.create(dealData);
@@ -551,6 +560,9 @@ exports.getAllDeals = async (req, res) => {
     const pageNum = Math.max(parseInt(page, 10) || 1, 1);
     const limitNum = Math.max(parseInt(limit, 10) || 20, 1);
     const skip = (pageNum - 1) * limitNum;
+
+    if (endDate) {
+    }
 
     const [deals, total] = await Promise.all([
       Deal.find(query)
@@ -700,23 +712,13 @@ exports.updateDeal = async (req, res) => {
   try {
     const deal = await Deal.findById(req.params.id);
     if (!deal) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Deal not found" });
+      return res.status(404).json({ success: false, message: "Deal not found" });
     }
 
-    // 1. Safe Banner Image Upload Handling
     let bannerImage = "";
-
     if (typeof handleImageUploads === "function") {
-      const uploadedImages = await handleImageUploads(
-        req,
-        "dealBanner",
-        "deals"
-      );
-      if (uploadedImages && uploadedImages.length > 0) {
-        bannerImage = uploadedImages[0];
-      }
+      const uploadedImages = await handleImageUploads(req, "dealBanner", "deals");
+      if (uploadedImages && uploadedImages.length > 0) bannerImage = uploadedImages[0];
     } else if (typeof uploadSingleToCloudinary === "function") {
       const fileObj =
         req.file ||
@@ -729,22 +731,15 @@ exports.updateDeal = async (req, res) => {
         bannerImage = req.body.dealBanner;
       }
     }
-
-    // Retain existing banner if no new upload/string provided
     deal.dealBanner = bannerImage || deal.dealBanner;
 
-    // 2. Safe Helper Function for JSON Parsing
     const safeJsonParse = (value, fallback) => {
       if (value === undefined || value === null) return fallback;
       if (typeof value === "string") {
         try {
           const parsed = JSON.parse(value);
           if (typeof parsed === "string") {
-            try {
-              return JSON.parse(parsed);
-            } catch {
-              return parsed;
-            }
+            try { return JSON.parse(parsed); } catch { return parsed; }
           }
           return parsed;
         } catch {
@@ -754,25 +749,16 @@ exports.updateDeal = async (req, res) => {
       return value;
     };
 
-    // 3. Parsing & Deep Sanitizing `offerDetails` + `itemsIncluded`
+    // 1. Update offerDetails & itemsIncluded
     if (req.body.offerDetails !== undefined) {
-      const incomingOfferDetails = safeJsonParse(
-        req.body.offerDetails,
-        deal.offerDetails || {}
-      );
-
-      // Existing offerDetails copy to preserve untouched fields
+      const incomingOfferDetails = safeJsonParse(req.body.offerDetails, deal.offerDetails || {});
       const updatedOfferDetails = {
         ...(deal.offerDetails ? deal.offerDetails.toObject() : {}),
         ...incomingOfferDetails,
       };
 
-      // Handle & Sanitize itemsIncluded Array (Preserves variations + addOns)
       if (incomingOfferDetails.itemsIncluded !== undefined) {
-        const rawItems = Array.isArray(incomingOfferDetails.itemsIncluded)
-          ? incomingOfferDetails.itemsIncluded
-          : [];
-
+        const rawItems = Array.isArray(incomingOfferDetails.itemsIncluded) ? incomingOfferDetails.itemsIncluded : [];
         updatedOfferDetails.itemsIncluded = rawItems.map((item) => ({
           product: item.product || item.productId || null,
           customItemName: item.customItemName || "",
@@ -788,16 +774,12 @@ exports.updateDeal = async (req, res) => {
             ? item.allowedAddOns.map((a) => ({
                 name: a.name || "",
                 price: Number(a.price) || 0,
-                isMandatory:
-                  a.isMandatory !== undefined
-                    ? String(a.isMandatory) === "true"
-                    : false,
+                isMandatory: a.isMandatory !== undefined ? String(a.isMandatory) === "true" : false,
               }))
             : [],
         }));
       }
 
-      // Convert Price Numbers Safely
       if (incomingOfferDetails.discountValue !== undefined)
         updatedOfferDetails.discountValue = Number(incomingOfferDetails.discountValue) || 0;
       if (incomingOfferDetails.originalPrice !== undefined)
@@ -806,14 +788,32 @@ exports.updateDeal = async (req, res) => {
         updatedOfferDetails.dealPrice = Number(incomingOfferDetails.dealPrice) || 0;
 
       deal.offerDetails = updatedOfferDetails;
-      deal.markModified("offerDetails"); // Mongoose nested object modification flag
+      deal.markModified("offerDetails");
     }
 
-    // 4. Parsing Array & Mongo Reference Fields
+    // 2. Update applicableProducts
     if (req.body.applicableProducts !== undefined) {
       const parsedProducts = safeJsonParse(req.body.applicableProducts, []);
       deal.applicableProducts = Array.isArray(parsedProducts)
-        ? parsedProducts.filter((id) => id && id !== "[]")
+        ? parsedProducts.map((item) => ({
+            product: item.product || item.productId || item,
+            customItemName: item.customItemName || "",
+            quantity: Number(item.quantity) || 1,
+            allowedVariations: Array.isArray(item.allowedVariations)
+              ? item.allowedVariations.map((v) => ({
+                  title: v.title || "",
+                  selectedOption: v.selectedOption || v.name || "",
+                  price: Number(v.price) || 0,
+                }))
+              : [],
+            allowedAddOns: Array.isArray(item.allowedAddOns)
+              ? item.allowedAddOns.map((a) => ({
+                  name: a.name || "",
+                  price: Number(a.price) || 0,
+                  isMandatory: a.isMandatory !== undefined ? String(a.isMandatory) === "true" : false,
+                }))
+              : [],
+          }))
         : [];
     }
 
@@ -824,29 +824,16 @@ exports.updateDeal = async (req, res) => {
         : [];
     }
 
-    // Fixed: eligibleCustomers in Schema is String enum ("all", "new_customers", "existing_customers")
     if (req.body.eligibleCustomers !== undefined) {
       const parsedCustomers = safeJsonParse(req.body.eligibleCustomers, "all");
-      deal.eligibleCustomers =
-        typeof parsedCustomers === "string" ? parsedCustomers : "all";
+      deal.eligibleCustomers = typeof parsedCustomers === "string" ? parsedCustomers : "all";
     }
 
-    // 5. Update Primitive Fields Safely
+    // 3. Primitive Fields
     const simpleFields = [
-      "dealName",
-      "dealType",
-      "branchId",
-      "description",
-      "appliesTo",
-      "startDate",
-      "endDate",
-      "startTime",
-      "endTime",
-      "minOrderAmount",
-      "maxDiscountAmount",
-      "usageLimit",
-      "perCustomerLimit",
-      "isActive",
+      "dealName", "dealType", "branchId", "description", "appliesTo",
+      "startDate", "endDate", "startTime", "endTime",
+      "minOrderAmount", "maxDiscountAmount", "usageLimit", "perCustomerLimit", "isActive",
     ];
 
     simpleFields.forEach((field) => {
@@ -854,12 +841,7 @@ exports.updateDeal = async (req, res) => {
         if (field === "isActive") {
           deal.isActive = String(req.body[field]) === "true";
         } else if (
-          [
-            "minOrderAmount",
-            "maxDiscountAmount",
-            "usageLimit",
-            "perCustomerLimit",
-          ].includes(field)
+          ["minOrderAmount", "maxDiscountAmount", "usageLimit", "perCustomerLimit"].includes(field)
         ) {
           deal[field] = req.body[field] !== null && req.body[field] !== "" ? Number(req.body[field]) : null;
         } else {
@@ -868,7 +850,6 @@ exports.updateDeal = async (req, res) => {
       }
     });
 
-    // 6. Save Updated Deal Document
     await deal.save();
 
     return res.status(200).json({
