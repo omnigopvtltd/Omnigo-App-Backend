@@ -179,8 +179,26 @@ const dealSchema = new mongoose.Schema(
     ],
     applicableProducts: [
       {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Product",
+        product: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Product",
+        },
+        customItemName: { type: String, default: "" },
+        quantity: { type: Number, default: 1 },
+        allowedVariations: [
+          {
+            title: { type: String },
+            selectedOption: { type: String },
+            price: { type: Number, default: 0 },
+          },
+        ],
+        allowedAddOns: [
+          {
+            name: { type: String },
+            price: { type: Number, default: 0 },
+            isMandatory: { type: Boolean, default: false },
+          },
+        ],
       },
     ],
 
@@ -212,7 +230,7 @@ const dealSchema = new mongoose.Schema(
       },
     ],
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 dealSchema.pre("validate", function (next) {
