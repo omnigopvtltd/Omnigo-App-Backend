@@ -1,8 +1,9 @@
-
-
 const Campaign = require("../models/Campaign");
 const VendorBranch = require("../models/VendorBranch");
-const { handleImageUploads, uploadSingleToCloudinary } = require("../utils/cloudinaryUpload");
+const {
+  handleImageUploads,
+  uploadSingleToCloudinary,
+} = require("../utils/cloudinaryUpload");
 
 // Create Campaign
 // Safe JSON Parser Helper
@@ -25,7 +26,11 @@ const parseObjectIdArray = (val) => {
   const parsed = parseJsonField(val, []);
   if (!Array.isArray(parsed)) return [];
   return parsed
-    .map((id) => (typeof id === "string" ? id.trim().replace(/^['"\[\]]+|['"\[\]]+$/g, "") : id))
+    .map((id) =>
+      typeof id === "string"
+        ? id.trim().replace(/^['"\[\]]+|['"\[\]]+$/g, "")
+        : id,
+    )
     .filter((id) => typeof id === "string" && id.length === 24);
 };
 
@@ -38,14 +43,17 @@ const getUploadedBanner = async (req) => {
   if (typeof uploadSingleToCloudinary === "function") {
     const fileObj =
       req.file ||
-      (req.files && req.files["campaignBanner"] && req.files["campaignBanner"][0]) ||
+      (req.files &&
+        req.files["campaignBanner"] &&
+        req.files["campaignBanner"][0]) ||
       (req.files && req.files[0]);
     if (fileObj) return await uploadSingleToCloudinary(fileObj, "campaigns");
   }
-  return typeof req.body.campaignBanner === "string" ? req.body.campaignBanner : "";
+  return typeof req.body.campaignBanner === "string"
+    ? req.body.campaignBanner
+    : "";
 };
 
-// ================= CREATE CAMPAIGN =================
 // ================= CREATE CAMPAIGN =================
 exports.createCampaign = async (req, res) => {
   try {
@@ -55,7 +63,8 @@ exports.createCampaign = async (req, res) => {
     if (!campaignName || !campaignType || !startDate || !endDate) {
       return res.status(400).json({
         success: false,
-        message: "campaignName, campaignType, startDate, and endDate are required.",
+        message:
+          "campaignName, campaignType, startDate, and endDate are required.",
       });
     }
 
@@ -102,6 +111,33 @@ exports.createCampaign = async (req, res) => {
       maxDeliveryDiscount: Number(rawOfferDetails.maxDeliveryDiscount) || 0,
     };
 
+    // Sanitize applicableProducts array if passed in root body
+    const rawAppProducts = parseJsonField(req.body.applicableProducts, []);
+    const sanitizedApplicableProducts = Array.isArray(rawAppProducts)
+      ? rawAppProducts.map((item) => ({
+          product: item.product || item.productId || item,
+          customItemName: item.customItemName || "",
+          quantity: Number(item.quantity) || 1,
+          allowedVariations: Array.isArray(item.allowedVariations)
+            ? item.allowedVariations.map((v) => ({
+                title: v.title || "",
+                selectedOption: v.selectedOption || v.name || "",
+                price: Number(v.price) || 0,
+              }))
+            : [],
+          allowedAddOns: Array.isArray(item.allowedAddOns)
+            ? item.allowedAddOns.map((a) => ({
+                name: a.name || "",
+                price: Number(a.price) || 0,
+                isMandatory:
+                  a.isMandatory !== undefined
+                    ? String(a.isMandatory) === "true"
+                    : false,
+              }))
+            : [],
+        }))
+      : [];
+
     // 4. Format Body Data
     const campaignData = {
       ...req.body,
@@ -111,7 +147,7 @@ exports.createCampaign = async (req, res) => {
       campaignBanner: bannerImage || req.body.campaignBanner || "",
       offerDetails: formattedOfferDetails,
       applicableCategories: parseObjectIdArray(req.body.applicableCategories),
-      applicableProducts: parseObjectIdArray(req.body.applicableProducts),
+      applicableProducts: sanitizedApplicableProducts,
       eligibleCustomers:
         typeof req.body.eligibleCustomers === "string" &&
         !req.body.eligibleCustomers.startsWith("[")
@@ -147,7 +183,9 @@ exports.updateCampaign = async (req, res) => {
   try {
     const campaign = await Campaign.findById(req.params.id);
     if (!campaign) {
-      return res.status(404).json({ success: false, message: "Campaign not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Campaign not found" });
     }
 
     // 1. Banner Image Update
@@ -158,7 +196,7 @@ exports.updateCampaign = async (req, res) => {
     if (req.body.offerDetails !== undefined) {
       const incomingOfferDetails = parseJsonField(
         req.body.offerDetails,
-        campaign.offerDetails || {}
+        campaign.offerDetails || {},
       );
 
       const updatedOfferDetails = {
@@ -196,28 +234,63 @@ exports.updateCampaign = async (req, res) => {
       }
 
       if (incomingOfferDetails.discountValue !== undefined)
-        updatedOfferDetails.discountValue = Number(incomingOfferDetails.discountValue) || 0;
+        updatedOfferDetails.discountValue =
+          Number(incomingOfferDetails.discountValue) || 0;
       if (incomingOfferDetails.originalPrice !== undefined)
-        updatedOfferDetails.originalPrice = Number(incomingOfferDetails.originalPrice) || 0;
+        updatedOfferDetails.originalPrice =
+          Number(incomingOfferDetails.originalPrice) || 0;
       if (incomingOfferDetails.dealPrice !== undefined)
-        updatedOfferDetails.dealPrice = Number(incomingOfferDetails.dealPrice) || 0;
+        updatedOfferDetails.dealPrice =
+          Number(incomingOfferDetails.dealPrice) || 0;
 
       campaign.offerDetails = updatedOfferDetails;
       campaign.markModified("offerDetails");
     }
 
     if (req.body.applicableCategories !== undefined) {
-      campaign.applicableCategories = parseObjectIdArray(req.body.applicableCategories);
+      campaign.applicableCategories = parseObjectIdArray(
+        req.body.applicableCategories,
+      );
     }
+    // if (req.body.applicableProducts !== undefined) {
+    //   campaign.applicableProducts = parseObjectIdArray(
+    //     req.body.applicableProducts,
+    //   );
+    // }
+    // 2. Update applicableProducts
     if (req.body.applicableProducts !== undefined) {
-      campaign.applicableProducts = parseObjectIdArray(req.body.applicableProducts);
+      const parsedProducts = safeJsonParse(req.body.applicableProducts, []);
+      deal.applicableProducts = Array.isArray(parsedProducts)
+        ? parsedProducts.map((item) => ({
+            product: item.product || item.productId || item,
+            customItemName: item.customItemName || "",
+            quantity: Number(item.quantity) || 1,
+            allowedVariations: Array.isArray(item.allowedVariations)
+              ? item.allowedVariations.map((v) => ({
+                  title: v.title || "",
+                  selectedOption: v.selectedOption || v.name || "",
+                  price: Number(v.price) || 0,
+                }))
+              : [],
+            allowedAddOns: Array.isArray(item.allowedAddOns)
+              ? item.allowedAddOns.map((a) => ({
+                  name: a.name || "",
+                  price: Number(a.price) || 0,
+                  isMandatory: a.isMandatory !== undefined ? String(a.isMandatory) === "true" : false,
+                }))
+              : [],
+          }))
+        : [];
     }
     if (req.body.eligibleCustomers !== undefined) {
       campaign.eligibleCustomers =
         typeof req.body.eligibleCustomers === "string" &&
         !req.body.eligibleCustomers.startsWith("[")
           ? req.body.eligibleCustomers
-          : parseJsonField(req.body.eligibleCustomers, campaign.eligibleCustomers);
+          : parseJsonField(
+              req.body.eligibleCustomers,
+              campaign.eligibleCustomers,
+            );
     }
 
     // 3. Primitive Fields Update
@@ -242,7 +315,9 @@ exports.updateCampaign = async (req, res) => {
     if (req.body.maxDiscountAmount !== undefined)
       campaign.maxDiscountAmount = Number(req.body.maxDiscountAmount) || 0;
     if (req.body.usageLimit !== undefined)
-      campaign.usageLimit = req.body.usageLimit ? Number(req.body.usageLimit) : null;
+      campaign.usageLimit = req.body.usageLimit
+        ? Number(req.body.usageLimit)
+        : null;
     if (req.body.perCustomerLimit !== undefined)
       campaign.perCustomerLimit = req.body.perCustomerLimit
         ? Number(req.body.perCustomerLimit)
@@ -271,11 +346,18 @@ exports.getAllCampaigns = async (req, res) => {
       isActive,
       campaignType,
       branchId,
+      includeExpired,
       page = 1,
       limit = 20,
     } = req.query;
 
     const query = {};
+     const now = new Date();
+
+    // 1. Filter out expired deals by default (unless includeExpired=true is passed)
+    if (includeExpired !== "true") {
+      query.endDate = { $gte: now };
+    }
 
     if (search) {
       query.$or = [
@@ -485,7 +567,7 @@ exports.getCampaignById = async (req, res) => {
 
 //     // 2. Safe Banner Image Upload
 //     let campaignBanner = "";
-    
+
 //     // Agar helper function handleImageUploads available ho:
 //     if (typeof handleImageUploads === "function") {
 //       const uploadedImages = await handleImageUploads(req, "campaignBanner", "campaigns");
@@ -505,8 +587,6 @@ exports.getCampaignById = async (req, res) => {
 //         campaignBanner = req.body.campaignBanner;
 //       }
 //     }
-
-    
 
 //     updateFields.forEach((field) => {
 //       if (req.body[field] !== undefined) {
