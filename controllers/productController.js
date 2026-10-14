@@ -51,26 +51,26 @@ const applyUniversalDealToProduct = (productObj, activePromos = []) => {
   vendorPromos.forEach((promo) => {
     const appliesTo = promo.appliesTo || "all_items";
 
-    // A. Specific Product Match
-    if (appliesTo === "specific_items") {
-      const itemsList = promo.applicableProducts || promo.applicableItems || [];
-      const isMatched = itemsList.some((item) => {
-        const itemId = item._id ? item._id.toString() : item.toString();
-        return itemId === prodIdStr;
-      });
-      if (isMatched) itemSpecificPromos.push(promo);
-    }
-    // B. Category Match
-    else if (appliesTo === "category") {
-      const catList = promo.applicableCategories || [];
-      const isMatched = catList.some((cat) => {
-        const catNameOrId = (cat.name || cat.categoryName || cat).toString().toLowerCase();
-        return catNameOrId === prodCatStr;
-      });
-      if (isMatched) categoryPromos.push(promo);
-    }
+    // // A. Specific Product Match
+    // if (appliesTo === "specific_items") {
+    //   const itemsList = promo.applicableProducts || promo.applicableItems || [];
+    //   const isMatched = itemsList.some((item) => {
+    //     const itemId = item._id ? item._id.toString() : item.toString();
+    //     return itemId === prodIdStr;
+    //   });
+    //   if (isMatched) itemSpecificPromos.push(promo);
+    // }
+    // // B. Category Match
+    // else if (appliesTo === "category") {
+    //   const catList = promo.applicableCategories || [];
+    //   const isMatched = catList.some((cat) => {
+    //     const catNameOrId = (cat.name || cat.categoryName || cat).toString().toLowerCase();
+    //     return catNameOrId === prodCatStr;
+    //   });
+    //   if (isMatched) categoryPromos.push(promo);
+    // }
     // C. Storewide Match
-    else if (appliesTo === "all_items") {
+     if (appliesTo === "all_items") {
       storeWidePromos.push(promo);
     }
   });
@@ -935,6 +935,7 @@ exports.getProductsByCategory = async (req, res) => {
 
       Deal.find({
         isActive: true,
+        appliesTo: "all_items",
         $or: [
           { startDate: { $lte: now }, endDate: {$gte: now } },
           { startDateTime: { $lte: now }, endDateTime: {$gte: now } },
@@ -943,6 +944,7 @@ exports.getProductsByCategory = async (req, res) => {
 
       Campaign.find({
         isActive: true,
+        appliesTo: "all_items",
         $or: [
           { startDate: { $lte: now }, endDate: {$gte: now } },
           { startDateTime: { $lte: now }, endDateTime: {$gte: now } },
@@ -969,6 +971,7 @@ exports.getProductsByCategory = async (req, res) => {
         price: product.price,
         discountPrice: dealData.hasActiveDeal == true ? dealData.discountPrice : product.discountPrice || 0,
         hasActiveDeal: dealData.hasActiveDeal,
+        dealAppliesTo: dealData.appliesTo,
         tag: dealData.tag,
         category: product.category,
         subcategory: product.subcategory,
@@ -1024,6 +1027,7 @@ exports.getProductsByType = async (req, res) => {
     const [activeDeals, activeCampaigns] = await Promise.all([
       Deal.find({
         isActive: true,
+        appliesTo: "all_items",
         $or: [
           { startDate: { $lte: now }, endDate: {$gte: now } },
           { startDateTime: { $lte: now }, endDateTime: {$gte: now } },
@@ -1032,6 +1036,7 @@ exports.getProductsByType = async (req, res) => {
 
       Campaign.find({
         isActive: true,
+        appliesTo: "all_items",
         $or: [
           { startDate: { $lte: now }, endDate: {$gte: now } },
           { startDateTime: { $lte: now }, endDateTime: {$gte: now } },
@@ -1056,7 +1061,7 @@ exports.getProductsByType = async (req, res) => {
           name: product.name,
           images: product.images || [],
           price: product.price,
-          discountPrice: dealData.hasActiveDeal == true ? dealData.discountPrice : product.discountPrice || 0,
+          discountPrice: dealData.hasActiveDeal == true ? dealData.discountPrice : product.discountPrice || 0, 
           hasActiveDeal: dealData.hasActiveDeal,
           tag: dealData.tag,
           rating: product.rating,
@@ -1206,10 +1211,70 @@ exports.getProductsByVendorCategories = async (req, res) => {
       .select("name images price description category")
       .lean();
 
+       const vendorIds = products.map((p) => p.vendorId).filter(Boolean);
+
+    // 2. Fetch Vendors & ALL Active Deals/Campaigns
+    const [vendors, activeDeals, activeCampaigns] = await Promise.all([
+      Vendor.find({ _id: { $in: vendorIds } }).select("_id businessName logo"),
+
+      Deal.find({
+        isActive: true,
+        appliesTo: "all_items",
+        $or: [
+          { startDate: { $lte: now }, endDate: {$gte: now } },
+          { startDateTime: { $lte: now }, endDateTime: {$gte: now } },
+        ],
+      }).lean(),
+
+      Campaign.find({
+        isActive: true,
+        appliesTo: "all_items",
+        $or: [
+          { startDate: { $lte: now }, endDate: {$gte: now } },
+          { startDateTime: { $lte: now }, endDateTime: {$gte: now } },
+        ],
+      }).lean(),
+    ]);
+
+    const activePromos = [...activeDeals, ...activeCampaigns];
+    const vendorMap = new Map(vendors.map((r) => [r._id.toString(), r]));
+
+    // 3. Map products with Universal Deal Calculations
+    const productsWithVendor = products.map((productDoc) => {
+      const product = productDoc.toObject();
+      const vendor = product.vendorId
+        ? vendorMap.get(product.vendorId.toString())
+        : null;
+
+      const dealData = applyUniversalDealToProduct(product, activePromos);
+
+      return {
+        _id: product._id,
+        name: product.name,
+        images: product.images || [],
+        price: product.price,
+        discountPrice: dealData.hasActiveDeal == true ? dealData.discountPrice : product.discountPrice || 0,
+        hasActiveDeal: dealData.hasActiveDeal,
+        tag: dealData.tag,
+        category: product.category,
+        subcategory: product.subcategory,
+        rating: product.rating,
+        isAvailable: product.isAvailable,
+        isFavourite: Boolean(product.isFavourite),
+        vendor: vendor
+          ? {
+              _id: vendor._id,
+              name: vendor.businessName,
+              logo: vendor.logo,
+            }
+          : null,
+      };
+    });
+
     return res.status(200).json({
       success: true,
-      count: products.length,
-      products,
+      count: productsWithVendor.length,
+      products: productsWithVendor,
     });
   } catch (err) {
     console.error("GET PRODUCTS ERROR:", err);
@@ -1371,10 +1436,71 @@ exports.getProductsByVendorSubcategories = async (req, res) => {
       "name images price discountPrice description rating isAvailable subcategory category vendorId chefId",
     );
 
+
+     const vendorIds = products.map((p) => p.vendorId).filter(Boolean);
+
+    // 2. Fetch Vendors & ALL Active Deals/Campaigns
+    const [vendors, activeDeals, activeCampaigns] = await Promise.all([
+      Vendor.find({ _id: { $in: vendorIds } }).select("_id businessName logo"),
+
+      Deal.find({
+        isActive: true,
+        appliesTo: "all_items",
+        $or: [
+          { startDate: { $lte: now }, endDate: {$gte: now } },
+          { startDateTime: { $lte: now }, endDateTime: {$gte: now } },
+        ],
+      }).lean(),
+
+      Campaign.find({
+        isActive: true,
+        appliesTo: "all_items",
+        $or: [
+          { startDate: { $lte: now }, endDate: {$gte: now } },
+          { startDateTime: { $lte: now }, endDateTime: {$gte: now } },
+        ],
+      }).lean(),
+    ]);
+
+    const activePromos = [...activeDeals, ...activeCampaigns];
+    const vendorMap = new Map(vendors.map((r) => [r._id.toString(), r]));
+
+    // 3. Map products with Universal Deal Calculations
+    const productsWithVendor = products.map((productDoc) => {
+      const product = productDoc.toObject();
+      const vendor = product.vendorId
+        ? vendorMap.get(product.vendorId.toString())
+        : null;
+
+      const dealData = applyUniversalDealToProduct(product, activePromos);
+
+      return {
+        _id: product._id,
+        name: product.name,
+        images: product.images || [],
+        price: product.price,
+        discountPrice: dealData.hasActiveDeal == true ? dealData.discountPrice : product.discountPrice || 0,
+        hasActiveDeal: dealData.hasActiveDeal,
+        tag: dealData.tag,
+        category: product.category,
+        subcategory: product.subcategory,
+        rating: product.rating,
+        isAvailable: product.isAvailable,
+        isFavourite: Boolean(product.isFavourite),
+        vendor: vendor
+          ? {
+              _id: vendor._id,
+              name: vendor.businessName,
+              logo: vendor.logo,
+            }
+          : null,
+      };
+    });
+
     return res.status(200).json({
       success: true,
-      count: products.length,
-      products,
+      count: productsWithVendor.length,
+      products: productsWithVendor,
     });
   } catch (err) {
     console.log("GET PRODUCTS ERROR:", err);
@@ -1418,10 +1544,72 @@ exports.getProductsByVendorTypes = async (req, res) => {
       "name images price description",
     );
 
+
+     const vendorIds = products.map((p) => p.vendorId).filter(Boolean);
+
+    // 2. Fetch Vendors & ALL Active Deals/Campaigns
+    const [vendors, activeDeals, activeCampaigns] = await Promise.all([
+      Vendor.find({ _id: { $in: vendorIds } }).select("_id businessName logo"),
+
+      Deal.find({
+        isActive: true,
+        appliesTo: "all_items",
+        $or: [
+          { startDate: { $lte: now }, endDate: {$gte: now } },
+          { startDateTime: { $lte: now }, endDateTime: {$gte: now } },
+        ],
+      }).lean(),
+
+      Campaign.find({
+        isActive: true,
+        appliesTo: "all_items",
+        $or: [
+          { startDate: { $lte: now }, endDate: {$gte: now } },
+          { startDateTime: { $lte: now }, endDateTime: {$gte: now } },
+        ],
+      }).lean(),
+    ]);
+
+    const activePromos = [...activeDeals, ...activeCampaigns];
+    const vendorMap = new Map(vendors.map((r) => [r._id.toString(), r]));
+
+    // 3. Map products with Universal Deal Calculations
+    const productsWithVendor = products.map((productDoc) => {
+      const product = productDoc.toObject();
+      const vendor = product.vendorId
+        ? vendorMap.get(product.vendorId.toString())
+        : null;
+
+      const dealData = applyUniversalDealToProduct(product, activePromos);
+
+      return {
+        _id: product._id,
+        name: product.name,
+        images: product.images || [],
+        price: product.price,
+        discountPrice: dealData.hasActiveDeal == true ? dealData.discountPrice : product.discountPrice || 0,
+        hasActiveDeal: dealData.hasActiveDeal,
+        tag: dealData.tag,
+        category: product.category,
+        subcategory: product.subcategory,
+        rating: product.rating,
+        isAvailable: product.isAvailable,
+        isFavourite: Boolean(product.isFavourite),
+        vendor: vendor
+          ? {
+              _id: vendor._id,
+              name: vendor.businessName,
+              logo: vendor.logo,
+            }
+          : null,
+      };
+    });
+
+    
     return res.status(200).json({
       success: true,
-      count: products.length,
-      products,
+     count: productsWithVendor.length,
+      products: productsWithVendor,
     });
   } catch (err) {
     console.log("GET PRODUCTS ERROR:", err);
@@ -1481,27 +1669,76 @@ exports.getProductsByHomeChefTypes = async (req, res) => {
 };
 
 // =====================================
-// GET SINGLE PRODUCT
+// GET SINGLE PRODUCT BY ID
 // =====================================
 exports.getProductById = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id).populate(
-      "vendorId",
-      "businessName logo status commissionRate",
-    );
+    const productDoc = await Product.findById(req.params.id)
+      .populate("vendorId", "businessName logo status commissionRate")
+      .lean();
 
-    if (!product) {
+    if (!productDoc) {
       return res.status(404).json({
         success: false,
         message: "Product not found",
       });
     }
 
+    const now = new Date();
+    const vendorId = productDoc.vendorId?._id || productDoc.vendorId;
+
+    // 1. Fetch Active Deals/Campaigns
+    const [activeDeals, activeCampaigns] = await Promise.all([
+      Deal.find({
+        isActive: true,
+        appliesTo: "all_items",
+        $or: [
+          { startDate: { $lte: now }, endDate: { $gte: now } },
+          { startDateTime: { $lte: now }, endDateTime: { $gte: now } },
+        ],
+      }).lean(),
+
+      Campaign.find({
+        isActive: true,
+        appliesTo: "all_items",
+        $or: [
+          { startDate: { $lte: now }, endDate: { $gte: now } },
+          { startDateTime: { $lte: now }, endDateTime: { $gte: now } },
+        ],
+      }).lean(),
+    ]);
+
+    const activePromos = [...activeDeals, ...activeCampaigns];
+    const dealData = applyUniversalDealToProduct(productDoc, activePromos);
+
+    const formattedProduct = {
+      _id: productDoc._id,
+      name: productDoc.name,
+      images: productDoc.images || [],
+      price: productDoc.price,
+      discountPrice: dealData.hasActiveDeal === true ? dealData.discountPrice : productDoc.discountPrice || 0,
+      hasActiveDeal: dealData.hasActiveDeal,
+      tag: dealData.tag,
+      category: productDoc.category,
+      subcategory: productDoc.subcategory,
+      rating: productDoc.rating,
+      isAvailable: productDoc.isAvailable,
+      isFavourite: Boolean(productDoc.isFavourite),
+      vendor: productDoc.vendorId
+        ? {
+            _id: productDoc.vendorId._id,
+            name: productDoc.vendorId.businessName,
+            logo: productDoc.vendorId.logo,
+          }
+        : null,
+    };
+
     return res.status(200).json({
       success: true,
-      product,
+      data: formattedProduct,
     });
   } catch (err) {
+    console.error("GET PRODUCT BY ID ERROR:", err);
     return res.status(500).json({
       success: false,
       message: err.message,
@@ -1509,27 +1746,82 @@ exports.getProductById = async (req, res) => {
   }
 };
 
+
 // =====================================
-// GET PRODUCT DETAILS
+// GET PRODUCT DETAILS (With variations & addOns)
 // =====================================
 exports.getProductDetails = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id).select(
-      "name images description rating price discountPrice addOns variations isAvailable belongsTo isFavourite",
-    );
+    const productDoc = await Product.findById(req.params.id)
+      .select("name images description rating price discountPrice addOns variations isAvailable belongsTo isFavourite vendorId")
+      .populate("vendorId", "businessName logo status commissionRate")
+      .lean();
 
-    if (!product) {
+    if (!productDoc) {
       return res.status(404).json({
         success: false,
         message: "Product not found",
       });
     }
 
+    const now = new Date();
+
+    // 1. Fetch Active Deals/Campaigns
+    const [activeDeals, activeCampaigns] = await Promise.all([
+      Deal.find({
+        isActive: true,
+        appliesTo: "all_items",
+        $or: [
+          { startDate: { $lte: now }, endDate: { $gte: now } },
+          { startDateTime: { $lte: now }, endDateTime: { $gte: now } },
+        ],
+      }).lean(),
+
+      Campaign.find({
+        isActive: true,
+        appliesTo: "all_items",
+        $or: [
+          { startDate: { $lte: now }, endDate: { $gte: now } },
+          { startDateTime: { $lte: now }, endDateTime: { $gte: now } },
+        ],
+      }).lean(),
+    ]);
+
+    const activePromos = [...activeDeals, ...activeCampaigns];
+    const dealData = applyUniversalDealToProduct(productDoc, activePromos);
+
+    const formattedProduct = {
+      _id: productDoc._id,
+      name: productDoc.name,
+      description: productDoc.description || "",
+      images: productDoc.images || [],
+      price: productDoc.price,
+      discountPrice: dealData.hasActiveDeal === true ? dealData.discountPrice : productDoc.discountPrice || 0,
+      hasActiveDeal: dealData.hasActiveDeal,
+      tag: dealData.tag,
+      category: productDoc.category,
+      subcategory: productDoc.subcategory,
+      rating: productDoc.rating,
+      isAvailable: productDoc.isAvailable,
+      isFavourite: Boolean(productDoc.isFavourite),
+      addOns: productDoc.addOns || [],       // Required for Product Details screen
+      variations: productDoc.variations || [], // Required for Product Details screen
+      vendor: productDoc.vendorId
+        ? {
+            _id: productDoc.vendorId._id,
+            name: productDoc.vendorId.businessName,
+            logo: productDoc.vendorId.logo,
+            status: productDoc.vendorId.status,
+          }
+        : null,
+    };
+
     return res.status(200).json({
       success: true,
-      product,
+      data: formattedProduct,
     });
   } catch (err) {
+    console.error("GET PRODUCT DETAILS ERROR:", err);
     return res.status(500).json({
       success: false,
       message: err.message,

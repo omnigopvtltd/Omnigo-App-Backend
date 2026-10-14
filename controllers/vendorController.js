@@ -1736,14 +1736,13 @@ exports.updateVendorProfile = async (req, res) => {
         typeof branchData === "string" ? JSON.parse(branchData) : branchData;
       parsedBranches = Array.isArray(rawData) ? rawData : [rawData];
     }
-console.log("Parsed Branches:", parsedBranches);
+    console.log("Parsed Branches:", parsedBranches);
     let updatedBranches = [];
 
     if (parsedBranches.length > 0) {
       updatedBranches = await Promise.all(
         parsedBranches.map(async (branch) => {
-          const targetBranchName =
-            branch.branchName;
+          const targetBranchName = branch.branchName;
           const targetBranchPhone = branch.phone || vendor.businessPhone;
           const branchOpeningHours =
             formatOpeningHours(branch.openingHours || branch.storeHours) ||
@@ -2051,14 +2050,13 @@ exports.updateVendor = async (req, res) => {
         typeof branchData === "string" ? JSON.parse(branchData) : branchData;
       parsedBranches = Array.isArray(rawData) ? rawData : [rawData];
     }
-console.log("Parsed Branches:", parsedBranches);
+    console.log("Parsed Branches:", parsedBranches);
     let updatedBranches = [];
 
     if (parsedBranches.length > 0) {
       updatedBranches = await Promise.all(
         parsedBranches.map(async (branch) => {
-          const targetBranchName =
-            branch.branchName;
+          const targetBranchName = branch.branchName;
           const targetBranchPhone = branch.phone || vendor.businessPhone;
           const branchOpeningHours =
             formatOpeningHours(branch.openingHours || branch.storeHours) ||
@@ -2752,7 +2750,7 @@ exports.getVendorPerformance = async (req, res) => {
 
     // Helper pipeline stage for vendor order aggregation
     const getVendorOrdersPipeline = (startDate, endDate) => [
-      { $match: { createdAt: { $gte: startDate,$lte: endDate } } },
+      { $match: { createdAt: { $gte: startDate, $lte: endDate } } },
       { $unwind: "$items" },
       {
         $lookup: {
@@ -2762,7 +2760,9 @@ exports.getVendorPerformance = async (req, res) => {
           as: "productDetails",
         },
       },
-      { $unwind: { path: "$productDetails", preserveNullAndEmptyArrays: true } },
+      {
+        $unwind: { path: "$productDetails", preserveNullAndEmptyArrays: true },
+      },
       {
         $match: {
           status: { $ne: "cancelled" },
@@ -2793,7 +2793,7 @@ exports.getVendorPerformance = async (req, res) => {
             _id: null,
             totalOrdersCount: { $sum: 1 },
             totalRevenue: {
-              $sum: {$ifNull: ["$totalAmount", "$subtotal", 0] },
+              $sum: { $ifNull: ["$totalAmount", "$subtotal", 0] },
             },
           },
         },
@@ -2805,7 +2805,7 @@ exports.getVendorPerformance = async (req, res) => {
             _id: null,
             totalOrdersCount: { $sum: 1 },
             totalRevenue: {
-              $sum: {$ifNull: ["$totalAmount", "$subtotal", 0] },
+              $sum: { $ifNull: ["$totalAmount", "$subtotal", 0] },
             },
           },
         },
@@ -2822,7 +2822,10 @@ exports.getVendorPerformance = async (req, res) => {
       return parseFloat(growth.toFixed(1));
     };
 
-    const ordersGrowth = calculateGrowth(curr.totalOrdersCount, prev.totalOrdersCount);
+    const ordersGrowth = calculateGrowth(
+      curr.totalOrdersCount,
+      prev.totalOrdersCount,
+    );
     const revenueGrowth = calculateGrowth(curr.totalRevenue, prev.totalRevenue);
 
     // 4. Generate Dynamic Chart Data (Handles Daily, Weekly, Monthly, Yearly)
@@ -2835,7 +2838,7 @@ exports.getVendorPerformance = async (req, res) => {
         {
           $group: {
             _id: { $hour: "$createdAt" },
-            totalSales: { $sum: {$ifNull: ["$totalAmount", "$subtotal", 0] } },
+            totalSales: { $sum: { $ifNull: ["$totalAmount", "$subtotal", 0] } },
           },
         },
       ]);
@@ -2844,7 +2847,7 @@ exports.getVendorPerformance = async (req, res) => {
       const hoursList = [0, 4, 8, 12, 16, 20];
       chartDataFormatted = hoursList.map((hr) => {
         const found = rawChartData.filter(
-          (item) => item._id >= hr && item._id < hr + 4
+          (item) => item._id >= hr && item._id < hr + 4,
         );
         const sales = found.reduce((sum, item) => sum + item.totalSales, 0);
         const label = `${String(hr).padStart(2, "0")}:00`;
@@ -2857,7 +2860,7 @@ exports.getVendorPerformance = async (req, res) => {
         {
           $group: {
             _id: { $dayOfWeek: "$createdAt" }, // 1=Sun, 2=Mon...
-            totalSales: { $sum: {$ifNull: ["$totalAmount", "$subtotal", 0] } },
+            totalSales: { $sum: { $ifNull: ["$totalAmount", "$subtotal", 0] } },
           },
         },
       ]);
@@ -2875,10 +2878,10 @@ exports.getVendorPerformance = async (req, res) => {
       const daysOrder = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
       chartDataFormatted = daysOrder.map((dayName) => {
         const dbDayIndex = Object.keys(daysLookup).find(
-          (key) => daysLookup[key] === dayName
+          (key) => daysLookup[key] === dayName,
         );
         const found = rawChartData.find(
-          (item) => item._id === Number(dbDayIndex)
+          (item) => item._id === Number(dbDayIndex),
         );
         return {
           day: dayName,
@@ -2889,7 +2892,7 @@ exports.getVendorPerformance = async (req, res) => {
 
     const totalSalesForPeriod = chartDataFormatted.reduce(
       (sum, item) => sum + item.sales,
-      0
+      0,
     );
 
     // 5. Final API Output
@@ -3220,7 +3223,9 @@ exports.vendorMenu = async (req, res) => {
       // Group Active Campaigns
       Campaign.aggregate([
         { $match: { vendorId: vendorObjectId, isActive: true } },
-        { $sort: { createdAt: -1 } }, {$group: {
+        { $sort: { createdAt: -1 } },
+        {
+          $group: {
             _id: "$campaignType",
             items: {
               $push: {
@@ -3231,6 +3236,9 @@ exports.vendorMenu = async (req, res) => {
                 campaignType: "$campaignType",
                 price: "$offerDetails.dealPrice",
                 discountValue: "$offerDetails.discountValue",
+                appliesTo: "$offerDetails.appliesTo",
+                offerType: "$offerDetails.offerType",
+                discountType: "$offerDetails.discountType",
               },
             },
           },
@@ -3241,7 +3249,9 @@ exports.vendorMenu = async (req, res) => {
       // Group Active Deals
       Deal.aggregate([
         { $match: { vendorId: vendorObjectId, isActive: true } },
-        { $sort: { isFeatured: -1, createdAt: -1 } }, {$group: {
+        { $sort: { isFeatured: -1, createdAt: -1 } },
+        {
+          $group: {
             _id: "$dealType",
             items: {
               $push: {
@@ -3250,6 +3260,10 @@ exports.vendorMenu = async (req, res) => {
                 image: "$dealBanner",
                 price: "$offerDetails.dealPrice",
                 dealType: "$dealType",
+                discountValue: "$offerDetails.discountValue",
+                appliesTo: "$offerDetails.appliesTo",
+                offerType: "$offerDetails.offerType",
+                discountType: "$offerDetails.discountType",
               },
             },
           },
@@ -3353,18 +3367,30 @@ exports.vendorMenu = async (req, res) => {
 
       if (activeStorewideDeal && maxDiscountPercent > 0) {
         const offer = activeStorewideDeal.offerDetails || {};
-        const discountType = offer.discountType || activeStorewideDeal.discountType || "percentage";
+        const discountType =
+          offer.discountType ||
+          activeStorewideDeal.discountType ||
+          "percentage";
         const maxCap = Number(offer.maxDiscountAmount || 0);
 
         if (discountType === "percentage") {
           let calculatedDiscount = (product.price * maxDiscountPercent) / 100;
-          if (maxCap > 0) calculatedDiscount = Math.min(calculatedDiscount, maxCap);
+          if (maxCap > 0)
+            calculatedDiscount = Math.min(calculatedDiscount, maxCap);
 
-          discountPrice = Math.max(0, Math.round(product.price - calculatedDiscount));
+          discountPrice = Math.max(
+            0,
+            Math.round(product.price - calculatedDiscount),
+          );
           tag = `${maxDiscountPercent}% OFF`;
           hasActiveDeal = true;
-        } else if (discountType === "fixed_amount" || discountType === "fixed") {
-          const fixVal = Number(offer.discountValue || activeStorewideDeal.discountValue || 0);
+        } else if (
+          discountType === "fixed_amount" ||
+          discountType === "fixed"
+        ) {
+          const fixVal = Number(
+            offer.discountValue || activeStorewideDeal.discountValue || 0,
+          );
           if (fixVal > 0) {
             discountPrice = Math.max(0, product.price - fixVal);
             tag = `Rs. ${fixVal} OFF`;
@@ -3397,13 +3423,14 @@ exports.vendorMenu = async (req, res) => {
 
     const productTypeMap = {};
     productsByType.forEach(
-      (p) => (productTypeMap[p._id] = p.items.map(applyStorewideDeal))
+      (p) => (productTypeMap[p._id] = p.items.map(applyStorewideDeal)),
     );
 
     const categoryProductMap = {};
     productsByCategory.forEach((c) => {
       if (c._id) {
-        categoryProductMap[c._id.toString()] = c.products.map(applyStorewideDeal);
+        categoryProductMap[c._id.toString()] =
+          c.products.map(applyStorewideDeal);
       }
     });
 
@@ -3473,7 +3500,8 @@ exports.vendorMenu = async (req, res) => {
 
     if (storeCategories.length > 0) {
       storeCategories.forEach((cat) => {
-        const catName = typeof cat === "string" ? cat : cat.categoryName || cat.name;
+        const catName =
+          typeof cat === "string" ? cat : cat.categoryName || cat.name;
         if (catName) {
           addedCategories.add(catName.toString());
           categoriesResponse.push({
@@ -3508,7 +3536,8 @@ exports.vendorMenu = async (req, res) => {
       message: err.message,
     });
   }
-};``
+};
+``;
 
 exports.vendorMenuProducts = async (req, res) => {
   try {
@@ -3869,7 +3898,7 @@ exports.toggleAvailability = async (req, res) => {
         updatedBranch.isOpen ? "activated" : "deactivated"
       }`,
       vendor: {
-        vendorId : vendorId.toString(),
+        vendorId: vendorId.toString(),
         businessName: vendor.businessName,
         isOpen: Boolean(updatedBranch.isOpen),
         // isActive: vendor.isActive,
