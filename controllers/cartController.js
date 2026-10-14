@@ -309,7 +309,7 @@ exports.addToCart = async (req, res) => {
       }, 0);
 
       // Single Unit Base Price = Item Base + Variation Extra Cost
-      const singleItemPriceWithVariations = unitPrice + variationsUnitSum;
+      const singleItemPriceWithVariations = variationsUnitSum === 0 ? unitPrice : variationsUnitSum;
 
       // Check if exact same item exists in user cart
       const existingIndex = cart.items.findIndex((item) => {
@@ -343,7 +343,7 @@ exports.addToCart = async (req, res) => {
 
         // Final Line Total = (Item Unit Price + Variations + AddOns) * Total Quantity
         existingItem.total =
-          (Number(existingItem.price || unitPrice) + currentVarSum + currentAddOnsSum) *
+          (Number(currentVarSum || existingItem.price || unitPrice) + currentAddOnsSum) *
           existingItem.quantity;
       } else {
         // PUSH NEW CART ITEM
