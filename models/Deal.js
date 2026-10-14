@@ -107,8 +107,26 @@ const dealSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: "Product",
           },
-          customItemName: { type: String, default: "" }, // E.g. "Crown Large Pizza" or "1.5 Ltr Drink"
+          customItemName: { type: String, default: "" }, // E.g. "Crown Pizza (Large)"
           quantity: { type: Number, default: 1 },
+
+          // Targeted Variation (e.g., Size -> Large)
+          allowedVariations: [
+            {
+              title: { type: String }, // e.g., "Size"
+              selectedOption: { type: String }, // e.g., "Large"
+              price: { type: Number, default: 0 }, // Additional price if any
+            },
+          ],
+
+          // Allowed/Pre-selected Add-ons (e.g., Extra Cheese)
+          allowedAddOns: [
+            {
+              name: { type: String }, // e.g., "Extra Cheese"
+              price: { type: Number, default: 0 },
+              isMandatory: { type: Boolean, default: false }, // Optional ya Required
+            },
+          ],
         },
       ],
 

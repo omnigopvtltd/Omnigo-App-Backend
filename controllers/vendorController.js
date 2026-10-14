@@ -2459,11 +2459,11 @@ exports.getVendorDashboardOverview = async (req, res) => {
     // 2. Vendor Branch Info
     let vendorBranch = await VendorBranch.findOne({
       vendorId: vendorObjectId,
-    }).select("isRushMode openingHours");
+    }).select("isRushMode isOpen openingHours");
 
     if (!vendorBranch) {
       vendorBranch = await VendorBranch.findById(vendorId).select(
-        "isRushMode openingHours",
+        "isRushMode isOpen openingHours",
       );
     }
 
@@ -2660,6 +2660,7 @@ exports.getVendorDashboardOverview = async (req, res) => {
           logo: vendor.logo || "",
           timings: { openTime, closeTime },
           isRushMode: vendorBranch ? Boolean(vendorBranch.isRushMode) : false,
+          isOpen: vendorBranch ? Boolean(vendorBranch.isOpen) : false,
           rating: vendor.rating?.average || 0.0,
           totalRatingsCount: vendor.rating?.count || 0,
         },
@@ -3853,7 +3854,7 @@ exports.toggleAvailability = async (req, res) => {
       io.to(`vendor:${vendorId}`).emit("rushModeToggled", {
         vendorId,
         isOpen: updatedBranch.isOpen,
-        message: `Rush mode is now ${updatedBranch.isOpen ? "ENABLED" : "DISABLED"}`,
+        message: `Vendor is now ${updatedBranch.isOpen ? "OPEN" : "CLOSED"}`,
       });
 
       io.to(`vendorCatalog:${vendorId}`).emit("vendorRushModeUpdated", {
@@ -3864,7 +3865,7 @@ exports.toggleAvailability = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: `Rush mode successfully ${
+      message: `Vendor availability successfully ${
         updatedBranch.isOpen ? "activated" : "deactivated"
       }`,
       vendor: {
@@ -3875,7 +3876,7 @@ exports.toggleAvailability = async (req, res) => {
       },
     });
   } catch (err) {
-    console.error("TOGGLE RUSH MODE ERROR:", err);
+    console.error("TOGGLE VENDOR AVAILABILITY ERROR:", err);
     return res.status(500).json({
       success: false,
       message: err.message,

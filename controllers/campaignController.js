@@ -46,6 +46,7 @@ const getUploadedBanner = async (req) => {
 };
 
 // ================= CREATE CAMPAIGN =================
+// ================= CREATE CAMPAIGN =================
 exports.createCampaign = async (req, res) => {
   try {
     const vendorId = req.vendor?._id || req.user?._id || req.body.vendorId;
@@ -61,25 +62,71 @@ exports.createCampaign = async (req, res) => {
     // 1. Process Image
     const bannerImage = await getUploadedBanner(req);
 
-    // 2. Format Body Data
+    // 2. Safely Parse offerDetails
+    let rawOfferDetails = parseJsonField(req.body.offerDetails, {});
+
+    // 3. Deep Sanitize itemsIncluded (Preserves variations & add-ons)
+    const sanitizedItemsIncluded = Array.isArray(rawOfferDetails.itemsIncluded)
+      ? rawOfferDetails.itemsIncluded.map((item) => ({
+          product: item.product || item.productId || null,
+          customItemName: item.customItemName || "",
+          quantity: Number(item.quantity) || 1,
+          allowedVariations: Array.isArray(item.allowedVariations)
+            ? item.allowedVariations.map((v) => ({
+                title: v.title || "",
+                selectedOption: v.selectedOption || v.name || "",
+                price: Number(v.price) || 0,
+              }))
+            : [],
+          allowedAddOns: Array.isArray(item.allowedAddOns)
+            ? item.allowedAddOns.map((a) => ({
+                name: a.name || "",
+                price: Number(a.price) || 0,
+                isMandatory:
+                  a.isMandatory !== undefined
+                    ? String(a.isMandatory) === "true"
+                    : false,
+              }))
+            : [],
+        }))
+      : [];
+
+    const formattedOfferDetails = {
+      ...rawOfferDetails,
+      itemsIncluded: sanitizedItemsIncluded,
+      discountValue: Number(rawOfferDetails.discountValue) || 0,
+      originalPrice: Number(rawOfferDetails.originalPrice) || 0,
+      dealPrice: Number(rawOfferDetails.dealPrice) || 0,
+      buyQuantity: Number(rawOfferDetails.buyQuantity) || 1,
+      getQuantity: Number(rawOfferDetails.getQuantity) || 1,
+      maxDeliveryDiscount: Number(rawOfferDetails.maxDeliveryDiscount) || 0,
+    };
+
+    // 4. Format Body Data
     const campaignData = {
       ...req.body,
       vendorId,
       branchId: req.body.branchId || null,
       campaignType: campaignType.toLowerCase(),
-      campaignBanner: bannerImage,
-      offerDetails: parseJsonField(req.body.offerDetails, {}),
+      campaignBanner: bannerImage || req.body.campaignBanner || "",
+      offerDetails: formattedOfferDetails,
       applicableCategories: parseObjectIdArray(req.body.applicableCategories),
       applicableProducts: parseObjectIdArray(req.body.applicableProducts),
-      // Agar string hai toh string rakhein (e.g., "all"), warna parse karein
-      eligibleCustomers: typeof req.body.eligibleCustomers === "string" && !req.body.eligibleCustomers.startsWith("[")
-        ? req.body.eligibleCustomers
-        : parseJsonField(req.body.eligibleCustomers, "all"),
+      eligibleCustomers:
+        typeof req.body.eligibleCustomers === "string" &&
+        !req.body.eligibleCustomers.startsWith("[")
+          ? req.body.eligibleCustomers
+          : parseJsonField(req.body.eligibleCustomers, "all"),
       minOrderAmount: Number(req.body.minOrderAmount) || 0,
       maxDiscountAmount: Number(req.body.maxDiscountAmount) || 0,
       usageLimit: req.body.usageLimit ? Number(req.body.usageLimit) : null,
-      perCustomerLimit: req.body.perCustomerLimit ? Number(req.body.perCustomerLimit) : null,
-      isActive: req.body.isActive !== undefined ? String(req.body.isActive) === "true" : true,
+      perCustomerLimit: req.body.perCustomerLimit
+        ? Number(req.body.perCustomerLimit)
+        : null,
+      isActive:
+        req.body.isActive !== undefined
+          ? String(req.body.isActive) === "true"
+          : true,
     };
 
     const campaign = await Campaign.create(campaignData);
@@ -107,10 +154,58 @@ exports.updateCampaign = async (req, res) => {
     const bannerImage = await getUploadedBanner(req);
     if (bannerImage) campaign.campaignBanner = bannerImage;
 
-    // 2. Complex & JSON Fields
+    // 2. Complex & JSON Fields (With itemsIncluded & variations/addOns support)
     if (req.body.offerDetails !== undefined) {
-      campaign.offerDetails = parseJsonField(req.body.offerDetails, campaign.offerDetails);
+      const incomingOfferDetails = parseJsonField(
+        req.body.offerDetails,
+        campaign.offerDetails || {}
+      );
+
+      const updatedOfferDetails = {
+        ...(campaign.offerDetails ? campaign.offerDetails.toObject() : {}),
+        ...incomingOfferDetails,
+      };
+
+      if (incomingOfferDetails.itemsIncluded !== undefined) {
+        const rawItems = Array.isArray(incomingOfferDetails.itemsIncluded)
+          ? incomingOfferDetails.itemsIncluded
+          : [];
+
+        updatedOfferDetails.itemsIncluded = rawItems.map((item) => ({
+          product: item.product || item.productId || null,
+          customItemName: item.customItemName || "",
+          quantity: Number(item.quantity) || 1,
+          allowedVariations: Array.isArray(item.allowedVariations)
+            ? item.allowedVariations.map((v) => ({
+                title: v.title || "",
+                selectedOption: v.selectedOption || v.name || "",
+                price: Number(v.price) || 0,
+              }))
+            : [],
+          allowedAddOns: Array.isArray(item.allowedAddOns)
+            ? item.allowedAddOns.map((a) => ({
+                name: a.name || "",
+                price: Number(a.price) || 0,
+                isMandatory:
+                  a.isMandatory !== undefined
+                    ? String(a.isMandatory) === "true"
+                    : false,
+              }))
+            : [],
+        }));
+      }
+
+      if (incomingOfferDetails.discountValue !== undefined)
+        updatedOfferDetails.discountValue = Number(incomingOfferDetails.discountValue) || 0;
+      if (incomingOfferDetails.originalPrice !== undefined)
+        updatedOfferDetails.originalPrice = Number(incomingOfferDetails.originalPrice) || 0;
+      if (incomingOfferDetails.dealPrice !== undefined)
+        updatedOfferDetails.dealPrice = Number(incomingOfferDetails.dealPrice) || 0;
+
+      campaign.offerDetails = updatedOfferDetails;
+      campaign.markModified("offerDetails");
     }
+
     if (req.body.applicableCategories !== undefined) {
       campaign.applicableCategories = parseObjectIdArray(req.body.applicableCategories);
     }
@@ -118,9 +213,11 @@ exports.updateCampaign = async (req, res) => {
       campaign.applicableProducts = parseObjectIdArray(req.body.applicableProducts);
     }
     if (req.body.eligibleCustomers !== undefined) {
-      campaign.eligibleCustomers = typeof req.body.eligibleCustomers === "string" && !req.body.eligibleCustomers.startsWith("[")
-        ? req.body.eligibleCustomers
-        : parseJsonField(req.body.eligibleCustomers, campaign.eligibleCustomers);
+      campaign.eligibleCustomers =
+        typeof req.body.eligibleCustomers === "string" &&
+        !req.body.eligibleCustomers.startsWith("[")
+          ? req.body.eligibleCustomers
+          : parseJsonField(req.body.eligibleCustomers, campaign.eligibleCustomers);
     }
 
     // 3. Primitive Fields Update
@@ -140,11 +237,18 @@ exports.updateCampaign = async (req, res) => {
       if (req.body[f] !== undefined) campaign[f] = req.body[f];
     });
 
-    if (req.body.minOrderAmount !== undefined) campaign.minOrderAmount = Number(req.body.minOrderAmount) || 0;
-    if (req.body.maxDiscountAmount !== undefined) campaign.maxDiscountAmount = Number(req.body.maxDiscountAmount) || 0;
-    if (req.body.usageLimit !== undefined) campaign.usageLimit = req.body.usageLimit ? Number(req.body.usageLimit) : null;
-    if (req.body.perCustomerLimit !== undefined) campaign.perCustomerLimit = req.body.perCustomerLimit ? Number(req.body.perCustomerLimit) : null;
-    if (req.body.isActive !== undefined) campaign.isActive = String(req.body.isActive) === "true";
+    if (req.body.minOrderAmount !== undefined)
+      campaign.minOrderAmount = Number(req.body.minOrderAmount) || 0;
+    if (req.body.maxDiscountAmount !== undefined)
+      campaign.maxDiscountAmount = Number(req.body.maxDiscountAmount) || 0;
+    if (req.body.usageLimit !== undefined)
+      campaign.usageLimit = req.body.usageLimit ? Number(req.body.usageLimit) : null;
+    if (req.body.perCustomerLimit !== undefined)
+      campaign.perCustomerLimit = req.body.perCustomerLimit
+        ? Number(req.body.perCustomerLimit)
+        : null;
+    if (req.body.isActive !== undefined)
+      campaign.isActive = String(req.body.isActive) === "true";
 
     await campaign.save();
 
