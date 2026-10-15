@@ -17,6 +17,7 @@ const {
   register,
   updateVendorProfile,
   vendorMenu,
+  vendorsMenu,
   getVendorPerformance,
   getVendorDashboardOverview,
   getVendorProfile,
@@ -43,7 +44,7 @@ const upload = require("../middleware/upload");
 router.get("/", auth, getVendors);
 router.get("/all-vendors", auth, getAllVendors);
 router.get("/dashboard/overview", auth, getVendorDashboardOverview);
-router.get("/vendor-menu", auth, vendorMenu);
+router.get("/vendor-menu", auth, vendorsMenu);
 router.get("/vendor-performance", auth, getVendorPerformance);
 router.get("/vendor-profile", auth, getVendorProfile);
 router.get("/brands", auth, getAllVendorBrands);
@@ -148,7 +149,7 @@ router.patch("/toggle-availability", auth, toggleAvailability);
 router.delete("/delete/:id", auth, role("admin"), deleteVendor);
 
 
-router.get("/vendor-menu/:vendorId", auth, vendorMenu);
+router.get("/vendor-menu/:vendorId", auth, vendorMenus);
 router.get("/vendor-menu-products/:vendorId", auth, vendorMenuProducts);
 router.get("/vendor-branches/:vendorId", auth, getVendorBranchById);
 
