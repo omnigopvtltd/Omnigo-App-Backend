@@ -1,44 +1,3 @@
-// const mongoose = require("mongoose");
-
-// const dealSchema = new mongoose.Schema(
-//   {
-//     title: { type: String, required: true },
-//     description: { type: String },
-//     image: { type: String, required: true },
-//     bannerImage: { type: String, required: true },
-//     vendorId: {
-//       type: mongoose.Schema.Types.ObjectId,
-//       ref: "Vendor",
-//       required: true,
-//     },
-//     items: [
-//       {
-//         productId: {
-//           type: mongoose.Schema.Types.ObjectId,
-//           ref: "Product",
-//         },
-//         name: String,
-//         image: String,
-//         category: String,
-//         price: Number,
-//         quantity: Number,
-//         total: Number,
-//       },
-//     ],
-//     originalPrice: { type: Number, required: true },
-//     discountPrice: { type: Number, required: true },
-//     dealType: { type: String, default: "Daily Deal" }, // Badge tag (e.g. 499/-)
-//     tag: { type: String, default: "Today's Deal" }, // Badge tag (e.g. 499/-)
-//     isActive: { type: Boolean, default: true },
-//     isFeatured: { type: Boolean, default: false },
-//     validFrom: { type: Date, default: Date.now },
-//     validUntil: { type: Date },
-//   },
-//   { timestamps: true },
-// );
-
-// module.exports = mongoose.model("Deal", dealSchema);
-
 const mongoose = require("mongoose");
 
 const dealSchema = new mongoose.Schema(
@@ -144,12 +103,39 @@ const dealSchema = new mongoose.Schema(
       // BOGO Details
       buyQuantity: { type: Number, default: 1 },
       getQuantity: { type: Number, default: 1 },
-      freeItemId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Product",
-        default: null,
-      },
+      // freeItemId: {
+      //   type: mongoose.Schema.Types.ObjectId,
+      //   ref: "Product",
+      //   default: null,
+      // },
 
+      freeItemId: {
+          product: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Product",
+          },
+          customItemName: { type: String, default: "" }, // E.g. "Crown Pizza (Large)"
+          quantity: { type: Number, default: 1 },
+
+          // Targeted Variation (e.g., Size -> Large)
+          allowedVariations: [
+            {
+              title: { type: String }, // e.g., "Size"
+              selectedOption: { type: String }, // e.g., "Large"
+              price: { type: Number, default: 0 }, // Additional price if any
+            },
+          ],
+
+          // Allowed/Pre-selected Add-ons (e.g., Extra Cheese)
+          allowedAddOns: [
+            {
+              name: { type: String }, // e.g., "Extra Cheese"
+              price: { type: Number, default: 0 },
+              isMandatory: { type: Boolean, default: false }, // Optional ya Required
+            },
+          ],
+        },
+        
       // Payment Details
       paymentMethod: {
         type: String,
