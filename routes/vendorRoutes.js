@@ -149,7 +149,7 @@ router.patch("/toggle-availability", auth, toggleAvailability);
 router.delete("/delete/:id", auth, role("admin"), deleteVendor);
 
 
-router.get("/vendor-menu/:vendorId", auth, vendorMenus);
+router.get("/vendor-menu/:vendorId", auth, vendorMenu);
 router.get("/vendor-menu-products/:vendorId", auth, vendorMenuProducts);
 router.get("/vendor-branches/:vendorId", auth, getVendorBranchById);
 
