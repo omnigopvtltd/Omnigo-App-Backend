@@ -1439,6 +1439,8 @@ exports.getProductsByVendorSubcategories = async (req, res) => {
 
      const vendorIds = products.map((p) => p.vendorId).filter(Boolean);
 
+     const now = new Date();
+
     // 2. Fetch Vendors & ALL Active Deals/Campaigns
     const [vendors, activeDeals, activeCampaigns] = await Promise.all([
       Vendor.find({ _id: { $in: vendorIds } }).select("_id businessName logo"),

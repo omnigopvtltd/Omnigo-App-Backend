@@ -40,7 +40,7 @@ exports.createSession = async (req, res) => {
         .status(400)
         .json({ success: false, message: "bonusAmount is required" });
     }
-    if (!startDate || !endDate) {
+    if (!startDate) {
       return res.status(400).json({
         success: false,
         message: "startDate and endDate are required",
@@ -321,15 +321,15 @@ exports.joinSession = async (req, res) => {
     //   return res.status(400).json({ success: false, message: "This session isn't currently open to join" });
     // }
 
-    const walletBalance = rider.wallet?.balance || 0;
-    if (walletBalance < session.minWalletBalance) {
-      return res.status(400).json({
-        success: false,
-        message: `You need at least ${session.minWalletBalance} in your wallet to join this session`,
-        requiredAmount: session.minWalletBalance,
-        currentBalance: walletBalance,
-      });
-    }
+    // const walletBalance = rider.wallet?.balance || 0;
+    // if (walletBalance < session.minWalletBalance) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: `You need at least ${session.minWalletBalance} in your wallet to join this session`,
+    //     requiredAmount: session.minWalletBalance,
+    //     currentBalance: walletBalance,
+    //   });
+    // }
 
     // Prevent booking the exact same session twice
     const alreadyParticipating = await RiderSessionParticipation.findOne({
@@ -355,6 +355,13 @@ exports.joinSession = async (req, res) => {
         ? new Date(Date.now() + session.timeLimitHours * 60 * 60 * 1000)
         : null;
 
+    const now = new Date();
+    // Calculate individual expiration time (e.g., Now + 8 Hours)
+    const timeLimitHours = template.defaultTimeLimitHours || 8;
+    const sessionEndTime = new Date(
+      now.getTime() + timeLimitHours * 60 * 60 * 1000,
+    );
+
     const participation = await RiderSessionParticipation.create({
       sessionId: session._id,
       riderId: rider._id,
@@ -362,6 +369,7 @@ exports.joinSession = async (req, res) => {
       bonusAmount: session.bonusAmount,
       requiredOrders: session.requiredOrders,
       startedAt,
+      sessionEndTime,
       expiresAt,
     });
 
@@ -899,6 +907,38 @@ exports.extendSession = async (req, res) => {
     });
   } catch (err) {
     console.log("UPDATE SESSION ERROR:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// =====================================
+// AUTO EXPIRE SESSIONS
+// =====================================
+exports.autoExpireSessions = async (req, res) => {
+  try {
+    const now = new Date();
+
+    // In tamam ACTIVE sessions ko find karke EXPIRED kar do jinka time khatam ho chuka hai
+    const result = await RiderSession.updateMany(
+      {
+        status: "ACTIVE",
+        sessionEndTime: { $lt: now }, // sessionEndTime past mein chali gayi ho
+      },
+      {
+        $set: {
+          status: "EXPIRED",
+          isBonusEligible: false,
+        },
+      },
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: `${result.modifiedCount} sessions automatically expired.`,
+      expiredCount: result.modifiedCount,
+    });
+  } catch (err) {
+    console.error("AUTO EXPIRE ERROR:", err);
     return res.status(500).json({ success: false, message: err.message });
   }
 };
