@@ -884,6 +884,34 @@ exports.updateDeal = async (req, res) => {
         }));
       }
 
+      // Sanitize freeItemId 
+      if (incomingOfferDetails.freeItemId !== undefined) {
+        const fItem = incomingOfferDetails.freeItemId;
+        if (fItem && typeof fItem === "object") {
+          updatedOfferDetails.freeItemId = {
+            product: fItem.product || fItem.productId || null,
+            customItemName: fItem.customItemName || "",
+            quantity: Number(fItem.quantity) || 1,
+            allowedVariations: Array.isArray(fItem.allowedVariations)
+              ? fItem.allowedVariations.map((v) => ({
+                  title: v.title || "",
+                  selectedOption: v.selectedOption || v.name || "",
+                  price: Number(v.price) || 0,
+                }))
+              : [],
+            allowedAddOns: Array.isArray(fItem.allowedAddOns)
+              ? fItem.allowedAddOns.map((a) => ({
+                  name: a.name || "",
+                  price: Number(a.price) || 0,
+                  isMandatory: a.isMandatory !== undefined ? String(a.isMandatory) === "true" : false,
+                }))
+              : [],
+          };
+        } else {
+          updatedOfferDetails.freeItemId = fItem || null;
+        }
+      }
+
       if (incomingOfferDetails.discountValue !== undefined)
         updatedOfferDetails.discountValue = Number(incomingOfferDetails.discountValue) || 0;
       if (incomingOfferDetails.originalPrice !== undefined)
