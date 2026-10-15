@@ -1748,6 +1748,84 @@ exports.getProductById = async (req, res) => {
   }
 };
 
+// =====================================
+// GET SINGLE PRODUCT BY ID
+// =====================================
+exports.getProductByIdForVendor = async (req, res) => {
+  try {
+    const productDoc = await Product.findById(req.params.id)
+      .populate("vendorId", "businessName logo status commissionRate")
+      .lean();
+
+    if (!productDoc) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+
+    const now = new Date();
+    const vendorId = productDoc.vendorId?._id || productDoc.vendorId;
+
+    // 1. Fetch Active Deals/Campaigns
+    const [activeDeals, activeCampaigns] = await Promise.all([
+      Deal.find({
+        isActive: true,
+        appliesTo: "all_items",
+        $or: [
+          { startDate: { $lte: now }, endDate: { $gte: now } },
+          { startDateTime: { $lte: now }, endDateTime: { $gte: now } },
+        ],
+      }).lean(),
+
+      Campaign.find({
+        isActive: true,
+        appliesTo: "all_items",
+        $or: [
+          { startDate: { $lte: now }, endDate: { $gte: now } },
+          { startDateTime: { $lte: now }, endDateTime: { $gte: now } },
+        ],
+      }).lean(),
+    ]);
+
+    const activePromos = [...activeDeals, ...activeCampaigns];
+    const dealData = applyUniversalDealToProduct(productDoc, activePromos);
+
+    const formattedProduct = {
+      _id: productDoc._id,
+      name: productDoc.name,
+      images: productDoc.images || [],
+      price: productDoc.price,
+      discountPrice: dealData.hasActiveDeal === true ? dealData.discountPrice : productDoc.discountPrice || 0,
+      hasActiveDeal: dealData.hasActiveDeal,
+      tag: dealData.tag,
+      category: productDoc.category,
+      subcategory: productDoc.subcategory,
+      rating: productDoc.rating,
+      isAvailable: productDoc.isAvailable,
+      isFavourite: Boolean(productDoc.isFavourite),
+      vendor: productDoc.vendorId
+        ? {
+            _id: productDoc.vendorId._id,
+            name: productDoc.vendorId.businessName,
+            logo: productDoc.vendorId.logo,
+          }
+        : null,
+    };
+
+    return res.status(200).json({
+      success: true,
+      products: formattedProduct,
+    });
+  } catch (err) {
+    console.error("GET PRODUCT BY ID ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
 
 // =====================================
 // GET PRODUCT DETAILS (With variations & addOns)
