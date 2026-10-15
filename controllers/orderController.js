@@ -66,6 +66,8 @@ exports.createOrder = async (req, res) => {
         image: item.image,
         category: item.category,
         weight: item.weight,
+        variations: item.variations,
+        addOns: item.addOns,
         price,
         quantity,
         total,
@@ -2177,7 +2179,7 @@ exports.getVendorOrders = async (req, res) => {
       const vendorSubtotal = order.items.reduce((acc, item) => {
         return acc + (item.total || item.price * item.quantity);
       }, 0);
-
+console.log(order, order.items)
       return {
         _id: order._id,
         orderNumber: order.orderNumber,
@@ -2196,6 +2198,8 @@ exports.getVendorOrders = async (req, res) => {
           note: item.note || item.itemInstructions || "",
           price: item.total || item.price * item.quantity,
           formattedPrice: `${item.total || item.price * item.quantity} PKR`,
+          variations: item.variations || [],
+          addOns: item.addOns || []
         })),
 
         subtotal: vendorSubtotal,
@@ -2214,14 +2218,14 @@ exports.getVendorOrders = async (req, res) => {
             }
           : null,
 
-        cancellationReason: order.cancellationReason || "Item wasn't available",
+        cancellationReason: order.cancellationReason,
 
         issue: {
           customerName:
             order.userId?.fullName || order.userId?.name || "Customer",
           complainText:
-            order.issueDetails?.reason || "Your food wasn't delivered to me...",
-          refundStatus: order.issueDetails?.status || "Refund customer",
+            order.issueDetails?.reason,
+          refundStatus: order.issueDetails?.status,
         },
       };
     });
