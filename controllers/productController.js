@@ -1737,7 +1737,7 @@ exports.getProductById = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      data: formattedProduct,
+      product: formattedProduct,
     });
   } catch (err) {
     console.error("GET PRODUCT BY ID ERROR:", err);
@@ -1747,6 +1747,7 @@ exports.getProductById = async (req, res) => {
     });
   }
 };
+
 
 
 // =====================================
