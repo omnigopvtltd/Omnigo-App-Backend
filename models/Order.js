@@ -44,8 +44,6 @@
 //       default: "",
 //     },
 
-    
-    
 //     items: [
 //       {
 //         orderFrom: {
@@ -149,7 +147,6 @@
 
 // module.exports = mongoose.model("Order", orderSchema);
 
-
 const mongoose = require("mongoose");
 
 const orderSchema = new mongoose.Schema(
@@ -208,7 +205,14 @@ const orderSchema = new mongoose.Schema(
         vendorName: { type: String, default: "" },
         vendorType: {
           type: String,
-          enum: ["fast-food", "restaurant", "grocery", "pharmacy", "bakery", "other"],
+          enum: [
+            "fast-food",
+            "restaurant",
+            "grocery",
+            "pharmacy",
+            "bakery",
+            "other",
+          ],
           default: "fast-food",
         },
         address: { type: String, default: "" },
@@ -228,7 +232,14 @@ const orderSchema = new mongoose.Schema(
       {
         orderFrom: {
           type: String,
-          enum: ["fast-food", "restaurant", "grocery", "pharmacy", "bakery", "other"],
+          enum: [
+            "fast-food",
+            "restaurant",
+            "grocery",
+            "pharmacy",
+            "bakery",
+            "other",
+          ],
           default: "fast-food",
         },
         productId: {
@@ -240,6 +251,24 @@ const orderSchema = new mongoose.Schema(
         image: String,
         category: String,
         weight: String,
+
+        variations: [
+          {
+            title: { type: String }, // e.g. "Size", "Flavour"
+            options: [
+              {
+                name: { type: String }, // e.g. "Large", "Chocolate"
+                price: { type: Number, default: 0 },
+              },
+            ],
+          },
+        ],
+        addOns: [
+          {
+            name: String,
+            price: { type: Number, default: 0 },
+          },
+        ],
 
         price: Number,
         quantity: Number,
@@ -311,14 +340,14 @@ const orderSchema = new mongoose.Schema(
 
     salesAndServiceTaxForUser: {
       type: Number,
-      default: 10
+      default: 10,
     },
 
     salesAndServiceTaxForRider: {
       type: Number,
-      default: 20
+      default: 20,
     },
-    
+
     // Float & Session Tracking
     riderFloatAmount: {
       type: Number,
@@ -348,7 +377,7 @@ const orderSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 orderSchema.pre("save", function (next) {
