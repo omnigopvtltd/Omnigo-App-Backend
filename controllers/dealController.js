@@ -464,9 +464,35 @@ exports.createDeal = async (req, res) => {
         }))
       : [];
 
+      let sanitizedFreeItemId = null;
+  if (rawOfferDetails.freeItemId) {
+    const fItem = rawOfferDetails.freeItemId;
+    sanitizedFreeItemId = {
+      product: fItem.product || fItem.productId || (typeof fItem === "string" ? fItem : null),
+      customItemName: fItem.customItemName || "",
+      quantity: Number(fItem.quantity) || 1,
+      allowedVariations: Array.isArray(fItem.allowedVariations)
+        ? fItem.allowedVariations.map((v) => ({
+            title: v.title || "",
+            selectedOption: v.selectedOption || v.name || "",
+            price: Number(v.price) || 0,
+          }))
+        : [],
+      allowedAddOns: Array.isArray(fItem.allowedAddOns)
+        ? fItem.allowedAddOns.map((a) => ({
+            name: a.name || "",
+            price: Number(a.price) || 0,
+            isMandatory: a.isMandatory !== undefined ? String(a.isMandatory) === "true" : false,
+          }))
+        : [],
+    };
+  }
+
+
     const formattedOfferDetails = {
       ...rawOfferDetails,
       itemsIncluded: sanitizedItemsIncluded,
+      freeItemId: sanitizedFreeItemId,
       discountValue: Number(rawOfferDetails.discountValue) || 0,
       originalPrice: Number(rawOfferDetails.originalPrice) || 0,
       dealPrice: Number(rawOfferDetails.dealPrice) || 0,

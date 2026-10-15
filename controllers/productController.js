@@ -1724,7 +1724,14 @@ exports.getProductById = async (req, res) => {
       price: productDoc.price,
       discountPrice: dealData.hasActiveDeal === true ? dealData.discountPrice : productDoc.discountPrice || 0,
       hasActiveDeal: dealData.hasActiveDeal,
-      tags: productDoc.tags.push({icon: "", tagName: dealData.tag}),
+      // tag: dealData.tag,
+      tags: [
+  ...productDoc.tags,
+  {
+    icon: "",
+    tagName: dealData.tag
+  }
+],
       serving: productDoc.serving,
       isVeg: productDoc.isVeg,
       category: productDoc.category,
@@ -1812,6 +1819,13 @@ exports.getProductDetails = async (req, res) => {
       discountPrice: dealData.hasActiveDeal === true ? dealData.discountPrice : productDoc.discountPrice || 0,
       hasActiveDeal: dealData.hasActiveDeal,
       tag: dealData.tag,
+//       tags: [
+//   ...productDoc.tags,
+//   {
+//     icon: "",
+//     tagName: dealData.tag
+//   }
+// ],
       category: productDoc.category,
       subcategory: productDoc.subcategory,
       rating: productDoc.rating,
