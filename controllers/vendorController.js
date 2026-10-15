@@ -2940,257 +2940,257 @@ exports.getVendorPerformance = async (req, res) => {
   }
 };
 
-// exports.vendorMenu = async (req, res) => {
-//   try {
-//     let vendorId;
-//     if (!req.params?.vendorId) {
-//       vendorId = req.user?.id || req.user?._id;
-//     } else {
-//       vendorId = req.params?.vendorId;
-//     }
+exports.vendorsMenu = async (req, res) => {
+  try {
+    let vendorId;
+    if (!req.params?.vendorId) {
+      vendorId = req.user?.id || req.user?._id;
+    } else {
+      vendorId = req.params?.vendorId;
+    }
 
-//     if (!vendorId || !mongoose.Types.ObjectId.isValid(vendorId)) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Invalid Vendor ID format",
-//       });
-//     }
+    if (!vendorId || !mongoose.Types.ObjectId.isValid(vendorId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Vendor ID format",
+      });
+    }
 
-//     const vendorObjectId = new mongoose.Types.ObjectId(vendorId);
+    const vendorObjectId = new mongoose.Types.ObjectId(vendorId);
 
-//     // 1. Fetch Deals, Special Types, Vendor Schema, & Products Grouped by Category
-//     const [
-//       campaignsGrouped,
-//       dealsGrouped,
-//       productsByType,
-//       vendorDoc,
-//       productsByCategory,
-//     ] = await Promise.all([
-//       // Group Active Campaigns by campaignType for this Vendor
-//       Campaign.aggregate([
-//         { $match: { vendorId: vendorObjectId, isActive: true } },
-//         { $sort: { createdAt: -1 } },
-//         {
-//           $group: {
-//             _id: "$campaignType",
-//             items: {
-//               $push: {
-//                 _id: "$_id",
-//                 name: "$campaignName",
-//                 description: "$description",
-//                 banner: "$campaignBanner",
-//                 campaignType: "$campaignType",
-//                 offerType: "$offerDetails.offerType",
-//                 discountType: "$offerDetails.discountType",
-//                 discountValue: "$offerDetails.discountValue",
-//                 originalPrice: "$offerDetails.originalPrice",
-//                 price: "$offerDetails.dealPrice", // Standardizing field as 'price' for UI
-//                 comboName: "$offerDetails.comboName",
-//                 buyQuantity: "$offerDetails.buyQuantity",
-//                 getQuantity: "$offerDetails.getQuantity",
-//                 applicableProducts: "$applicableProducts",
-//                 applicableCategories: "$applicableCategories",
-//               },
-//             },
-//           },
-//         },
-//         { $project: { items: { $slice: ["$items", 10] } } },
-//       ]),
+    // 1. Fetch Deals, Special Types, Vendor Schema, & Products Grouped by Category
+    const [
+      campaignsGrouped,
+      dealsGrouped,
+      productsByType,
+      vendorDoc,
+      productsByCategory,
+    ] = await Promise.all([
+      // Group Active Campaigns by campaignType for this Vendor
+      Campaign.aggregate([
+        { $match: { vendorId: vendorObjectId, isActive: true } },
+        { $sort: { createdAt: -1 } },
+        {
+          $group: {
+            _id: "$campaignType",
+            items: {
+              $push: {
+                _id: "$_id",
+                name: "$campaignName",
+                description: "$description",
+                banner: "$campaignBanner",
+                campaignType: "$campaignType",
+                offerType: "$offerDetails.offerType",
+                discountType: "$offerDetails.discountType",
+                discountValue: "$offerDetails.discountValue",
+                originalPrice: "$offerDetails.originalPrice",
+                price: "$offerDetails.dealPrice", // Standardizing field as 'price' for UI
+                comboName: "$offerDetails.comboName",
+                buyQuantity: "$offerDetails.buyQuantity",
+                getQuantity: "$offerDetails.getQuantity",
+                applicableProducts: "$applicableProducts",
+                applicableCategories: "$applicableCategories",
+              },
+            },
+          },
+        },
+        { $project: { items: { $slice: ["$items", 10] } } },
+      ]),
 
-//       // Group Active Deals by dealType for this Vendor
-//       Deal.aggregate([
-//         { $match: { vendorId: vendorObjectId, isActive: true } },
-//         { $sort: { isFeatured: -1, createdAt: -1 } },
-//         {
-//           $group: {
-//             _id: "$dealType",
-//             items: {
-//               $push: {
-//                 _id: "$_id",
-//                 name: "$title",
-//                 image: "$image",
-//                 originalPrice: "$originalPrice",
-//                 discountPrice: "$discountPrice",
-//                 dealType: "$dealType",
-//               },
-//             },
-//           },
-//         },
-//         { $project: { items: { $slice: ["$items", 10] } } },
-//       ]),
+      // Group Active Deals by dealType for this Vendor
+      Deal.aggregate([
+        { $match: { vendorId: vendorObjectId, isActive: true } },
+        { $sort: { isFeatured: -1, createdAt: -1 } },
+        {
+          $group: {
+            _id: "$dealType",
+            items: {
+              $push: {
+                _id: "$_id",
+                name: "$title",
+                image: "$image",
+                originalPrice: "$originalPrice",
+                discountPrice: "$discountPrice",
+                dealType: "$dealType",
+              },
+            },
+          },
+        },
+        { $project: { items: { $slice: ["$items", 10] } } },
+      ]),
 
-//       // Group Special Product Types
-//       Product.aggregate([
-//         {
-//           $match: {
-//             vendorId: vendorObjectId,
-//             type: { $in: ["special", "popular", "featured", "new"] },
-//           },
-//         },
-//         {
-//           $group: {
-//             _id: "$type",
-//             items: {
-//               $push: {
-//                 _id: "$_id",
-//                 name: "$name",
-//                 description: "$description",
-//                 price: "$price",
-//                 images: "$images",
-//                 isFavourite: "$isFavourite",
-//                 rating: "$rating",
-//               },
-//             },
-//           },
-//         },
-//         { $project: { items: { $slice: ["$items", 10] } } },
-//       ]),
+      // Group Special Product Types
+      Product.aggregate([
+        {
+          $match: {
+            vendorId: vendorObjectId,
+            type: { $in: ["special", "popular", "featured", "new"] },
+          },
+        },
+        {
+          $group: {
+            _id: "$type",
+            items: {
+              $push: {
+                _id: "$_id",
+                name: "$name",
+                description: "$description",
+                price: "$price",
+                images: "$images",
+                isFavourite: "$isFavourite",
+                rating: "$rating",
+              },
+            },
+          },
+        },
+        { $project: { items: { $slice: ["$items", 10] } } },
+      ]),
 
-//       // Fetch Vendor Document
-//       Vendor.findById(vendorObjectId).select("categories").lean(),
+      // Fetch Vendor Document
+      Vendor.findById(vendorObjectId).select("categories").lean(),
 
-//       // Fetch ALL Regular Products Grouped by Category in Database
-//       Product.aggregate([
-//         { $match: { vendorId: vendorObjectId } },
-//         {
-//           $group: {
-//             _id: "$category",
-//             products: {
-//               $push: {
-//                 _id: "$_id",
-//                 name: "$name",
-//                 description: "$description",
-//                 price: "$price",
-//                 images: "$images",
-//                 isFavourite: "$isFavourite",
-//                 rating: "$rating",
-//               },
-//             },
-//           },
-//         },
-//       ]),
-//     ]);
+      // Fetch ALL Regular Products Grouped by Category in Database
+      Product.aggregate([
+        { $match: { vendorId: vendorObjectId } },
+        {
+          $group: {
+            _id: "$category",
+            products: {
+              $push: {
+                _id: "$_id",
+                name: "$name",
+                description: "$description",
+                price: "$price",
+                images: "$images",
+                isFavourite: "$isFavourite",
+                rating: "$rating",
+              },
+            },
+          },
+        },
+      ]),
+    ]);
 
-//     // 2. Maps for quick lookups
-//     const dealMap = {};
-//     dealsGrouped.forEach((d) => (dealMap[d._id] = d.items));
+    // 2. Maps for quick lookups
+    const dealMap = {};
+    dealsGrouped.forEach((d) => (dealMap[d._id] = d.items));
 
-//     const campaignMap = {};
-//     campaignsGrouped.forEach((c) => (campaignMap[c._id] = c.items));
+    const campaignMap = {};
+    campaignsGrouped.forEach((c) => (campaignMap[c._id] = c.items));
 
-//     const productTypeMap = {};
-//     productsByType.forEach((p) => (productTypeMap[p._id] = p.items));
+    const productTypeMap = {};
+    productsByType.forEach((p) => (productTypeMap[p._id] = p.items));
 
-//     const categoryProductMap = {};
-//     productsByCategory.forEach((c) => {
-//       if (c._id) categoryProductMap[c._id.toString()] = c.products;
-//     });
+    const categoryProductMap = {};
+    productsByCategory.forEach((c) => {
+      if (c._id) categoryProductMap[c._id.toString()] = c.products;
+    });
 
-//     const categoriesResponse = [];
+    const categoriesResponse = [];
 
-//     // 3. Section 1: Deals
-//     const dealTypes = [
-//       { key: "Offer Deal", label: "Offer Deals" },
-//       { key: "Bogo Deal", label: "Bogo Deals" },
-//       { key: "Combo Deal", label: "Combo Deals" },
-//       { key: "Flash Deal", label: "Flash Deals" },
-//       { key: "Seasonal Deal", label: "Seasonal Deals" },
-//       { key: "Free Delivery Deal", label: "Free Delivery Deals" },
-//       { key: "Daily Deal", label: "Daily Deals" },
-//     ];
+    // 3. Section 1: Deals
+    const dealTypes = [
+      { key: "Offer Deal", label: "Offer Deals" },
+      { key: "Bogo Deal", label: "Bogo Deals" },
+      { key: "Combo Deal", label: "Combo Deals" },
+      { key: "Flash Deal", label: "Flash Deals" },
+      { key: "Seasonal Deal", label: "Seasonal Deals" },
+      { key: "Free Delivery Deal", label: "Free Delivery Deals" },
+      { key: "Daily Deal", label: "Daily Deals" },
+    ];
 
-//     dealTypes.forEach(({ key, label }) => {
-//       if (dealMap[key] && dealMap[key].length > 0) {
-//         categoriesResponse.push({
-//           _id: new mongoose.Types.ObjectId(),
-//           categoryName: label,
-//           products: dealMap[key],
-//         });
-//       }
-//     });
+    dealTypes.forEach(({ key, label }) => {
+      if (dealMap[key] && dealMap[key].length > 0) {
+        categoriesResponse.push({
+          _id: new mongoose.Types.ObjectId(),
+          categoryName: label,
+          products: dealMap[key],
+        });
+      }
+    });
 
-//     // 3. Section 1: Deals
-//     const campaignType = [
-//       { key: "flash_deal", label: "Flash Deals" },
-//       { key: "bogo_deal", label: "Bogo Deals" },
-//       { key: "combo_deal", label: "Combo Deals" },
-//       { key: "discount_deal", label: "Discount Deals" },
-//       { key: "free_delivery_deal", label: "Free Delivery Deals" },
-//       { key: "payment_card_deal", label: "Payment Card Deals" },
-//       { key: "custom_deal", label: "Custom Deals" },
-//     ];
+    // 3. Section 1: Deals
+    const campaignType = [
+      { key: "flash_deal", label: "Flash Deals" },
+      { key: "bogo_deal", label: "Bogo Deals" },
+      { key: "combo_deal", label: "Combo Deals" },
+      { key: "discount_deal", label: "Discount Deals" },
+      { key: "free_delivery_deal", label: "Free Delivery Deals" },
+      { key: "payment_card_deal", label: "Payment Card Deals" },
+      { key: "custom_deal", label: "Custom Deals" },
+    ];
 
-//     campaignType.forEach(({ key, label }) => {
-//       if (campaignMap[key] && campaignMap[key].length > 0) {
-//         categoriesResponse.push({
-//           _id: new mongoose.Types.ObjectId(),
-//           categoryName: label,
-//           products: campaignMap[key],
-//         });
-//       }
-//     });
+    campaignType.forEach(({ key, label }) => {
+      if (campaignMap[key] && campaignMap[key].length > 0) {
+        categoriesResponse.push({
+          _id: new mongoose.Types.ObjectId(),
+          categoryName: label,
+          products: campaignMap[key],
+        });
+      }
+    });
 
-//     // 4. Section 2: Special Product Types
-//     const productTypes = [
-//       { key: "special", label: "Special Items" },
-//       { key: "popular", label: "Popular Items" },
-//       { key: "featured", label: "Featured Items" },
-//       { key: "new", label: "New Items" },
-//     ];
+    // 4. Section 2: Special Product Types
+    const productTypes = [
+      { key: "special", label: "Special Items" },
+      { key: "popular", label: "Popular Items" },
+      { key: "featured", label: "Featured Items" },
+      { key: "new", label: "New Items" },
+    ];
 
-//     productTypes.forEach(({ key, label }) => {
-//       if (productTypeMap[key] && productTypeMap[key].length > 0) {
-//         categoriesResponse.push({
-//           _id: new mongoose.Types.ObjectId(),
-//           categoryName: label,
-//           products: productTypeMap[key],
-//         });
-//       }
-//     });
+    productTypes.forEach(({ key, label }) => {
+      if (productTypeMap[key] && productTypeMap[key].length > 0) {
+        categoriesResponse.push({
+          _id: new mongoose.Types.ObjectId(),
+          categoryName: label,
+          products: productTypeMap[key],
+        });
+      }
+    });
 
-//     // 5. Section 3: Vendor Categories (With Dynamic Fallback)
-//     const storeCategories = vendorDoc?.categories || [];
-//     const addedCategories = new Set();
+    // 5. Section 3: Vendor Categories (With Dynamic Fallback)
+    const storeCategories = vendorDoc?.categories || [];
+    const addedCategories = new Set();
 
-//     if (storeCategories.length > 0) {
-//       storeCategories.forEach((cat) => {
-//         const catName =
-//           typeof cat === "string" ? cat : cat.categoryName || cat.name;
-//         if (catName) {
-//           addedCategories.add(catName.toString());
-//           categoriesResponse.push({
-//             _id: cat._id || new mongoose.Types.ObjectId(),
-//             categoryName: catName,
-//             products: categoryProductMap[catName.toString()] || [],
-//           });
-//         }
-//       });
-//     }
+    if (storeCategories.length > 0) {
+      storeCategories.forEach((cat) => {
+        const catName =
+          typeof cat === "string" ? cat : cat.categoryName || cat.name;
+        if (catName) {
+          addedCategories.add(catName.toString());
+          categoriesResponse.push({
+            _id: cat._id || new mongoose.Types.ObjectId(),
+            categoryName: catName,
+            products: categoryProductMap[catName.toString()] || [],
+          });
+        }
+      });
+    }
 
-//     // Auto-Fallback: Push remaining product categories directly from Product collection
-//     Object.keys(categoryProductMap).forEach((catName) => {
-//       if (!addedCategories.has(catName)) {
-//         categoriesResponse.push({
-//           _id: new mongoose.Types.ObjectId(),
-//           categoryName: catName,
-//           products: categoryProductMap[catName],
-//         });
-//       }
-//     });
+    // Auto-Fallback: Push remaining product categories directly from Product collection
+    Object.keys(categoryProductMap).forEach((catName) => {
+      if (!addedCategories.has(catName)) {
+        categoriesResponse.push({
+          _id: new mongoose.Types.ObjectId(),
+          categoryName: catName,
+          products: categoryProductMap[catName],
+        });
+      }
+    });
 
-//     return res.status(200).json({
-//       success: true,
-//       vendorId: vendorId.toString(),
-//       categories: categoriesResponse,
-//     });
-//   } catch (err) {
-//     console.error("GET VENDOR MENU ERROR:", err);
-//     return res.status(500).json({
-//       success: false,
-//       message: err.message,
-//     });
-//   }
-// };
+    return res.status(200).json({
+      success: true,
+      vendorId: vendorId.toString(),
+      categories: categoriesResponse,
+    });
+  } catch (err) {
+    console.error("GET VENDOR MENU ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
 
 exports.vendorMenu = async (req, res) => {
   try {
