@@ -44,4 +44,5 @@ router.put("/extend/:id", auth, extendSession);
 router.delete("/delete/:id", auth, role("admin"), deleteSession);
 router.get("/:id/participants", auth, role("admin"), getSessionParticipants);
 
+
 module.exports = router;

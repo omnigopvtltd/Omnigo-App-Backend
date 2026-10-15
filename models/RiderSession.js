@@ -12,14 +12,22 @@ const riderSessionSchema = new mongoose.Schema(
 
     requiredOrders: { type: Number, required: true, min: 1, default: 6 },
     bonusAmount: { type: Number, required: true, min: 0 },
-
+    isBonusEligible: {
+      type: Boolean,
+      default: false,
+    },
+    
     // Optional wallet minimum a rider must hold to join (acts like the same
     // "commitment" idea as the order float in Option 1).
     minWalletBalance: { type: Number, default: 0 },
 
     // Optional time limit to finish once joined, in hours. Default 8 hours for example
     timeLimitHours: { type: Number, default: 8 },
-
+    // Dynamically calculated: startedAt + timeLimitHours
+    sessionEndTime: {
+      type: Date,
+      required: true,
+    },
     isActive: { type: Boolean, default: true },
     startDate: { type: Date },
     endDate: { type: Date },
