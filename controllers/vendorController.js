@@ -3539,7 +3539,7 @@ exports.vendorMenu = async (req, res) => {
     });
   }
 };
-``;
+
 
 exports.vendorMenuProducts = async (req, res) => {
   try {
@@ -4261,37 +4261,37 @@ exports.getHomeChefById = async (req, res) => {
 //   }
 // };
 
-// =====================================
-// GET SINGLE VENDOR
-// =====================================
-exports.getVendorById = async (req, res) => {
-  try {
-    const vendor = await Vendor.findById(req.params.id).select(
-      "businessName logo businessDescription coverImage rating isActive deliveryFee deliveryTime isFreeDelivery openingHours",
-    );
-    // .populate(
-    //   "ownerId",
-    //   "name email phone",
-    // );
+// // =====================================
+// // GET SINGLE VENDOR
+// // =====================================
+// exports.getVendorById = async (req, res) => {
+//   try {
+//     const vendor = await Vendor.findById(req.params.id).select(
+//       "businessName logo businessDescription coverImage rating isActive deliveryFee deliveryTime isFreeDelivery openingHours",
+//     );
+//     // .populate(
+//     //   "ownerId",
+//     //   "name email phone",
+//     // );
 
-    if (!vendor) {
-      return res.status(404).json({
-        success: false,
-        message: "Vendor not found",
-      });
-    }
+//     if (!vendor) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Vendor not found",
+//       });
+//     }
 
-    return res.status(200).json({
-      success: true,
-      vendor,
-    });
-  } catch (err) {
-    return res.status(500).json({
-      success: false,
-      message: err.message,
-    });
-  }
-};
+//     return res.status(200).json({
+//       success: true,
+//       vendor,
+//     });
+//   } catch (err) {
+//     return res.status(500).json({
+//       success: false,
+//       message: err.message,
+//     });
+//   }
+// };
 
 // =====================================
 // GET VENDOR CATEGORIES
