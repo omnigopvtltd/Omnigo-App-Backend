@@ -301,7 +301,7 @@ exports.updateCampaign = async (req, res) => {
     }
 
     if (req.body.applicableCategories !== undefined) {
-      campaign.applicableCategories = parseObjectIdArray(
+      campaign.applicableCategories = parseJsonField(
         req.body.applicableCategories,
       );
     }
@@ -312,8 +312,8 @@ exports.updateCampaign = async (req, res) => {
     // }
     // 2. Update applicableProducts
     if (req.body.applicableProducts !== undefined) {
-      const parsedProducts = safeJsonParse(req.body.applicableProducts, []);
-      deal.applicableProducts = Array.isArray(parsedProducts)
+      const parsedProducts = parseJsonField(req.body.applicableProducts, []);
+      campaign.applicableProducts = Array.isArray(parsedProducts)
         ? parsedProducts.map((item) => ({
             product: item.product || item.productId || item,
             customItemName: item.customItemName || "",
