@@ -202,27 +202,37 @@ const orderSchema = new mongoose.Schema(
       {
         stopNumber: { type: Number, default: 1 },
         vendorId: { type: mongoose.Schema.Types.ObjectId, ref: "Vendor" },
-        vendorName: { type: String, default: "" },
-        vendorType: {
+        businessName: { type: String, default: "" },
+        logo: { type: String, default: "" },
+        businessType: {
           type: String,
-          enum: [
-            "fast-food",
-            "restaurant",
-            "grocery",
-            "pharmacy",
-            "bakery",
-            "other",
-          ],
-          default: "fast-food",
+          // enum: [
+          //   "fast-food",
+          //   "restaurant",
+          //   "grocery",
+          //   "pharmacy",
+          //   "bakery",
+          //   "other",
+          // ],
+          default: "grocery",
         },
         address: { type: String, default: "" },
+        city: { type: String, default: "" },
+        country: { type: String, default: "" },
         location: {
           type: { type: String, enum: ["Point"], default: "Point" },
           coordinates: { type: [Number], default: [0, 0] }, // [longitude, latitude]
         },
         status: {
           type: String,
-          enum: ["assigned", "arrived_at_vendor", "picked_up", "shopping"],
+          enum: [
+            "pending",
+            "assigned",
+            "preparing",
+            "ready",
+            "completed",
+            "cancelled",
+          ],
           default: "assigned",
         },
       },

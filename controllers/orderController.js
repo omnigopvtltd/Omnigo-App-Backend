@@ -14,18 +14,19 @@ const {
   sendNotificationToVendor,
 } = require("../utils/sendNotification");
 const { default: mongoose } = require("mongoose");
+const VendorBranch = require("../models/VendorBranch");
 
 exports.createOrder = async (req, res) => {
   try {
     const {
       address,
       addressId,
-      stops = [],
+      // stops = [],
       paymentMethod = "cash_on_delivery",
       promoDiscount = 0,
       instructions = "",
       deliveryFee = 200,
-      salesAndServiceTaxForUser = 10,
+      salesAndServiceTaxForUser = 5,
       routingMetrics,
     } = req.body;
 
@@ -38,6 +39,8 @@ exports.createOrder = async (req, res) => {
         .status(404)
         .json({ success: false, message: "User not found" });
     }
+
+    console.log(req.user.id);
 
     // Cart Validation
     const cart = await Cart.findOne({
@@ -73,7 +76,8 @@ exports.createOrder = async (req, res) => {
         total,
       };
     });
-
+    console.log(formattedItems);
+    console.log(formattedItems.length);
     // Step 1: Order items me se saare Product IDs collect karein
     const productIds = cart.items.map((item) => item.productId).filter(Boolean);
     console.log("Product IDs in this order:", productIds);
@@ -91,6 +95,42 @@ exports.createOrder = async (req, res) => {
       ),
     ];
     console.log("Unique Vendor IDs for this order:", vendorIds);
+
+    // 🛑 STEP 4: AUTOMATICALLY GENERATE STOPS FROM VENDOR BRANCHES
+    let stops = [];
+    if (req.body.stops && Array.isArray(req.body.stops) && req.body.stops.length > 0) {
+      stops = req.body.stops; // Agar frontend se aa jayein toh override na karein
+    } else if (vendorIds.length > 0) {
+      // Step A: Fetch Vendors basic info
+      const vendors = await Vendor.find({ _id: { $in: vendorIds } });
+      
+      // Step B: Fetch corresponding Vendor Branches (e.g. Primary branch or branch matching vendorId)
+      // Agar aapke paas request mein branchId hai toh wo use karein, warna vendor ki default/first active branch fetch karein
+      const branches = await VendorBranch.find({ vendorId: { $in: vendorIds }, isActive: true });
+
+      stops = vendors.map((vendor, index) => {
+        // Is vendor ki relevant branch dhoondhein (agar branchId req mein ho ya pehli branch utha lein)
+        const matchedBranch = branches.find(b => b.vendorId.toString() === vendor._id.toString()) || {};
+
+        return {
+          stopNumber: index + 1,
+          vendorId: vendor._id,
+          branchId: matchedBranch._id || null, // Branch ID link kar dein
+          logo: vendor.logo || "",
+          businessName: vendor?.businessName || matchedBranch.branchName || "Branch Name",
+          businessType: vendor.businessType || "fast-food",
+          // Branch address aur location prioritized honge
+          address: matchedBranch.address || vendor.address || "Vendor Address",
+          city: matchedBranch.city || vendor.city || "Vendor City",
+          country: matchedBranch.country || vendor.country || "Vendor Country",
+          location: {
+            type: "Point",
+            coordinates: matchedBranch.location?.coordinates || vendor.location?.coordinates || [0, 0],
+          },
+          status: "pending",
+        };
+      });
+    }
 
     const savedAddresses = user.addresses.filter(
       (addr) => addr.isSave === true,
@@ -111,15 +151,18 @@ exports.createOrder = async (req, res) => {
     };
 
     const discount = Number(promoDiscount) || 0;
-    const totalAmount =
-      subtotal +
-      Number(deliveryFee) +
-      Number(salesAndServiceTaxForUser) -
-      discount;
 
-    const hasGrocery = formattedItems.some(
-      (item) => item.orderFrom === "grocery",
-    );
+    const subtotalWithTax =
+      (Number(salesAndServiceTaxForUser) / 100) * subtotal;
+    const totalAmount =
+      subtotal + subtotalWithTax + Number(deliveryFee) - discount;
+
+    const hasOnlyGroceryItems =
+      formattedItems.length > 0 &&
+      formattedItems.every((item) => item.orderFrom === "grocery");
+
+    // const status = hasOnlyGroceryItems ? "confirmed" : "pending";
+
     const order = await Order.create({
       orderNumber: "ORD" + Date.now() + Math.floor(Math.random() * 1000),
       userId: req.user.id,
@@ -135,14 +178,14 @@ exports.createOrder = async (req, res) => {
       promoDiscount: discount,
       totalAmount,
       routingMetrics,
-      status: hasGrocery ? "confirmed" : "pending",
+      status: hasOnlyGroceryItems ? "confirmed" : "pending",
       riderId: null,
       isAssigned: false,
     });
 
     // CLEAR CART & NOTIFY SOCKETS
-    cart.items = [];
-    await cart.save();
+    // cart.items = [];
+    // await cart.save();
 
     const io = req.app.get("io");
     if (io) {
@@ -745,10 +788,144 @@ exports.readyOrder = async (req, res) => {
 // =====================================
 // CANCEL ORDER BY VENDOR
 // =====================================
+// exports.cancelOrderByVendor = async (req, res) => {
+//   try {
+//     const vendorId = req.user?.id || req.user?._id;
+//     const cancellationReason = req.body?.reason;
+
+//     if (!vendorId) {
+//       return res.status(401).json({
+//         success: false,
+//         message: "Unauthorized access: Vendor ID missing",
+//       });
+//     }
+//     // 1. Find Order associated with this Vendor
+//     const vendor = await Vendor.findOne({
+//       _id: vendorId,
+//       // status: "pending"
+//       // "stops.vendorId": vendorId,
+//     });
+
+//     // 1. Find Order belonging to this Vendor
+//     const order = await Order.findOne({
+//       _id: req.params.id,
+//       // "stops.vendorId": vendorId,
+//     });
+
+//     if (!order) {
+//       return res
+//         .status(404)
+//         .json({ success: false, message: "Order not found" });
+//     }
+
+//     // Check if order is already completed or cancelled
+//     if (["delivered", "completed", "cancelled"].includes(order.status)) {
+//       return res.status(400).json({
+//         success: false,
+//         message: `Order cannot be cancelled as it is already ${order.status}`,
+//       });
+//     }
+
+//     // Update Vendor Stops Status if present
+//     // if (Array.isArray(order.stops) && order.stops.length > 0) {
+//     //   order.stops.forEach((stop) => {
+//     //     if (stop.vendorId && stop.vendorId.toString() === vendorId.toString()) {
+//     //       stop.status = "rejected_by_vendor";
+//     //     }
+//     //   });
+//     // }
+
+//     // // 2. Update Vendor Specific Stop Status to 'ready'
+//     // let vendorStopFound = false;
+//     // order.stops.forEach((stop) => {
+//     //   if (stop.vendorId && stop.vendorId.toString() === vendorId.toString()) {
+//     //     stop.status = "ready"; // Vendor level status
+//     //     vendorStopFound = true;
+//     //   }
+//     // });
+
+//     // if (!vendorStopFound) {
+//     //   return res.status(400).json({
+//     //     success: false,
+//     //     message: "Vendor stop not matching order stops",
+//     //   });
+//     // }
+
+//     // Update Overall Order Status & Reason
+//     order.status = "cancelled";
+//     order.cancellationReason = cancellationReason || "Rejected by vendor";
+//     await order.save();
+//     vendor.status = "cancelled";
+//     await vendor.save();
+
+//     // Socket.IO Real-time Updates
+//     const io = req.app.get("io");
+//     if (io) {
+//       // Notify Customer
+//       io.to(`user:${order.userId}`).emit("orderStatusUpdated", {
+//         orderId: order._id,
+//         orderNumber: order.orderNumber,
+//         status: "cancelled",
+//         cancellationReason: order.cancellationReason,
+//         message: "Your order has been cancelled by the vendor.",
+//       });
+
+//       // Notify Rider if assigned
+//       const assignedRiderId = order.driverId || order.riderId;
+//       if (assignedRiderId) {
+//         io.to(`rider:${assignedRiderId}`).emit("orderCancelledByVendor", {
+//           orderId: order._id,
+//           orderNumber: order.orderNumber,
+//           message: "Order assigned to you has been cancelled by vendor.",
+//         });
+//       }
+//     }
+
+//     sendNotification(req.app, {
+//       userId: order.userId,
+//       role: "user",
+//       title: "Order Cancelled!",
+//       message: `Order #${order.orderNumber} Cancelled. Reason: ${order.cancellationReason}`,
+//       type: "cancelled_order",
+//       data: {
+//         orderId: order._id,
+//         orderNumber: order.orderNumber,
+//         totalAmount: order.totalAmount || order.grandTotal,
+//         itemCount: order.items?.length || 0,
+//         screenToOpen: "UserOrderDetails",
+//       },
+//       // link: `/user/orders/cancel/${order._id}`,
+//     });
+//     // Send FCM Push Notification to Customer
+//     // const customer = await User.findById(order.userId);
+//     // if (customer?.fcmToken) {
+//     //   await sendNotification(
+//     //     customer.fcmToken,
+//     //     "Order Cancelled",
+//     //     `Your order #${order.orderNumber} was cancelled by vendor: ${order.cancellationReason}`,
+//     //   );
+//     // }
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Order cancelled successfully",
+//       status: order.status,
+//       cancellationReason: order.cancellationReason,
+//       order,
+//     });
+//   } catch (err) {
+//     console.error("VENDOR CANCEL ORDER ERROR:", err);
+//     return res.status(500).json({ success: false, message: err.message });
+//   }
+// };
+
+// =====================================
+// CANCEL ORDER BY VENDOR
+// =====================================
 exports.cancelOrderByVendor = async (req, res) => {
   try {
     const vendorId = req.user?.id || req.user?._id;
-    const cancellationReason = req.body?.reason;
+    const cancellationReason = req.body?.reason || "Rejected by vendor";
 
     if (!vendorId) {
       return res.status(401).json({
@@ -756,17 +933,10 @@ exports.cancelOrderByVendor = async (req, res) => {
         message: "Unauthorized access: Vendor ID missing",
       });
     }
-    // 1. Find Order associated with this Vendor
-    const vendor = await Vendor.findOne({
-      _id: vendorId,
-      // status: "pending"
-      // "stops.vendorId": vendorId,
-    });
 
     // 1. Find Order belonging to this Vendor
     const order = await Order.findOne({
       _id: req.params.id,
-      // "stops.vendorId": vendorId,
     });
 
     if (!order) {
@@ -783,66 +953,92 @@ exports.cancelOrderByVendor = async (req, res) => {
       });
     }
 
-    // Update Vendor Stops Status if present
-    // if (Array.isArray(order.stops) && order.stops.length > 0) {
-    //   order.stops.forEach((stop) => {
-    //     if (stop.vendorId && stop.vendorId.toString() === vendorId.toString()) {
-    //       stop.status = "rejected_by_vendor";
-    //     }
-    //   });
-    // }
+    // Determine Total Unique Vendors / Stops in the order
+    const totalStops = Array.isArray(order.stops) ? order.stops.length : 0;
+    
+    // Find vendor's specific stop in the order
+    let targetStop = null;
+    if (totalStops > 0) {
+      targetStop = order.stops.find(
+        (stop) => stop.vendorId && stop.vendorId.toString() === vendorId.toString()
+      );
+    }
 
-    // // 2. Update Vendor Specific Stop Status to 'ready'
-    // let vendorStopFound = false;
-    // order.stops.forEach((stop) => {
-    //   if (stop.vendorId && stop.vendorId.toString() === vendorId.toString()) {
-    //     stop.status = "ready"; // Vendor level status
-    //     vendorStopFound = true;
-    //   }
-    // });
+    // Check if vendor belongs to this order
+    if (totalStops > 0 && !targetStop) {
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden: Vendor is not associated with this order",
+      });
+    }
 
-    // if (!vendorStopFound) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: "Vendor stop not matching order stops",
-    //   });
-    // }
+    let isFullOrderCancelled = false;
 
-    // Update Overall Order Status & Reason
-    order.status = "cancelled";
-    order.cancellationReason = cancellationReason || "Rejected by vendor";
+    // Logic 1: Single Vendor Order or No Stops Schema (Cancel Full Order)
+    if (totalStops <= 1) {
+      order.status = "cancelled";
+      order.cancellationReason = cancellationReason;
+      if (targetStop) {
+        targetStop.status = "cancelled";
+      }
+      isFullOrderCancelled = true;
+    } 
+    // Logic 2: Multi-Vendor Order (Cancel Only This Vendor's Stop)
+    else {
+      targetStop.status = "cancelled"; // Ya "rejected_by_vendor"
+      targetStop.cancellationReason = cancellationReason;
+
+      // Agar saare stops cancel ho jayein, tab overall order bhi cancel mark ho jaye
+      const allStopsCancelled = order.stops.every(
+        (stop) => stop.status === "cancelled" || stop.status === "rejected_by_vendor"
+      );
+
+      if (allStopsCancelled) {
+        order.status = "cancelled";
+        order.cancellationReason = "All vendor stops cancelled";
+        isFullOrderCancelled = true;
+      }
+    }
+
     await order.save();
-    vendor.status = "cancelled";
-    await vendor.save();
 
-    // Socket.IO Real-time Updates
+    // =====================================
+    // REAL-TIME NOTIFICATIONS (Socket.IO & FCM)
+    // =====================================
     const io = req.app.get("io");
     if (io) {
       // Notify Customer
       io.to(`user:${order.userId}`).emit("orderStatusUpdated", {
         orderId: order._id,
         orderNumber: order.orderNumber,
-        status: "cancelled",
-        cancellationReason: order.cancellationReason,
-        message: "Your order has been cancelled by the vendor.",
+        status: order.status,
+        vendorId,
+        isFullOrderCancelled,
+        cancellationReason,
+        message: isFullOrderCancelled
+          ? "Your order has been cancelled."
+          : "One vendor stop was cancelled from your multi-vendor order.",
       });
 
-      // Notify Rider if assigned
+      // Notify Rider if assigned and full order is cancelled
       const assignedRiderId = order.driverId || order.riderId;
-      if (assignedRiderId) {
+      if (assignedRiderId && isFullOrderCancelled) {
         io.to(`rider:${assignedRiderId}`).emit("orderCancelledByVendor", {
           orderId: order._id,
           orderNumber: order.orderNumber,
-          message: "Order assigned to you has been cancelled by vendor.",
+          message: "Order assigned to you has been cancelled.",
         });
       }
     }
 
+    // Push Notification to User
     sendNotification(req.app, {
       userId: order.userId,
       role: "user",
-      title: "Order Cancelled!",
-      message: `Order #${order.orderNumber} Cancelled. Reason: ${order.cancellationReason}`,
+      title: isFullOrderCancelled ? "Order Cancelled!" : "Order Item Cancelled!",
+      message: isFullOrderCancelled
+        ? `Order #${order.orderNumber} was cancelled. Reason: ${cancellationReason}`
+        : `A vendor stop in Order #${order.orderNumber} was cancelled.`,
       type: "cancelled_order",
       data: {
         orderId: order._id,
@@ -851,23 +1047,15 @@ exports.cancelOrderByVendor = async (req, res) => {
         itemCount: order.items?.length || 0,
         screenToOpen: "UserOrderDetails",
       },
-      // link: `/user/orders/cancel/${order._id}`,
     });
-    // Send FCM Push Notification to Customer
-    // const customer = await User.findById(order.userId);
-    // if (customer?.fcmToken) {
-    //   await sendNotification(
-    //     customer.fcmToken,
-    //     "Order Cancelled",
-    //     `Your order #${order.orderNumber} was cancelled by vendor: ${order.cancellationReason}`,
-    //   );
-    // }
 
     return res.status(200).json({
       success: true,
-      message: "Order cancelled successfully",
+      message: isFullOrderCancelled
+        ? "Order cancelled successfully"
+        : "Vendor stop cancelled successfully",
       status: order.status,
-      cancellationReason: order.cancellationReason,
+      isFullOrderCancelled,
       order,
     });
   } catch (err) {
@@ -1015,7 +1203,7 @@ exports.getAvailableOrders = async (req, res) => {
       isAssigned: false,
     })
       .populate("userId", "name email phone")
-      .populate("stops.vendorId", "name logo address contact location")
+      .populate("stops.vendorId", "businessName logo address contact location")
       .sort({ createdAt: -1 });
 
     return res.status(200).json({
@@ -1890,7 +2078,7 @@ exports.trackOrder = async (req, res) => {
     // Force a fresh database fetch without lean caching
     const order = await Order.findById(req.params.id)
       .populate("riderId", "name phone location")
-      .populate("stops.vendorId", "name address location contact")
+      .populate("stops.vendorId", "businessName address location contact")
       .populate("userId", "name email phone");
 
     const productIds = order?.items?.map((item) => item.productId) || [];
@@ -1903,9 +2091,41 @@ exports.trackOrder = async (req, res) => {
     const products = await Product.find({ _id: { $in: productIds } }).select(
       "vendorId",
     );
+    // const vendors = await Vendor.find({
+    //   _id: { $in: products.map((p) => p.vendorId) },
+    // }).select("businessName logo address contact location status");
+    // const vendorBranches = await VendorBranch.find({
+    //   vendorId: { $in: products.map((p) => p.vendorId) },
+    // }).select("address area isRushMode city country phone location status");
+
+    const uniqueVendorIds = [
+      ...new Set(products.map((p) => p.vendorId?.toString()).filter(Boolean)),
+    ];
+
     const vendors = await Vendor.find({
-      _id: { $in: products.map((p) => p.vendorId) },
+      _id: { $in: uniqueVendorIds },
     }).select("businessName logo address contact location status");
+
+    const vendorBranches = await VendorBranch.find({
+      vendorId: { $in: uniqueVendorIds },
+    }).select(
+      "vendorId address area isRushMode city country phone location status",
+    );
+
+    const vendorsWithBranches = vendors.map((vendor) => {
+      const branches = vendorBranches.filter(
+        (branch) => branch.vendorId.toString() === vendor._id.toString(),
+      );
+
+      return {
+        ...vendor.toObject(),
+        branches,
+        address:
+          vendor.address ||
+          branches.find((branch) => branch.address)?.address ||
+          "",
+      };
+    });
 
     if (!order) {
       return res
@@ -1943,7 +2163,7 @@ exports.trackOrder = async (req, res) => {
           : null,
 
         // Rider Details Object
-        vendors: vendors.length > 0 ? vendors : [],
+        vendors: vendors.length > 0 ? vendorsWithBranches : [],
 
         routingMetrics: order.routingMetrics,
         timeline: {
@@ -2179,7 +2399,7 @@ exports.getVendorOrders = async (req, res) => {
       const vendorSubtotal = order.items.reduce((acc, item) => {
         return acc + (item.total || item.price * item.quantity);
       }, 0);
-console.log(order, order.items)
+      console.log(order, order.items);
       return {
         _id: order._id,
         orderNumber: order.orderNumber,
@@ -2199,7 +2419,7 @@ console.log(order, order.items)
           price: item.total || item.price * item.quantity,
           formattedPrice: `${item.total || item.price * item.quantity} PKR`,
           variations: item.variations || [],
-          addOns: item.addOns || []
+          addOns: item.addOns || [],
         })),
 
         subtotal: vendorSubtotal,
@@ -2223,8 +2443,7 @@ console.log(order, order.items)
         issue: {
           customerName:
             order.userId?.fullName || order.userId?.name || "Customer",
-          complainText:
-            order.issueDetails?.reason,
+          complainText: order.issueDetails?.reason,
           refundStatus: order.issueDetails?.status,
         },
       };
