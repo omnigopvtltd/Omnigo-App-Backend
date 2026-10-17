@@ -20,6 +20,8 @@ const {
   sendNotificationToVendor,
 } = require("../utils/sendNotification");
 const Campaign = require("../models/Campaign");
+const Zone = require("../models/Zone");
+const { getFirestore } = require("firebase-admin/firestore"); 
 
 // ======================================================
 // CONFIGURATIONS & HELPERS
@@ -3724,6 +3726,101 @@ exports.vendorMenuProducts = async (req, res) => {
   }
 };
 
+// exports.toggleRushMode = async (req, res) => {
+//   try {
+//     const vendorId = req.user?.id || req.user?._id;
+
+//     if (!vendorId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Vendor ID missing from authentication token",
+//       });
+//     }
+
+//     // 1. Fetch main Vendor details for metadata
+//     const vendor = await Vendor.findById(vendorId).select(
+//       "businessName isActive",
+//     );
+
+//     if (!vendor) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Vendor account not found",
+//       });
+//     }
+
+//     // 2. Fetch current VendorBranch state (using vendorId ref or direct ID)
+//     let branch = await VendorBranch.findOne({ vendorId: vendorId }).select(
+//       "isRushMode",
+//     );
+
+//     // Fallback: If vendorId is itself the Branch ID
+//     if (!branch) {
+//       branch = await VendorBranch.findById(vendorId).select("isRushMode");
+//     }
+
+//     if (!branch) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Vendor branch not found",
+//       });
+//     }
+
+//     // 3. Determine target status
+//     const currentRushState = Boolean(branch.isRushMode);
+
+//     let targetRushState;
+//     if (req.body && typeof req.body.isRushMode === "boolean") {
+//       targetRushState = req.body.isRushMode;
+//     } else if (req.body && typeof req.body.rushMode === "boolean") {
+//       targetRushState = req.body.rushMode;
+//     } else {
+//       targetRushState = !currentRushState;
+//     }
+
+//     // 4. Update VendorBranch atomically
+//     const updatedBranch = await VendorBranch.findByIdAndUpdate(
+//       branch._id,
+//       { $set: { isRushMode: targetRushState } },
+//       { new: true, runValidators: true },
+//     ).select("isRushMode");
+
+//     // 5. Real-time updates via Socket IO
+//     const io = req.app.get("io");
+//     if (io) {
+//       io.to(`vendor:${vendorId}`).emit("rushModeToggled", {
+//         vendorId,
+//         isRushMode: updatedBranch.isRushMode,
+//         message: `Rush mode is now ${updatedBranch.isRushMode ? "ENABLED" : "DISABLED"}`,
+//       });
+
+//       io.to(`vendorCatalog:${vendorId}`).emit("vendorRushModeUpdated", {
+//         vendorId,
+//         isRushMode: updatedBranch.isRushMode,
+//       });
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       message: `Rush mode successfully ${
+//         updatedBranch.isRushMode ? "activated" : "deactivated"
+//       }`,
+//       vendor: {
+//         businessName: vendor.businessName,
+//         isRushMode: Boolean(updatedBranch.isRushMode),
+//         isActive: vendor.isActive,
+//       },
+//     });
+//   } catch (err) {
+//     console.error("TOGGLE RUSH MODE ERROR:", err);
+//     return res.status(500).json({
+//       success: false,
+//       message: err.message,
+//     });
+//   }
+// };
+
+
 exports.toggleRushMode = async (req, res) => {
   try {
     const vendorId = req.user?.id || req.user?._id;
@@ -3737,7 +3834,7 @@ exports.toggleRushMode = async (req, res) => {
 
     // 1. Fetch main Vendor details for metadata
     const vendor = await Vendor.findById(vendorId).select(
-      "businessName isActive",
+      "businessName isActive"
     );
 
     if (!vendor) {
@@ -3747,12 +3844,11 @@ exports.toggleRushMode = async (req, res) => {
       });
     }
 
-    // 2. Fetch current VendorBranch state (using vendorId ref or direct ID)
+    // 2. Fetch current VendorBranch state
     let branch = await VendorBranch.findOne({ vendorId: vendorId }).select(
-      "isRushMode",
+      "isRushMode"
     );
 
-    // Fallback: If vendorId is itself the Branch ID
     if (!branch) {
       branch = await VendorBranch.findById(vendorId).select("isRushMode");
     }
@@ -3776,27 +3872,60 @@ exports.toggleRushMode = async (req, res) => {
       targetRushState = !currentRushState;
     }
 
-    // 4. Update VendorBranch atomically
+    // 4. Update VendorBranch atomically in MongoDB
     const updatedBranch = await VendorBranch.findByIdAndUpdate(
       branch._id,
       { $set: { isRushMode: targetRushState } },
-      { new: true, runValidators: true },
+      { new: true, runValidators: true }
     ).select("isRushMode");
 
-    // 5. Real-time updates via Socket IO
-    const io = req.app.get("io");
-    if (io) {
-      io.to(`vendor:${vendorId}`).emit("rushModeToggled", {
-        vendorId,
-        isRushMode: updatedBranch.isRushMode,
-        message: `Rush mode is now ${updatedBranch.isRushMode ? "ENABLED" : "DISABLED"}`,
-      });
-
-      io.to(`vendorCatalog:${vendorId}`).emit("vendorRushModeUpdated", {
-        vendorId,
-        isRushMode: updatedBranch.isRushMode,
-      });
+    // ====================================================
+    // 5. SIMPLE REAL-TIME UPDATE TO FIREBASE FIRESTORE
+    // ====================================================
+    try {
+      const db = getFirestore(); // Uses app initialized in your existing firebase file
+      await db.collection("vendors").doc(vendorId.toString()).set(
+        {
+          isRushMode: Boolean(updatedBranch.isRushMode),
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+    } catch (fbErr) {
+      console.error("Firebase Sync Warning:", fbErr.message);
     }
+
+    // 6. Real-time updates via Socket IO
+    // const io = req.app.get("io");
+    // if (io) {
+    //   io.to(`vendor:${vendorId}`).emit("rushModeToggled", {
+    //     vendorId,
+    //     isRushMode: updatedBranch.isRushMode,
+    //     message: `Rush mode is now ${
+    //       updatedBranch.isRushMode ? "ENABLED" : "DISABLED"
+    //     }`,
+    //   });
+
+    //   io.to(`vendorCatalog:${vendorId}`).emit("vendorRushModeUpdated", {
+    //     vendorId,
+    //     isRushMode: updatedBranch.isRushMode,
+    //   });
+    // }
+
+    // Send Notification
+       sendNotification(req.app, {
+      vendorId: vendorId,
+      role: "Vendor",
+      title: `Rush Mode ${
+        updatedBranch.isRushMode ? "activated" : "deactivated"
+      }`,
+      message: `You have ${
+        updatedBranch.isRushMode ? "activated" : "deactivated"
+      } Rush Mode. ${
+        updatedBranch.isRushMode ? "Rush Mode activation may affect your orders" : ""
+      }`,
+      type: "rush_mode",
+    });
 
     return res.status(200).json({
       success: true,
