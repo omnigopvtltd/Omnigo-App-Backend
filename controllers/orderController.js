@@ -211,8 +211,8 @@ exports.createOrder = async (req, res) => {
     });
 
     // CLEAR CART & NOTIFY SOCKETS
-    // cart.items = [];
-    // await cart.save();
+    cart.items = [];
+    await cart.save();
 
     const io = req.app.get("io");
     if (io) {
@@ -1010,7 +1010,23 @@ exports.cancelOrderByVendor = async (req, res) => {
       }
       isFullOrderCancelled = true;
     } 
-    // Logic 2: Multi-Vendor Order (Cancel Only This Vendor's Stop)
+    // // Logic 2: Multi-Vendor Order (Cancel Only This Vendor's Stop)
+    // else {
+    //   targetStop.status = "cancelled"; // Ya "rejected_by_vendor"
+    //   targetStop.cancellationReason = cancellationReason;
+
+    //   // Agar saare stops cancel ho jayein, tab overall order bhi cancel mark ho jaye
+    //   const allStopsCancelled = order.stops.every(
+    //     (stop) => stop.status === "cancelled" || stop.status === "rejected_by_vendor"
+    //   );
+
+    //   if (allStopsCancelled) {
+    //     order.status = "cancelled";
+    //     order.cancellationReason = "All vendor stops cancelled";
+    //     isFullOrderCancelled = true;
+    //   } 
+    // }
+// Logic 2: Multi-Vendor Order (Cancel Only This Vendor's Stop)
     else {
       targetStop.status = "cancelled"; // Ya "rejected_by_vendor"
       targetStop.cancellationReason = cancellationReason;
@@ -1024,9 +1040,30 @@ exports.cancelOrderByVendor = async (req, res) => {
         order.status = "cancelled";
         order.cancellationReason = "All vendor stops cancelled";
         isFullOrderCancelled = true;
+      } else {
+        // 🛒 NEW CHECK: Check remaining active stops / items
+        // Find which vendor IDs still have active (non-cancelled) stops
+        const activeVendorIds = order.stops
+          .filter((stop) => !["cancelled", "rejected_by_vendor"].includes(stop.status))
+          .map((stop) => stop.vendorId.toString());
+
+        // Check if the remaining active items in the order belong ONLY to grocery
+        const remainingItems = order.items.filter((item) => {
+          // Aap item ke vendorId ya product ke zariye check kar sakte hain ke wo kis vendor ka hai
+          return activeVendorIds.includes(item.vendorId?.toString());
+        });
+
+        const hasOnlyGroceryLeft =
+          remainingItems.length > 0 &&
+          remainingItems.every((item) => item.orderFrom === "grocery");
+
+        if (hasOnlyGroceryLeft) {
+          order.status = "confirmed"; // Auto-confirm if only grocery items are left
+          order.cancellationReason = `Vendor cancelled, remaining order auto-confirmed (Grocery only)`;
+        }
       }
     }
-
+    
     await order.save();
 
     // =====================================
@@ -2282,10 +2319,40 @@ exports.getVendorOrders = async (req, res) => {
 
     const targetStatuses = tabStatusMap[status] || tabStatusMap.pending;
 
+    // 💡 DUAL MATCH EXPRESSION: Check Vendor Stop status first, fallback to Order status
+    const statusMatchExpr = {
+      $expr: {$let: {
+          vars: {
+            matchingStops: {
+              $filter: {
+                input: { $ifNull: ["$stops", []] },
+                as: "stop",
+                cond: { $eq: ["$$stop.vendorId", targetVendorObjectId] },
+              },
+            },
+          },
+          in: {
+            $cond: {
+              if: { $gt: [{ $size: "$$matchingStops" }, 0] },
+              // Agar vendor stop mil jaye, toh stop ka status check karo
+              then: {
+                $in: [
+                  { $arrayElemAt: ["$$matchingStops.status", 0] },
+                  targetStatuses,
+                ],
+              },
+              // Warna main order ka status check karo (Fallback)
+              else: { $in: ["$status", targetStatuses] },
+            },
+          },
+        },
+      },
+    };
+
     // 1. Aggregation Pipeline: Filter Orders & Items strictly for Current Vendor
     const activeOrders = await Order.aggregate([
-      // Stage A: Basic Status Filter
-      { $match: { status: { $in: targetStatuses } } },
+      // Stage A: Dual Match (Stop Status vs Order Status)
+      { $match: statusMatchExpr },
 
       // Stage B: Unwind items array to inspect vendor ownership
       { $unwind: "$items" },
@@ -2306,7 +2373,7 @@ exports.getVendorOrders = async (req, res) => {
         },
       },
 
-      // Stage D: Join with 'deals' collection (Checking both dealId and productId fallback)
+      // Stage D: Join with 'deals' collection
       {
         $lookup: {
           from: "deals",
@@ -2314,14 +2381,13 @@ exports.getVendorOrders = async (req, res) => {
           pipeline: [
             {
               $match: {
-                $expr: {
-                  $or: [
+                $expr: {$or: [
                     { $eq: ["$_id", "$$dId"] },
-                    { $eq: ["$_id", "$$prodId"] } // Fallback if deal ID is passed in productId
-                  ]
-                }
-              }
-            }
+                    { $eq: ["$_id", "$$prodId"] },
+                  ],
+                },
+              },
+            },
           ],
           as: "dealDetails",
         },
@@ -2335,8 +2401,7 @@ exports.getVendorOrders = async (req, res) => {
 
       // Stage E: Strictly match items that belong to THIS Vendor
       {
-        $match: {
-          $or: [
+        $match: {$or: [
             { "items.vendorId": targetVendorObjectId },
             { "productDetails.vendorId": targetVendorObjectId },
             { "dealDetails.vendorId": targetVendorObjectId },
@@ -2365,7 +2430,6 @@ exports.getVendorOrders = async (req, res) => {
             $push: {$mergeObjects: [
                 "$items",
                 {
-                  // Tag actual vendorId if missing directly on item level
                   vendorId: {
                     $ifNull: [
                       "$items.vendorId",
@@ -2390,7 +2454,7 @@ exports.getVendorOrders = async (req, res) => {
       { path: "userId", select: "fullName name" },
     ]);
 
-    // 2. Tab Counts Aggregation Pipeline (Matches only vendor's relevant orders)
+    // 2. Tab Counts Aggregation Pipeline
     const countPipeline = await Order.aggregate([
       { $unwind: "$items" },
       {
@@ -2434,6 +2498,7 @@ exports.getVendorOrders = async (req, res) => {
         $group: {
           _id: "$_id",
           status: { $first: "$status" },
+          stops: { $first: "$stops" },
         },
       },
       {
@@ -2479,19 +2544,16 @@ exports.getVendorOrders = async (req, res) => {
           })
           .toLowerCase();
 
-      // Filter items strictly belonging to this logged-in vendor
       const vendorOnlyItems = order.items.filter((item) => {
-        if (!item.vendorId) return true; // Fallback if single vendor order
+        if (!item.vendorId) return true;
         return item.vendorId.toString() === targetVendorObjectId.toString();
       });
 
-      // Calculate Subtotal for this specific vendor's items only
       const vendorSubtotal = vendorOnlyItems.reduce((acc, item) => {
         const itemPrice = item.total || item.price * item.quantity || 0;
         return acc + itemPrice;
       }, 0);
 
-      // Check current vendor stop status if stops exist
       const vendorStop = Array.isArray(order.stops)
         ? order.stops.find(
             (stop) =>
@@ -2511,7 +2573,6 @@ exports.getVendorOrders = async (req, res) => {
         allergyAlert: order.allergyWarning || null,
         customerNote: order.instructions || "",
 
-        // Display ONLY logged-in vendor's items, deals, variations & addOns
         items: vendorOnlyItems.map((item) => ({
           itemId: item.productId || item.dealId || item._id,
           type: item.dealId ? "deal" : "product",
