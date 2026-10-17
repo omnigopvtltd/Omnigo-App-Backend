@@ -15,6 +15,8 @@ const {
 } = require("../utils/sendNotification");
 const { default: mongoose } = require("mongoose");
 const VendorBranch = require("../models/VendorBranch");
+const Deal = require("../models/Deal");
+const Campaign = require("../models/Campaign");
 
 exports.createOrder = async (req, res) => {
   try {
@@ -78,23 +80,48 @@ exports.createOrder = async (req, res) => {
     });
     console.log(formattedItems);
     console.log(formattedItems.length);
-    // Step 1: Order items me se saare Product IDs collect karein
-    const productIds = cart.items.map((item) => item.productId).filter(Boolean);
-    console.log("Product IDs in this order:", productIds);
+    // // Step 1: Order items me se saare Product IDs collect karein
+    // const productIds = cart.items.map((item) => item.productId).filter(Boolean);
+    // console.log("Product IDs in this order:", productIds);
 
-    // Step 2: In Products ke Database records se direct Vendor IDs query karein
-    const products = await Product.find({ _id: { $in: productIds } }).select(
-      "vendorId",
-    );
-    console.log("Products fetched for this order:", products);
+    // // Step 2: In Products ke Database records se direct Vendor IDs query karein
+    // const products = await Product.find({ _id: { $in: productIds } }).select(
+    //   "vendorId",
+    // );
+    // console.log("Products fetched for this order:", products);
 
-    // Step 3: Extract unique Vendor IDs (Duplicates remove ho jayenge)
-    const vendorIds = [
-      ...new Set(
-        products.map((product) => product.vendorId?.toString()).filter(Boolean),
-      ),
-    ];
-    console.log("Unique Vendor IDs for this order:", vendorIds);
+// ==========================================================
+    // STEP 1 & 2: COLLECT IDs AND FETCH FROM PRODUCTS, DEALS & CAMPAIGNS
+    // ==========================================================
+    const itemIds = cart.items.map((item) => item.productId).filter(Boolean);
+    console.log("Item IDs in this order:", itemIds);
+
+    // Fetch vendorIds from all possible collections (Products, Deals, Campaigns)
+    const [products, deals, campaigns] = await Promise.all([
+      Product.find({ _id: { $in: itemIds } }).select("vendorId"),
+      Deal.find({ _id: { $in: itemIds } }).select("vendorId"),
+      Campaign.find({ _id: { $in: itemIds } }).select("vendorId"), // Agar campaign ka model 'Campaign' hai
+    ]);
+
+    // Extract and combine all vendor IDs uniquely
+    const extractedVendorIds = [
+      ...products.map((p) => p.vendorId?.toString()),
+      ...deals.map((d) => d.vendorId?.toString()),
+      ...campaigns.map((c) => c.vendorId?.toString()),
+      ...cart.items.map((item) => item.vendorId?.toString()), // Direct fallback
+    ].filter(Boolean);
+
+    const vendorIds = [...new Set(extractedVendorIds)];
+    console.log("Unique Vendor IDs extracted for this order:", vendorIds);
+    
+
+    // // Step 3: Extract unique Vendor IDs (Duplicates remove ho jayenge)
+    // const vendorIds = [
+    //   ...new Set(
+    //     products.map((product) => product.vendorId?.toString()).filter(Boolean),
+    //   ),
+    // ];
+    // console.log("Unique Vendor IDs for this order:", vendorIds);
 
     // 🛑 STEP 4: AUTOMATICALLY GENERATE STOPS FROM VENDOR BRANCHES
     let stops = [];
@@ -2255,25 +2282,23 @@ exports.getVendorOrders = async (req, res) => {
 
     const targetStatuses = tabStatusMap[status] || tabStatusMap.pending;
 
-    // 1. Aggregation Pipeline: Filter Orders & Items strictly by Product's Vendor ID
+    // 1. Aggregation Pipeline: Filter Orders & Items strictly for Current Vendor
     const activeOrders = await Order.aggregate([
       // Stage A: Basic Status Filter
       { $match: { status: { $in: targetStatuses } } },
 
-      // Stage B: Unwind items array to lookup each product individually
+      // Stage B: Unwind items array to inspect vendor ownership
       { $unwind: "$items" },
 
-      // Stage C: Join with 'products' collection using productId
+      // Stage C: Join with 'products' collection
       {
         $lookup: {
-          from: "products", // Ensure this matches your Product collection name in MongoDB
+          from: "products",
           localField: "items.productId",
           foreignField: "_id",
           as: "productDetails",
         },
       },
-
-      // Stage D: Flatten product details
       {
         $unwind: {
           path: "$productDetails",
@@ -2281,18 +2306,46 @@ exports.getVendorOrders = async (req, res) => {
         },
       },
 
-      // Stage E: Match ONLY items where Product's vendorId matches Current Vendor ID
+      // Stage D: Join with 'deals' collection (Checking both dealId and productId fallback)
+      {
+        $lookup: {
+          from: "deals",
+          let: { prodId: "$items.productId", dId: "$items.dealId" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $or: [
+                    { $eq: ["$_id", "$$dId"] },
+                    { $eq: ["$_id", "$$prodId"] } // Fallback if deal ID is passed in productId
+                  ]
+                }
+              }
+            }
+          ],
+          as: "dealDetails",
+        },
+      },
+      {
+        $unwind: {
+          path: "$dealDetails",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      // Stage E: Strictly match items that belong to THIS Vendor
       {
         $match: {
           $or: [
-            { "productDetails.vendorId": targetVendorObjectId },
             { "items.vendorId": targetVendorObjectId },
+            { "productDetails.vendorId": targetVendorObjectId },
+            { "dealDetails.vendorId": targetVendorObjectId },
             { "stops.vendorId": targetVendorObjectId },
           ],
         },
       },
 
-      // Stage F: Group back into Orders with ONLY matched items
+      // Stage F: Group back into Order Object with ONLY matched vendor items
       {
         $group: {
           _id: "$_id",
@@ -2307,21 +2360,37 @@ exports.getVendorOrders = async (req, res) => {
           userId: { $first: "$userId" },
           cancellationReason: { $first: "$cancellationReason" },
           issueDetails: { $first: "$issueDetails" },
-          items: { $push: "$items" },
+          stops: { $first: "$stops" },
+          items: {
+            $push: {$mergeObjects: [
+                "$items",
+                {
+                  // Tag actual vendorId if missing directly on item level
+                  vendorId: {
+                    $ifNull: [
+                      "$items.vendorId",
+                      "$productDetails.vendorId",
+                      "$dealDetails.vendorId",
+                    ],
+                  },
+                },
+              ],
+            },
+          },
         },
       },
 
-      // Stage G: Sort by Latest Orders
+      // Stage G: Sort by Latest Orders First
       { $sort: { createdAt: -1 } },
     ]);
 
-    // Populate user and driver manually after aggregation
+    // Populate user and rider details
     await Order.populate(activeOrders, [
       { path: "riderId", select: "fullName name phone avatar rating" },
       { path: "userId", select: "fullName name" },
     ]);
 
-    // 2. Aggregate Counts for Tabs (Strict Matching)
+    // 2. Tab Counts Aggregation Pipeline (Matches only vendor's relevant orders)
     const countPipeline = await Order.aggregate([
       { $unwind: "$items" },
       {
@@ -2339,10 +2408,24 @@ exports.getVendorOrders = async (req, res) => {
         },
       },
       {
-        $match: {
-          $or: [
-            { "productDetails.vendorId": targetVendorObjectId },
+        $lookup: {
+          from: "deals",
+          localField: "items.dealId",
+          foreignField: "_id",
+          as: "dealDetails",
+        },
+      },
+      {
+        $unwind: {
+          path: "$dealDetails",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $match: {$or: [
             { "items.vendorId": targetVendorObjectId },
+            { "productDetails.vendorId": targetVendorObjectId },
+            { "dealDetails.vendorId": targetVendorObjectId },
             { "stops.vendorId": targetVendorObjectId },
           ],
         },
@@ -2378,7 +2461,7 @@ exports.getVendorOrders = async (req, res) => {
       }
     });
 
-    // 3. Format Response JSON
+    // 3. Format Final JSON Response
     const formattedOrders = activeOrders.map((order) => {
       const dateObj = new Date(order.createdAt);
       const formattedDate =
@@ -2396,10 +2479,27 @@ exports.getVendorOrders = async (req, res) => {
           })
           .toLowerCase();
 
-      const vendorSubtotal = order.items.reduce((acc, item) => {
-        return acc + (item.total || item.price * item.quantity);
+      // Filter items strictly belonging to this logged-in vendor
+      const vendorOnlyItems = order.items.filter((item) => {
+        if (!item.vendorId) return true; // Fallback if single vendor order
+        return item.vendorId.toString() === targetVendorObjectId.toString();
+      });
+
+      // Calculate Subtotal for this specific vendor's items only
+      const vendorSubtotal = vendorOnlyItems.reduce((acc, item) => {
+        const itemPrice = item.total || item.price * item.quantity || 0;
+        return acc + itemPrice;
       }, 0);
-      console.log(order, order.items);
+
+      // Check current vendor stop status if stops exist
+      const vendorStop = Array.isArray(order.stops)
+        ? order.stops.find(
+            (stop) =>
+              stop.vendorId &&
+              stop.vendorId.toString() === targetVendorObjectId.toString()
+          )
+        : null;
+
       return {
         _id: order._id,
         orderNumber: order.orderNumber,
@@ -2411,23 +2511,25 @@ exports.getVendorOrders = async (req, res) => {
         allergyAlert: order.allergyWarning || null,
         customerNote: order.instructions || "",
 
-        items: order.items.map((item) => ({
-          itemId: item.productId,
+        // Display ONLY logged-in vendor's items, deals, variations & addOns
+        items: vendorOnlyItems.map((item) => ({
+          itemId: item.productId || item.dealId || item._id,
+          type: item.dealId ? "deal" : "product",
           quantity: item.quantity,
-          name: item.name,
+          name: item.name || item.title || item.customItemName,
           note: item.note || item.itemInstructions || "",
           price: item.total || item.price * item.quantity,
           formattedPrice: `${item.total || item.price * item.quantity} PKR`,
-          variations: item.variations || [],
-          addOns: item.addOns || [],
+          variations: item.variations || item.allowedVariations || [],
+          addOns: item.addOns || item.allowedAddOns || [],
         })),
 
         subtotal: vendorSubtotal,
-        deliveryFee: order.deliveryFee,
+        deliveryFee: order.deliveryFee || 0,
         totalAmount: vendorSubtotal,
         formattedTotal: `${vendorSubtotal.toLocaleString()} PKR`,
 
-        status: order.status,
+        status: vendorStop?.status || order.status,
 
         rider: order.riderId
           ? {
