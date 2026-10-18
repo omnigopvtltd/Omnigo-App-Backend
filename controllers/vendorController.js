@@ -2336,7 +2336,7 @@ exports.getAllVendors = async (req, res) => {
 // =======================
 exports.getVendorById = async (req, res) => {
   try {
-    const vendorId = req.params.vendorId || req.user?.id;
+    const vendorId = req.params.id ? req.params.id : req.user?.id || req.user?._id || req.params.vendorId;
 
     if (!vendorId) {
       return res.status(400).json({
@@ -2346,15 +2346,18 @@ exports.getVendorById = async (req, res) => {
     }
 
     const vendor = await Vendor.findById(vendorId);
-    const vendorBranch = await VendorBranch.findById(vendorId);
+    
+    // FIX: Use findOne with vendorId field instead of findById
+    const vendorBranch = await VendorBranch.findOne({ vendorId: vendorId });
 
-    res.json({
+    return res.status(200).json({
       success: true,
       vendor,
       vendorBranch,
     });
   } catch (err) {
-    res.status(500).json({
+    console.error("GET VENDOR BY ID ERROR:", err);
+    return res.status(500).json({
       success: false,
       message: err.message,
     });
