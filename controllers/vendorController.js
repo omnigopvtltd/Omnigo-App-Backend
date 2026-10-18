@@ -3991,38 +3991,67 @@ exports.toggleAvailability = async (req, res) => {
     }
 
     // 3. Determine target status
-    const currentRushState = Boolean(branch.isOpen);
+    const currentOpenState = Boolean(branch.isOpen);
 
-    let targetRushState;
+    let targetOpenState;
     if (req.body && typeof req.body.isOpen === "boolean") {
-      targetRushState = req.body.isOpen;
-    } else if (req.body && typeof req.body.rushMode === "boolean") {
-      targetRushState = req.body.rushMode;
+      targetOpenState = req.body.isOpen;
+    } else if (req.body && typeof req.body.isOpen === "boolean") {
+      targetOpenState = req.body.isOpen;
     } else {
-      targetRushState = !currentRushState;
+      targetOpenState = !currentOpenState;
     }
 
     // 4. Update VendorBranch atomically
     const updatedBranch = await VendorBranch.findByIdAndUpdate(
       branch._id,
-      { $set: { isOpen: targetRushState } },
+      { $set: { isOpen: targetOpenState } },
       { new: true, runValidators: true },
     ).select("isOpen");
 
-    // 5. Real-time updates via Socket IO
-    const io = req.app.get("io");
-    if (io) {
-      io.to(`vendor:${vendorId}`).emit("rushModeToggled", {
-        vendorId,
-        isOpen: updatedBranch.isOpen,
-        message: `Vendor is now ${updatedBranch.isOpen ? "OPEN" : "CLOSED"}`,
-      });
-
-      io.to(`vendorCatalog:${vendorId}`).emit("vendorRushModeUpdated", {
-        vendorId,
-        isOpen: updatedBranch.isOpen,
-      });
+    // ====================================================
+    // 5. SIMPLE REAL-TIME UPDATE TO FIREBASE FIRESTORE
+    // ====================================================
+    try {
+      const db = getFirestore(); // Uses app initialized in your existing firebase file
+      await db.collection("vendors").doc(vendorId.toString()).set(
+        {
+          isOpen: Boolean(updatedBranch.isOpen),
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+    } catch (fbErr) {
+      console.error("Firebase Sync Warning:", fbErr.message);
     }
+
+    // 5. Real-time updates via Socket IO
+    // const io = req.app.get("io");
+    // if (io) {
+    //   io.to(`vendor:${vendorId}`).emit("rushModeToggled", {
+    //     vendorId,
+    //     isOpen: updatedBranch.isOpen,
+    //     message: `Vendor is now ${updatedBranch.isOpen ? "OPEN" : "CLOSED"}`,
+    //   });
+
+    //   io.to(`vendorCatalog:${vendorId}`).emit("vendorRushModeUpdated", {
+    //     vendorId,
+    //     isOpen: updatedBranch.isOpen,
+    //   });
+    // }
+
+    // Send Notification
+       sendNotification(req.app, {
+      vendorId: vendorId,
+      role: "Vendor",
+      title: `${vendor.businessName} ${
+        updatedBranch.isOpen ? "available" : "not available"
+      }`,
+      message: `${vendor.businessName} ${
+        updatedBranch.isOpen ? "is open now" : "is close Now"
+      }`,
+      type: "rush_mode",
+    });
 
     return res.status(200).json({
       success: true,
