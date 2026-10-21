@@ -115,6 +115,11 @@ exports.createOrder = async (req, res) => {
     console.log("Unique Vendor IDs extracted for this order:", vendorIds);
     
 
+    
+    const hasOnlyGroceryItems =
+      formattedItems.length > 0 &&
+      formattedItems.every((item) => item.orderFrom === "grocery");
+
     // // Step 3: Extract unique Vendor IDs (Duplicates remove ho jayenge)
     // const vendorIds = [
     //   ...new Set(
@@ -154,7 +159,7 @@ exports.createOrder = async (req, res) => {
             type: "Point",
             coordinates: matchedBranch.location?.coordinates || vendor.location?.coordinates || [0, 0],
           },
-          status: "pending",
+          status: hasOnlyGroceryItems ? "confirmed" : "pending",
         };
       });
     }
@@ -184,9 +189,6 @@ exports.createOrder = async (req, res) => {
     const totalAmount =
       subtotal + subtotalWithTax + Number(deliveryFee) - discount;
 
-    const hasOnlyGroceryItems =
-      formattedItems.length > 0 &&
-      formattedItems.every((item) => item.orderFrom === "grocery");
 
     // const status = hasOnlyGroceryItems ? "confirmed" : "pending";
 
@@ -947,7 +949,7 @@ exports.readyOrder = async (req, res) => {
 // };
 
 // =====================================
-// CANCEL ORDER BY VENDOR
+// CANCEL ORDER BY VENDOR (With Debug Logs)
 // =====================================
 exports.cancelOrderByVendor = async (req, res) => {
   try {
@@ -961,18 +963,13 @@ exports.cancelOrderByVendor = async (req, res) => {
       });
     }
 
-    // 1. Find Order belonging to this Vendor
-    const order = await Order.findOne({
-      _id: req.params.id,
-    });
+    // 1. Fetch Order
+    const order = await Order.findOne({ _id: req.params.id });
 
     if (!order) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Order not found" });
+      return res.status(404).json({ success: false, message: "Order not found" });
     }
 
-    // Check if order is already completed or cancelled
     if (["delivered", "completed", "cancelled"].includes(order.status)) {
       return res.status(400).json({
         success: false,
@@ -980,10 +977,9 @@ exports.cancelOrderByVendor = async (req, res) => {
       });
     }
 
-    // Determine Total Unique Vendors / Stops in the order
     const totalStops = Array.isArray(order.stops) ? order.stops.length : 0;
     
-    // Find vendor's specific stop in the order
+    // Find target vendor's stop
     let targetStop = null;
     if (totalStops > 0) {
       targetStop = order.stops.find(
@@ -991,7 +987,6 @@ exports.cancelOrderByVendor = async (req, res) => {
       );
     }
 
-    // Check if vendor belongs to this order
     if (totalStops > 0 && !targetStop) {
       return res.status(403).json({
         success: false,
@@ -1001,117 +996,105 @@ exports.cancelOrderByVendor = async (req, res) => {
 
     let isFullOrderCancelled = false;
 
-    // Logic 1: Single Vendor Order or No Stops Schema (Cancel Full Order)
+    // SCENARIO 1: Single Vendor / Single Stop Order
     if (totalStops <= 1) {
       order.status = "cancelled";
       order.cancellationReason = cancellationReason;
       if (targetStop) {
         targetStop.status = "cancelled";
+        targetStop.cancellationReason = cancellationReason;
       }
       isFullOrderCancelled = true;
     } 
-    // // Logic 2: Multi-Vendor Order (Cancel Only This Vendor's Stop)
-    // else {
-    //   targetStop.status = "cancelled"; // Ya "rejected_by_vendor"
-    //   targetStop.cancellationReason = cancellationReason;
-
-    //   // Agar saare stops cancel ho jayein, tab overall order bhi cancel mark ho jaye
-    //   const allStopsCancelled = order.stops.every(
-    //     (stop) => stop.status === "cancelled" || stop.status === "rejected_by_vendor"
-    //   );
-
-    //   if (allStopsCancelled) {
-    //     order.status = "cancelled";
-    //     order.cancellationReason = "All vendor stops cancelled";
-    //     isFullOrderCancelled = true;
-    //   } 
-    // }
-// Logic 2: Multi-Vendor Order (Cancel Only This Vendor's Stop)
+    // SCENARIO 2: Multi-Vendor Order
     else {
-      targetStop.status = "cancelled"; // Ya "rejected_by_vendor"
+
+      // 1. Mark target vendor stop as cancelled
+      targetStop.status = "cancelled";
       targetStop.cancellationReason = cancellationReason;
 
-      // Agar saare stops cancel ho jayein, tab overall order bhi cancel mark ho jaye
-      const allStopsCancelled = order.stops.every(
-        (stop) => stop.status === "cancelled" || stop.status === "rejected_by_vendor"
+      // 2. Identify cancelled vendors and their business types
+      const cancelledStops = order.stops.filter(
+        (stop) => ["cancelled", "rejected_by_vendor"].includes(stop.status)
       );
 
-      if (allStopsCancelled) {
+      const cancelledVendorIds = cancelledStops.map((stop) => stop.vendorId.toString());
+      const cancelledBusinessTypes = cancelledStops.map((stop) => 
+        (stop.businessType || "").toLowerCase().replace(/[\s-_]/g, '')
+      );
+
+      // 3. Remove items associated with cancelled vendors/business types
+      const initialItemCount = order.items.length;
+      order.items = order.items.filter((item) => {
+        const itemVendorId = item.vendorId ? item.vendorId.toString() : null;
+        const itemOrderFromRaw = item.orderFrom || item.category || "";
+        const itemOrderFromNormalized = itemOrderFromRaw.toLowerCase().replace(/[\s-_]/g, '');
+
+        let isCancelled = false;
+
+        if (itemVendorId) {
+          isCancelled = cancelledVendorIds.includes(itemVendorId);
+        } else {
+          isCancelled = cancelledBusinessTypes.some((type) => type && itemOrderFromNormalized.includes(type));
+        }
+
+        console.log(`🛒 [LOG] Checking Item: "${item.name}" | orderFrom: "${itemOrderFromRaw}" | normalized: "${itemOrderFromNormalized}" | Is Cancelled: ${isCancelled}`);
+
+        return !isCancelled;
+      });
+
+
+      // 4. Check if ALL stops are cancelled
+      const allStopsCancelled = order.stops.every(
+        (stop) => ["cancelled", "rejected_by_vendor"].includes(stop.status)
+      );
+
+      if (allStopsCancelled || order.items.length === 0) {
         order.status = "cancelled";
-        order.cancellationReason = "All vendor stops cancelled";
+        order.cancellationReason = "All vendor stops or items cancelled";
         isFullOrderCancelled = true;
       } else {
-        // 🛒 NEW CHECK: Check remaining active stops / items
-        // Find which vendor IDs still have active (non-cancelled) stops
-        const activeVendorIds = order.stops
-          .filter((stop) => !["cancelled", "rejected_by_vendor"].includes(stop.status))
-          .map((stop) => stop.vendorId.toString());
+        // 5. RECALCULATE SUBTOTAL, TAX, TOTAL AMOUNT
+        const newSubtotal = order.items.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+        order.subtotal = newSubtotal;
 
-        // Check if the remaining active items in the order belong ONLY to grocery
-        const remainingItems = order.items.filter((item) => {
-          // Aap item ke vendorId ya product ke zariye check kar sakte hain ke wo kis vendor ka hai
-          return activeVendorIds.includes(item.vendorId?.toString());
+        const taxPercent = Number(order.salesAndServiceTaxForUser) || 0;
+        const newTax = (newSubtotal * taxPercent) / 100;
+        order.tax = newTax;
+
+        const deliveryFee = Number(order.deliveryFee) || 0;
+        const promoDiscount = Number(order.promoDiscount) || 0;
+
+        order.totalAmount = newSubtotal + deliveryFee + newTax - promoDiscount;
+
+        // 6. GROCERY AUTO-CONFIRMATION CHECK
+        const activeStops = order.stops.filter(
+          (stop) => !["cancelled", "rejected_by_vendor"].includes(stop.status)
+        );
+
+        activeStops.forEach((s) => console.log(`   - Active Stop: ${s.businessName} | Type: ${s.businessType}`));
+
+        const onlyActiveStopsAreGrocery = activeStops.every((stop) => {
+          const type = (stop.businessType || "").toLowerCase();
+          return type.includes("mart") || type.includes("grocery") || type.includes("store");
         });
 
-        const hasOnlyGroceryLeft =
-          remainingItems.length > 0 &&
-          remainingItems.every((item) => item.orderFrom === "grocery");
+        const remainingItemsAreGrocery = order.items.every((item) => {
+          const cat = (item.orderFrom || item.category || "").toLowerCase();
+          return cat.includes("grocery") || cat.includes("mart") || cat.includes("fastfood") === false;
+        });
 
-        if (hasOnlyGroceryLeft) {
-          order.status = "confirmed"; // Auto-confirm if only grocery items are left
-          order.cancellationReason = `Vendor cancelled, remaining order auto-confirmed (Grocery only)`;
+        // Auto confirm if only Grocery/Mart remains
+        if (onlyActiveStopsAreGrocery && remainingItemsAreGrocery) {
+          order.status = "confirmed";
+          order.cancellationReason = "Vendor stop cancelled; remaining Grocery items auto-confirmed";
+        } else {
+          order.status = order.status;
         }
       }
     }
-    
+
     await order.save();
-
-    // =====================================
-    // REAL-TIME NOTIFICATIONS (Socket.IO & FCM)
-    // =====================================
-    const io = req.app.get("io");
-    if (io) {
-      // Notify Customer
-      io.to(`user:${order.userId}`).emit("orderStatusUpdated", {
-        orderId: order._id,
-        orderNumber: order.orderNumber,
-        status: order.status,
-        vendorId,
-        isFullOrderCancelled,
-        cancellationReason,
-        message: isFullOrderCancelled
-          ? "Your order has been cancelled."
-          : "One vendor stop was cancelled from your multi-vendor order.",
-      });
-
-      // Notify Rider if assigned and full order is cancelled
-      const assignedRiderId = order.driverId || order.riderId;
-      if (assignedRiderId && isFullOrderCancelled) {
-        io.to(`rider:${assignedRiderId}`).emit("orderCancelledByVendor", {
-          orderId: order._id,
-          orderNumber: order.orderNumber,
-          message: "Order assigned to you has been cancelled.",
-        });
-      }
-    }
-
-    // Push Notification to User
-    sendNotification(req.app, {
-      userId: order.userId,
-      role: "user",
-      title: isFullOrderCancelled ? "Order Cancelled!" : "Order Item Cancelled!",
-      message: isFullOrderCancelled
-        ? `Order #${order.orderNumber} was cancelled. Reason: ${cancellationReason}`
-        : `A vendor stop in Order #${order.orderNumber} was cancelled.`,
-      type: "cancelled_order",
-      data: {
-        orderId: order._id,
-        orderNumber: order.orderNumber,
-        totalAmount: order.totalAmount || order.grandTotal,
-        itemCount: order.items?.length || 0,
-        screenToOpen: "UserOrderDetails",
-      },
-    });
 
     return res.status(200).json({
       success: true,
@@ -1127,7 +1110,6 @@ exports.cancelOrderByVendor = async (req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 };
-
 // =====================================
 // RAISE ORDER ISSUE BY USER
 // =====================================
@@ -2530,14 +2512,14 @@ exports.getVendorOrders = async (req, res) => {
     const formattedOrders = activeOrders.map((order) => {
       const dateObj = new Date(order.createdAt);
       const formattedDate =
-        dateObj.toLocaleDateString("en-GB", {
+        dateObj.toLocaleDateString("en-PK", {
           day: "2-digit",
           month: "2-digit",
           year: "2-digit",
         }) +
         " at " +
         dateObj
-          .toLocaleTimeString("en-US", {
+          .toLocaleTimeString("en-PK", {
             hour: "numeric",
             minute: "2-digit",
             hour12: true,

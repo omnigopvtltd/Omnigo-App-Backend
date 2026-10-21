@@ -303,7 +303,7 @@ const orderSchema = new mongoose.Schema(
 
     deliveryFee: {
       type: Number,
-      default: 0,
+      default: 100,
     },
 
     tax: {
@@ -350,7 +350,7 @@ const orderSchema = new mongoose.Schema(
 
     salesAndServiceTaxForUser: {
       type: Number,
-      default: 10,
+      default: 5,
     },
 
     salesAndServiceTaxForRider: {

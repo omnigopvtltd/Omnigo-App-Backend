@@ -44,7 +44,7 @@ router.get("/", getAllCampaigns);
 router.get("/vendor/:vendorId", auth, getCampaignsByVendor);
 router.put("/:id", upload.diskUpload.single("campaignBanner"), updateCampaign);
 router.patch("/:id", toggleCampaignAvailability); // New route for toggling status
-router.delete("/:id", deleteCampaign);
+router.delete("/delete/:id", deleteCampaign);
 
 router.get("/:id", getCampaignById);
 module.exports = router;

@@ -52,7 +52,9 @@ app.use((req, res, next) => {
 //  static uploads
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
+
 // ================= ROUTES =================
+app.use("/api/config", require("./routes/appConfigRoutes"));
 app.use("/api/vendors", require("./routes/vendorRoutes"));
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/products", require("./routes/productRoutes"));
