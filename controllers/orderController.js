@@ -1372,7 +1372,8 @@ exports.getAvailableOrders = async (req, res) => {
   try {
     const allOrders = await Order.find({
       status: {
-        $in: ["confirmed", "preparing", "ready"],
+        $in: ["ready"],
+        // $in: ["confirmed", "preparing", "ready"],
       },
       isAssigned: false,
     })
