@@ -338,6 +338,7 @@ exports.updateAppVersionConfig = async (req, res) => {
     const textFields = [
       "updateTitle",
       "updateMessage",
+    //   "type",
       "forceUpdateMessage",
       "maintenanceTitle",
       "maintenanceMessage",

@@ -202,7 +202,7 @@ exports.addToCart = async (req, res) => {
     const io = req.app.get("io");
     const { items } = req.body;
 
-    console.log("ADD TO CART REQUEST BODY:", JSON.stringify(req.body, null, 2));
+    // console.log("ADD TO CART REQUEST BODY:", JSON.stringify(req.body, null, 2));
 
     // 1. Array Validation
     if (!Array.isArray(items) || items.length === 0) {
@@ -223,6 +223,7 @@ exports.addToCart = async (req, res) => {
 
     // 3. Process Each Incoming Item
     for (const newItem of items) {
+      // console.log("New Item", newItem);
       const itemId = newItem.productId || newItem.itemId || newItem.id;
       if (!itemId || !mongoose.Types.ObjectId.isValid(itemId)) continue;
 
@@ -297,6 +298,10 @@ exports.addToCart = async (req, res) => {
         ? newItem.variations
         : [];
 
+      // Serving
+      const incomingServing = newItem.serving;
+      console.log(incomingAddOns, incomingVariations, incomingServing);
+
       // Calculate Variations Sum & Add-Ons Sum
       const addOnsUnitSum = incomingAddOns.reduce(
         (sum, a) => sum + (Number(a.price) || 0),
@@ -354,66 +359,81 @@ exports.addToCart = async (req, res) => {
       // Updated existingIndex search in Cart Controller
       // ==========================================
       const existingIndex = cart.items.findIndex((item) => {
-        // 1. Basic match: productId and itemType (entityType)
-        const isBaseMatch =
-          item.productId &&
+        console.log(cart.items);
+        // 1. Check Product ID & Type
+        const isProductSame =
           item.productId.toString() === itemId.toString() &&
           item.itemType === entityType;
+        if (!isProductSame) return false;
+        // console.log(req.body, incomingServing);
+        // 2. Check Serving (e.g., "full")
+        const isServingSame = items?.serving ? item.serving === incomingServing : item.serving;
+        if (!isServingSame) return false;
 
-        if (!isBaseMatch) return false;
+        // 3. Check Variation Name (e.g., "Small")
+        // Hum dekh rahe hain ke pehle wale item ka variation name aur naye wale ka naam same hai ya nahi
+        const oldVarName =
+          item.variations && item.variations[0]
+            ? item.variations[0].options[0].name
+            : "";
+        const newVarName =
+          items?.variations && items?.variations[0]
+            ? incomingVariations[0].options[0].name
+            : "";
+        if (oldVarName !== newVarName) return false;
 
-        // 2. Match Variations (e.g., Size, Flavor, etc.)
-        // Assuming item.variation and incoming variation are stored as strings, IDs, or objects
-        const itemVar = item.variations ? item.variations.toString() : "";
-        const incomingVar = variations ? variations.toString() : "";
-        const isVariationMatch = itemVar === incomingVar;
+        // 4. Check Add-on Name (e.g., "Extra Cheese")
+        const oldAddOnName =
+          item.addOns && item.addOns[0] ? item.addOns[0].name : "";
+        const newAddOnName =
+         items?.addOns && items.addOns[0] 
+            ? incomingAddOns[0].name 
+            : "";
+        if (oldAddOnName !== newAddOnName) return false;
 
-        if (!isVariationMatch) return false;
-
-        // 3. Match Serving (e.g., Small, Medium, Large or specific serving ID)
-        const itemServ = item.serving ? item.serving.toString() : "";
-        const incomingServ = serving ? serving.toString() : "";
-        const isServingMatch = itemServ === incomingServ;
-
-        if (!isServingMatch) return false;
-
-        // 4. Match AddOns
-        const isAddOnsMatch = areAddOnsEqual(item.addOns, incomingAddOns);
-
-        // Return true only if base, variation, serving, and addOns all match perfectly
-        return isAddOnsMatch;
+        // Agar sab kuch match ho gaya, toh matlab item same hai!
+        return true;
       });
 
+      // Ab agar item mil gaya (index -1 nahi hai), toh quantity barha dein
       if (existingIndex > -1) {
-        // UPDATE EXISTING CART ITEM
-        const existingItem = cart.items[existingIndex];
-
-        if (incomingAddOns.length > 0) existingItem.addOns = incomingAddOns;
-        if (incomingVariations.length > 0)
-          existingItem.variations = incomingVariations;
-
-        existingItem.quantity += qty;
-
-        const currentAddOnsSum = existingItem.addOns.reduce(
-          (sum, a) => sum + (Number(a.price) || 0),
-          0,
+        cart.items[existingIndex].quantity += Number(
+          qty || req.body.items.quantity || 1,
         );
+        cart.items[existingIndex].total =
+          cart.items[existingIndex].quantity * cart.items[existingIndex].price;
+        // }
 
-        const currentVarSum = existingItem.variations.reduce((sum, v) => {
-          if (v.options && Array.isArray(v.options)) {
-            return (
-              sum +
-              v.options.reduce((oSum, o) => oSum + (Number(o.price) || 0), 0)
-            );
-          }
-          return sum + (Number(v.price) || 0);
-        }, 0);
+        // if (existingIndex > -1) {
+        //   // UPDATE EXISTING CART ITEM
+        //   const existingItem = cart.items[existingIndex];
 
-        // Final Line Total = (Item Unit Price + Variations + AddOns) * Total Quantity
-        existingItem.total =
-          (Number(currentVarSum || existingItem.price || unitPrice) +
-            currentAddOnsSum) *
-          existingItem.quantity;
+        //   if (incomingAddOns.length > 0) existingItem.addOns = incomingAddOns;
+        //   if (incomingVariations.length > 0)
+        //     existingItem.variations = incomingVariations;
+
+        //   existingItem.quantity += qty;
+
+        //   const currentAddOnsSum = existingItem.addOns.reduce(
+        //     (sum, a) => sum + (Number(a.price) || 0),
+        //     0,
+        //   );
+
+        //   const currentVarSum = existingItem.variations.reduce((sum, v) => {
+        //     if (v.options && Array.isArray(v.options)) {
+        //       return (
+        //         sum +
+        //         v.options.reduce((oSum, o) => oSum + (Number(o.price) || 0), 0)
+        //       );
+        //     }
+        //     return sum + (Number(v.price) || 0);
+        //   }, 0);
+
+        //   // Final Line Total = (Item Unit Price + Variations + AddOns) * Total Quantity
+        //   existingItem.total =
+        //     (Number(currentVarSum || existingItem.price || unitPrice) +
+        //       currentAddOnsSum) *
+        //     existingItem.quantity;
       } else {
         // PUSH NEW CART ITEM
         const lineItemTotal =
@@ -465,7 +485,6 @@ exports.addToCart = async (req, res) => {
     });
   }
 };
-
 // ================= GET CART =================
 exports.getCart = async (req, res) => {
   try {

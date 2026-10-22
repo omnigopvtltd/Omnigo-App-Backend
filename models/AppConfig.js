@@ -60,7 +60,7 @@ const platformSchema = new mongoose.Schema(
     minRequiredVersion: versionField, // anything below this is force-blocked
     storeUrl: { type: String, trim: true, default: "" },
   },
-  { _id: false }
+  { _id: false },
 );
 
 const appConfigSchema = new mongoose.Schema(
@@ -87,14 +87,21 @@ const appConfigSchema = new mongoose.Schema(
       type: String,
       trim: true,
       maxlength: 500,
-      default: "A new version of the app is available with bug fixes and improvements.",
+      default:
+        "A new version of the app is available with bug fixes and improvements.",
     },
     forceUpdateMessage: {
       type: String,
       trim: true,
       maxlength: 500,
-      default: "This version is no longer supported. Please update to continue using the app.",
+      default:
+        "This version is no longer supported. Please update to continue using the app.",
     },
+    // type: {
+    //   type: String,
+    //   enum: ["normal", "force"],
+    //   default: "normal",
+    // },
     isMaintenanceMode: { type: Boolean, default: false },
     maintenanceTitle: {
       type: String,
@@ -106,11 +113,12 @@ const appConfigSchema = new mongoose.Schema(
       type: String,
       trim: true,
       maxlength: 500,
-      default: "System is undergoing scheduled maintenance. Please check back shortly.",
+      default:
+        "System is undergoing scheduled maintenance. Please check back shortly.",
     },
     updatedBy: { type: mongoose.Schema.Types.ObjectId }, // which admin changed it last
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 module.exports = mongoose.model("AppConfig", appConfigSchema);
