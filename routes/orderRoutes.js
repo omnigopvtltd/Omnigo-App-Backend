@@ -27,6 +27,7 @@ const {
   readyOrder,
   cancelOrderByVendor,
   raiseOrderIssueByUser,
+  calculateDeliveryCharges,
 } = require("../controllers/orderController");
 
 const {completeOrderDelivery} = require("../controllers/riderOrderFlowController");
@@ -37,6 +38,7 @@ router.get("/all-orders", auth, role("admin", "superadmin"), getAllOrders);
 router.get("/available", auth, getAvailableOrders);
 router.get("/ongoing", auth, getOngoingOrders);
 
+router.post("/calculate-delivery", auth, calculateDeliveryCharges);
 
 // CREATE ORDER
 router.post("/create", auth, createOrder);

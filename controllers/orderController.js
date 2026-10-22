@@ -18,6 +18,100 @@ const VendorBranch = require("../models/VendorBranch");
 const Deal = require("../models/Deal");
 const Campaign = require("../models/Campaign");
 
+// Helper function to calculate distance in KM using Haversine Formula
+const calculateDistance = (lat1, lon1, lat2, lon2) => {
+  const toRad = (value) => (value * Math.PI) / 180;
+  const R = 6371; // Earth radius in KM
+
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c; // Distance in KM
+};
+
+// ==========================================
+// Calculate Delivery Charges API
+// ==========================================
+exports.calculateDeliveryCharges = async (req, res) => {
+  try {
+    const { vendorLat, vendorLng, userLat, userLng, isPeakHour, isBadWeather } =
+      req.body;
+
+    console.log(req.body);
+    // 1. Validate coordinates
+    if (!vendorLat || !vendorLng || !userLat || !userLng) {
+      return res.status(400).json({
+        success: false,
+        message: "Vendor and User latitude & longitude are required",
+      });
+    }
+
+    // 2. Calculate distance in kilometers
+    const distanceKm = calculateDistance(
+      Number(vendorLat),
+      Number(vendorLng),
+      Number(userLat),
+      Number(userLng),
+    );
+
+    console.log(distanceKm);
+
+    // 3. Base Delivery Charges Logic
+    const baseDistance = 1; // 1 km
+    const baseCharge = 100;
+    const ratePerExtraKm = 25;
+
+    let deliveryFee = baseCharge;
+
+    if (distanceKm > baseDistance) {
+      const extraKm = distanceKm - baseDistance;
+      deliveryFee += extraKm * ratePerExtraKm;
+    }
+    let peakHourPercent = 8;
+    // 4. Apply Peak Hours Multiplier (e.g., 8% extra during rush hours)
+    if (isPeakHour) {
+      deliveryFee += (peakHourPercent / 100) * deliveryFee;
+    }
+
+    let badWeatherPercent = 8;
+    // 5. Apply Weather Multiplier (e.g., 30% extra during rain/bad weather)
+    if (isBadWeather) {
+      deliveryFee += (badWeatherPercent / 100) * deliveryFee;
+    }
+
+    // Round to nearest integer
+    const finalDeliveryCharge = Math.round(deliveryFee);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        distanceKm: Number(distanceKm.toFixed(2)),
+        baseCharge,
+        deliveryFee: finalDeliveryCharge,
+        appliedMultipliers: {
+          peakHour: isPeakHour || false,
+          badWeather: isBadWeather || false,
+          peakHourCharges: isPeakHour ? `${peakHourPercent}%` : 0,
+          badweatherCharges: isBadWeather ? `${badWeatherPercent}%`: 0,
+        },
+      },
+    });
+  } catch (err) {
+    console.error("DELIVERY CALCULATION ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
 exports.createOrder = async (req, res) => {
   try {
     const {
@@ -90,7 +184,7 @@ exports.createOrder = async (req, res) => {
     // );
     // console.log("Products fetched for this order:", products);
 
-// ==========================================================
+    // ==========================================================
     // STEP 1 & 2: COLLECT IDs AND FETCH FROM PRODUCTS, DEALS & CAMPAIGNS
     // ==========================================================
     const itemIds = cart.items.map((item) => item.productId).filter(Boolean);
@@ -113,9 +207,7 @@ exports.createOrder = async (req, res) => {
 
     const vendorIds = [...new Set(extractedVendorIds)];
     console.log("Unique Vendor IDs extracted for this order:", vendorIds);
-    
 
-    
     const hasOnlyGroceryItems =
       formattedItems.length > 0 &&
       formattedItems.every((item) => item.orderFrom === "grocery");
@@ -130,26 +222,37 @@ exports.createOrder = async (req, res) => {
 
     // 🛑 STEP 4: AUTOMATICALLY GENERATE STOPS FROM VENDOR BRANCHES
     let stops = [];
-    if (req.body.stops && Array.isArray(req.body.stops) && req.body.stops.length > 0) {
+    if (
+      req.body.stops &&
+      Array.isArray(req.body.stops) &&
+      req.body.stops.length > 0
+    ) {
       stops = req.body.stops; // Agar frontend se aa jayein toh override na karein
     } else if (vendorIds.length > 0) {
       // Step A: Fetch Vendors basic info
       const vendors = await Vendor.find({ _id: { $in: vendorIds } });
-      
+
       // Step B: Fetch corresponding Vendor Branches (e.g. Primary branch or branch matching vendorId)
       // Agar aapke paas request mein branchId hai toh wo use karein, warna vendor ki default/first active branch fetch karein
-      const branches = await VendorBranch.find({ vendorId: { $in: vendorIds }, isActive: true });
+      const branches = await VendorBranch.find({
+        vendorId: { $in: vendorIds },
+        isActive: true,
+      });
 
       stops = vendors.map((vendor, index) => {
         // Is vendor ki relevant branch dhoondhein (agar branchId req mein ho ya pehli branch utha lein)
-        const matchedBranch = branches.find(b => b.vendorId.toString() === vendor._id.toString()) || {};
+        const matchedBranch =
+          branches.find(
+            (b) => b.vendorId.toString() === vendor._id.toString(),
+          ) || {};
 
         return {
           stopNumber: index + 1,
           vendorId: vendor._id,
           branchId: matchedBranch._id || null, // Branch ID link kar dein
           logo: vendor.logo || "",
-          businessName: vendor?.businessName || matchedBranch.branchName || "Branch Name",
+          businessName:
+            vendor?.businessName || matchedBranch.branchName || "Branch Name",
           businessType: vendor.businessType || "fast-food",
           // Branch address aur location prioritized honge
           address: matchedBranch.address || vendor.address || "Vendor Address",
@@ -157,7 +260,8 @@ exports.createOrder = async (req, res) => {
           country: matchedBranch.country || vendor.country || "Vendor Country",
           location: {
             type: "Point",
-            coordinates: matchedBranch.location?.coordinates || vendor.location?.coordinates || [0, 0],
+            coordinates: matchedBranch.location?.coordinates ||
+              vendor.location?.coordinates || [0, 0],
           },
           status: hasOnlyGroceryItems ? "confirmed" : "pending",
         };
@@ -188,7 +292,6 @@ exports.createOrder = async (req, res) => {
       (Number(salesAndServiceTaxForUser) / 100) * subtotal;
     const totalAmount =
       subtotal + subtotalWithTax + Number(deliveryFee) - discount;
-
 
     // const status = hasOnlyGroceryItems ? "confirmed" : "pending";
 
@@ -967,7 +1070,9 @@ exports.cancelOrderByVendor = async (req, res) => {
     const order = await Order.findOne({ _id: req.params.id });
 
     if (!order) {
-      return res.status(404).json({ success: false, message: "Order not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
     }
 
     if (["delivered", "completed", "cancelled"].includes(order.status)) {
@@ -978,12 +1083,13 @@ exports.cancelOrderByVendor = async (req, res) => {
     }
 
     const totalStops = Array.isArray(order.stops) ? order.stops.length : 0;
-    
+
     // Find target vendor's stop
     let targetStop = null;
     if (totalStops > 0) {
       targetStop = order.stops.find(
-        (stop) => stop.vendorId && stop.vendorId.toString() === vendorId.toString()
+        (stop) =>
+          stop.vendorId && stop.vendorId.toString() === vendorId.toString(),
       );
     }
 
@@ -1005,22 +1111,23 @@ exports.cancelOrderByVendor = async (req, res) => {
         targetStop.cancellationReason = cancellationReason;
       }
       isFullOrderCancelled = true;
-    } 
+    }
     // SCENARIO 2: Multi-Vendor Order
     else {
-
       // 1. Mark target vendor stop as cancelled
       targetStop.status = "cancelled";
       targetStop.cancellationReason = cancellationReason;
 
       // 2. Identify cancelled vendors and their business types
-      const cancelledStops = order.stops.filter(
-        (stop) => ["cancelled", "rejected_by_vendor"].includes(stop.status)
+      const cancelledStops = order.stops.filter((stop) =>
+        ["cancelled", "rejected_by_vendor"].includes(stop.status),
       );
 
-      const cancelledVendorIds = cancelledStops.map((stop) => stop.vendorId.toString());
-      const cancelledBusinessTypes = cancelledStops.map((stop) => 
-        (stop.businessType || "").toLowerCase().replace(/[\s-_]/g, '')
+      const cancelledVendorIds = cancelledStops.map((stop) =>
+        stop.vendorId.toString(),
+      );
+      const cancelledBusinessTypes = cancelledStops.map((stop) =>
+        (stop.businessType || "").toLowerCase().replace(/[\s-_]/g, ""),
       );
 
       // 3. Remove items associated with cancelled vendors/business types
@@ -1028,25 +1135,30 @@ exports.cancelOrderByVendor = async (req, res) => {
       order.items = order.items.filter((item) => {
         const itemVendorId = item.vendorId ? item.vendorId.toString() : null;
         const itemOrderFromRaw = item.orderFrom || item.category || "";
-        const itemOrderFromNormalized = itemOrderFromRaw.toLowerCase().replace(/[\s-_]/g, '');
+        const itemOrderFromNormalized = itemOrderFromRaw
+          .toLowerCase()
+          .replace(/[\s-_]/g, "");
 
         let isCancelled = false;
 
         if (itemVendorId) {
           isCancelled = cancelledVendorIds.includes(itemVendorId);
         } else {
-          isCancelled = cancelledBusinessTypes.some((type) => type && itemOrderFromNormalized.includes(type));
+          isCancelled = cancelledBusinessTypes.some(
+            (type) => type && itemOrderFromNormalized.includes(type),
+          );
         }
 
-        console.log(`🛒 [LOG] Checking Item: "${item.name}" | orderFrom: "${itemOrderFromRaw}" | normalized: "${itemOrderFromNormalized}" | Is Cancelled: ${isCancelled}`);
+        console.log(
+          `🛒 [LOG] Checking Item: "${item.name}" | orderFrom: "${itemOrderFromRaw}" | normalized: "${itemOrderFromNormalized}" | Is Cancelled: ${isCancelled}`,
+        );
 
         return !isCancelled;
       });
 
-
       // 4. Check if ALL stops are cancelled
-      const allStopsCancelled = order.stops.every(
-        (stop) => ["cancelled", "rejected_by_vendor"].includes(stop.status)
+      const allStopsCancelled = order.stops.every((stop) =>
+        ["cancelled", "rejected_by_vendor"].includes(stop.status),
       );
 
       if (allStopsCancelled || order.items.length === 0) {
@@ -1055,7 +1167,10 @@ exports.cancelOrderByVendor = async (req, res) => {
         isFullOrderCancelled = true;
       } else {
         // 5. RECALCULATE SUBTOTAL, TAX, TOTAL AMOUNT
-        const newSubtotal = order.items.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+        const newSubtotal = order.items.reduce(
+          (sum, item) => sum + (Number(item.total) || 0),
+          0,
+        );
         order.subtotal = newSubtotal;
 
         const taxPercent = Number(order.salesAndServiceTaxForUser) || 0;
@@ -1069,25 +1184,38 @@ exports.cancelOrderByVendor = async (req, res) => {
 
         // 6. GROCERY AUTO-CONFIRMATION CHECK
         const activeStops = order.stops.filter(
-          (stop) => !["cancelled", "rejected_by_vendor"].includes(stop.status)
+          (stop) => !["cancelled", "rejected_by_vendor"].includes(stop.status),
         );
 
-        activeStops.forEach((s) => console.log(`   - Active Stop: ${s.businessName} | Type: ${s.businessType}`));
+        activeStops.forEach((s) =>
+          console.log(
+            `   - Active Stop: ${s.businessName} | Type: ${s.businessType}`,
+          ),
+        );
 
         const onlyActiveStopsAreGrocery = activeStops.every((stop) => {
           const type = (stop.businessType || "").toLowerCase();
-          return type.includes("mart") || type.includes("grocery") || type.includes("store");
+          return (
+            type.includes("mart") ||
+            type.includes("grocery") ||
+            type.includes("store")
+          );
         });
 
         const remainingItemsAreGrocery = order.items.every((item) => {
           const cat = (item.orderFrom || item.category || "").toLowerCase();
-          return cat.includes("grocery") || cat.includes("mart") || cat.includes("fastfood") === false;
+          return (
+            cat.includes("grocery") ||
+            cat.includes("mart") ||
+            cat.includes("fastfood") === false
+          );
         });
 
         // Auto confirm if only Grocery/Mart remains
         if (onlyActiveStopsAreGrocery && remainingItemsAreGrocery) {
           order.status = "confirmed";
-          order.cancellationReason = "Vendor stop cancelled; remaining Grocery items auto-confirmed";
+          order.cancellationReason =
+            "Vendor stop cancelled; remaining Grocery items auto-confirmed";
         } else {
           order.status = order.status;
         }
@@ -2303,7 +2431,8 @@ exports.getVendorOrders = async (req, res) => {
 
     // 💡 DUAL MATCH EXPRESSION: Check Vendor Stop status first, fallback to Order status
     const statusMatchExpr = {
-      $expr: {$let: {
+      $expr: {
+        $let: {
           vars: {
             matchingStops: {
               $filter: {
@@ -2363,7 +2492,8 @@ exports.getVendorOrders = async (req, res) => {
           pipeline: [
             {
               $match: {
-                $expr: {$or: [
+                $expr: {
+                  $or: [
                     { $eq: ["$_id", "$$dId"] },
                     { $eq: ["$_id", "$$prodId"] },
                   ],
@@ -2383,7 +2513,8 @@ exports.getVendorOrders = async (req, res) => {
 
       // Stage E: Strictly match items that belong to THIS Vendor
       {
-        $match: {$or: [
+        $match: {
+          $or: [
             { "items.vendorId": targetVendorObjectId },
             { "productDetails.vendorId": targetVendorObjectId },
             { "dealDetails.vendorId": targetVendorObjectId },
@@ -2409,7 +2540,8 @@ exports.getVendorOrders = async (req, res) => {
           issueDetails: { $first: "$issueDetails" },
           stops: { $first: "$stops" },
           items: {
-            $push: {$mergeObjects: [
+            $push: {
+              $mergeObjects: [
                 "$items",
                 {
                   vendorId: {
@@ -2468,7 +2600,8 @@ exports.getVendorOrders = async (req, res) => {
         },
       },
       {
-        $match: {$or: [
+        $match: {
+          $or: [
             { "items.vendorId": targetVendorObjectId },
             { "productDetails.vendorId": targetVendorObjectId },
             { "dealDetails.vendorId": targetVendorObjectId },
@@ -2540,7 +2673,7 @@ exports.getVendorOrders = async (req, res) => {
         ? order.stops.find(
             (stop) =>
               stop.vendorId &&
-              stop.vendorId.toString() === targetVendorObjectId.toString()
+              stop.vendorId.toString() === targetVendorObjectId.toString(),
           )
         : null;
 
