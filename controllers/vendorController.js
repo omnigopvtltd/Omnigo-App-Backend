@@ -2473,11 +2473,9 @@ exports.getVendorDashboardOverview = async (req, res) => {
     const openTime = vendorBranch?.openingHours?.monday?.open || "11:00";
     const closeTime = vendorBranch?.openingHours?.monday?.close || "12:00";
 
-    // 3. Aggregate Orders Metrics via Lookup with Products
+    // 3. Aggregate Orders Metrics & Correct Vendor-Specific Revenue
     const orderStats = await Order.aggregate([
-      // Unwind items to inspect productId
       { $unwind: "$items" },
-      // Lookup product details to match vendorId
       {
         $lookup: {
           from: "products",
@@ -2486,29 +2484,64 @@ exports.getVendorDashboardOverview = async (req, res) => {
           as: "productDetails",
         },
       },
-      { $unwind: "$productDetails" },
-      // Match orders where product belongs to this vendor
+      { $unwind: { path: "$productDetails", preserveNullAndEmptyArrays: true } },
       {
-        $match: {
-          $or: [
-            { "productDetails.vendorId": vendorObjectId },
-            { "productDetails.vendor": vendorObjectId },
-            { "items.vendorId": vendorObjectId },
-            { vendorId: vendorObjectId },
-          ],
+        $lookup: {
+          from: "deals",
+          localField: "items.dealId",
+          foreignField: "_id",
+          as: "dealDetails",
         },
       },
-      // Group back to unique order level
+      { $unwind: { path: "$dealDetails", preserveNullAndEmptyArrays: true } },
+      // Tag if item belongs to this vendor and calculate item total securely
+      {
+        $addFields: {
+          isThisVendorItem: {
+            $or: [
+              { $eq: ["$items.vendorId", vendorObjectId] },
+              { $eq: ["$productDetails.vendorId", vendorObjectId] },
+              { $eq: ["$productDetails.vendor", vendorObjectId] },
+              { $eq: ["$dealDetails.vendorId", vendorObjectId] },
+            ],
+          },
+          computedItemTotal: {
+            $ifNull: [
+              "$items.total",
+              { $multiply: [{ $ifNull: ["$items.price", 0] }, { $ifNull: ["$items.quantity", 1] }] }
+            ]
+          }
+        }
+      },
+      // Group by Order ID to calculate vendor's exact share per order
       {
         $group: {
           _id: "$_id",
           status: { $first: "$status" },
-          totalAmount: { $first: "$totalAmount" },
-          subtotal: { $first: "$subtotal" },
           createdAt: { $first: "$createdAt" },
-        },
+          stops: { $first: "$stops" },
+          vendorOrderRevenue: {
+            $sum: {
+              $cond: ["$isThisVendorItem", "$computedItemTotal", 0]
+            }
+          },
+          hasVendorItems: { $max: "$isThisVendorItem" },
+          hasVendorStop: {
+            $max: {
+              $in: [vendorObjectId, { $ifNull: ["$stops.vendorId", []] }]
+            }
+          }
+        }
       },
-      // Group metrics for dashboard
+      // Filter orders belonging to this vendor
+      {
+        $match: {
+          $expr: {
+            $or: ["$hasVendorItems", "$hasVendorStop"]
+          }
+        }
+      },
+      // Group for overall dashboard metrics
       {
         $group: {
           _id: null,
@@ -2516,12 +2549,7 @@ exports.getVendorDashboardOverview = async (req, res) => {
           deliveredOrders: {
             $sum: {
               $cond: [
-                {
-                  $in: [
-                    "$status",
-                    ["completed", "delivered", "complete", "assigned"],
-                  ],
-                },
+                { $in: ["$status", ["completed", "delivered", "complete"]] },
                 1,
                 0,
               ],
@@ -2559,7 +2587,7 @@ exports.getVendorDashboardOverview = async (req, res) => {
             $sum: {
               $cond: [
                 { $ne: ["$status", "cancelled"] },
-                { $ifNull: ["$totalAmount", "$subtotal"] },
+                "$vendorOrderRevenue",
                 0,
               ],
             },
@@ -2577,7 +2605,7 @@ exports.getVendorDashboardOverview = async (req, res) => {
       totalRevenue: 0,
     };
 
-    // 4. Weekly Chart Data
+    // 4. Weekly Chart Data (Vendor Specific)
     const rawChartData = await Order.aggregate([
       { $unwind: "$items" },
       {
@@ -2588,30 +2616,64 @@ exports.getVendorDashboardOverview = async (req, res) => {
           as: "productDetails",
         },
       },
-      { $unwind: "$productDetails" },
+      { $unwind: { path: "$productDetails", preserveNullAndEmptyArrays: true } },
       {
-        $match: {
-          status: { $ne: "cancelled" },
-          $or: [
-            { "productDetails.vendorId": vendorObjectId },
-            { "productDetails.vendor": vendorObjectId },
-            { "items.vendorId": vendorObjectId },
-            { vendorId: vendorObjectId },
-          ],
+        $lookup: {
+          from: "deals",
+          localField: "items.dealId",
+          foreignField: "_id",
+          as: "dealDetails",
         },
+      },
+      { $unwind: { path: "$dealDetails", preserveNullAndEmptyArrays: true } },
+      {
+        $addFields: {
+          isThisVendorItem: {
+            $or: [
+              { $eq: ["$items.vendorId", vendorObjectId] },
+              { $eq: ["$productDetails.vendorId", vendorObjectId] },
+              { $eq: ["$productDetails.vendor", vendorObjectId] },
+              { $eq: ["$dealDetails.vendorId", vendorObjectId] },
+            ],
+          },
+          computedItemTotal: {
+            $ifNull: [
+              "$items.total",
+              { $multiply: [{ $ifNull: ["$items.price", 0] }, { $ifNull: ["$items.quantity", 1] }] }
+            ]
+          }
+        }
       },
       {
         $group: {
           _id: "$_id",
-          totalAmount: { $first: "$totalAmount" },
-          subtotal: { $first: "$subtotal" },
+          status: { $first: "$status" },
           createdAt: { $first: "$createdAt" },
-        },
+          vendorOrderRevenue: {
+            $sum: {
+              $cond: ["$isThisVendorItem", "$computedItemTotal", 0]
+            }
+          },
+          hasVendorItems: { $max: "$isThisVendorItem" },
+          hasVendorStop: {
+            $max: {
+              $in: [vendorObjectId, { $ifNull: ["$stops.vendorId", []] }]
+            }
+          }
+        }
+      },
+      {
+        $match: {
+          status: { $ne: "cancelled" },
+          $expr: {
+            $or: ["$hasVendorItems", "$hasVendorStop"]
+          }
+        }
       },
       {
         $group: {
           _id: { $dayOfWeek: "$createdAt" },
-          total: { $sum: { $ifNull: ["$totalAmount", "$subtotal"] } },
+          total: { $sum: "$vendorOrderRevenue" },
         },
       },
     ]);
@@ -2642,7 +2704,6 @@ exports.getVendorDashboardOverview = async (req, res) => {
     rawChartData.forEach((dbItem) => {
       const dayName = daysLookup[dbItem._id];
       const chartItem = fullWeekChart.find((d) => d.label === dayName);
-
       if (chartItem) {
         chartItem.amount = dbItem.total || 0;
         if (dbItem.total > maxSalesAmount) {
