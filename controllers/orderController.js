@@ -2705,7 +2705,7 @@ exports.getVendorOrders = async (req, res) => {
         totalAmount: vendorSubtotal,
         formattedTotal: `${vendorSubtotal.toLocaleString()} PKR`,
 
-        status: vendorStop?.status || order.status,
+        status: order.status || vendorStop?.status,
 
         rider: order.riderId
           ? {
