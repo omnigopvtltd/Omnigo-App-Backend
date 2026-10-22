@@ -705,26 +705,26 @@ exports.confirmOrder = async (req, res) => {
     }
 
     // 2. Update Vendor Specific Stop Status to 'assigned' or 'confirmed'
-    // let vendorStopFound = false;
-    // order.stops.forEach((stop) => {
-    //   if (stop.vendorId && stop.vendorId.toString() === vendorId.toString()) {
-    //     stop.status = "assigned"; // Vendor status updated
-    //     vendorStopFound = true;
-    //   }
-    // });
+    let vendorStopFound = false;
+    order.stops.forEach((stop) => {
+      if (stop.vendorId && stop.vendorId.toString() === vendorId.toString()) {
+        stop.status = "assigned"; // Vendor status updated
+        vendorStopFound = true;
+      }
+    });
 
-    // if (!vendorStopFound) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: "Vendor stop not matching order stops",
-    //   });
-    // }
+    if (!vendorStopFound) {
+      return res.status(400).json({
+        success: false,
+        message: "Vendor stop not matching order stops",
+      });
+    }
 
     // 3. Update Overall Order Status to 'confirmed'
     order.status = "confirmed";
     await order.save();
-    vendor.status = "assigned";
-    await vendor.save();
+    // vendor.status = "assigned";
+    // await vendor.save();
 
     // 4. Socket IO Real-time Updates
     const io = req.app.get("io");
@@ -773,8 +773,8 @@ exports.confirmOrder = async (req, res) => {
     await sendNotification({
       userId: order.userId,
       orderId: order._id,
-      title: "Order Update",
-      message: `Your order status is now: ${order.status}`,
+      title: "Order Accepted",
+      message: `Your order is accepted by ${vendor.businessName}`,
       type: "order_confirmed",
     });
 
