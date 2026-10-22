@@ -2795,7 +2795,6 @@ exports.getVendorPerformance = async (req, res) => {
     let previousPeriodEnd = new Date(now);
 
     if (timeframe === "daily") {
-      // Current: Today (00:00:00 to now), Previous: Yesterday
       currentPeriodStart.setHours(0, 0, 0, 0);
       previousPeriodEnd = new Date(currentPeriodStart);
       previousPeriodStart = new Date(currentPeriodStart);
@@ -2814,7 +2813,7 @@ exports.getVendorPerformance = async (req, res) => {
       previousPeriodStart.setFullYear(now.getFullYear() - 2);
     }
 
-    // Helper pipeline stage for vendor order aggregation
+    // Helper pipeline stage for vendor order aggregation with accurate item-level revenue
     const getVendorOrdersPipeline = (startDate, endDate) => [
       { $match: { createdAt: { $gte: startDate, $lte: endDate } } },
       { $unwind: "$items" },
@@ -2830,22 +2829,54 @@ exports.getVendorPerformance = async (req, res) => {
         $unwind: { path: "$productDetails", preserveNullAndEmptyArrays: true },
       },
       {
+        $lookup: {
+          from: "deals",
+          localField: "items.dealId",
+          foreignField: "_id",
+          as: "dealDetails",
+        },
+      },
+      {
+        $unwind: { path: "$dealDetails", preserveNullAndEmptyArrays: true },
+      },
+      {
+        $addFields: {
+          isThisVendorItem: {
+            $or: [
+              { $eq: ["$items.vendorId", vendorObjectId] },
+              { $eq: ["$productDetails.vendorId", vendorObjectId] },
+              { $eq: ["$productDetails.vendor", vendorObjectId] },
+              { $eq: ["$dealDetails.vendorId", vendorObjectId] },
+            ],
+          },
+          computedItemTotal: {
+            $ifNull: [
+              "$items.total",
+              { $multiply: [{ $ifNull: ["$items.price", 0] }, { $ifNull: ["$items.quantity", 1] }] }
+            ]
+          }
+        }
+      },
+      {
         $match: {
           status: { $ne: "cancelled" },
-          $or: [
-            { "productDetails.vendorId": vendorObjectId },
-            { "productDetails.vendor": vendorObjectId },
-            { "items.vendorId": vendorObjectId },
-            { vendorId: vendorObjectId },
-          ],
-        },
+          $expr: {
+            $or: [
+              "$isThisVendorItem",
+              { $in: [vendorObjectId, { $ifNull: ["$stops.vendorId", []] }] }
+            ]
+          }
+        }
       },
       {
         $group: {
           _id: "$_id",
-          totalAmount: { $first: "$totalAmount" },
-          subtotal: { $first: "$subtotal" },
           createdAt: { $first: "$createdAt" },
+          vendorOrderRevenue: {
+            $sum: {
+              $cond: ["$isThisVendorItem", "$computedItemTotal", 0]
+            }
+          }
         },
       },
     ];
@@ -2858,9 +2889,7 @@ exports.getVendorPerformance = async (req, res) => {
           $group: {
             _id: null,
             totalOrdersCount: { $sum: 1 },
-            totalRevenue: {
-              $sum: { $ifNull: ["$totalAmount", "$subtotal", 0] },
-            },
+            totalRevenue: { $sum: "$vendorOrderRevenue" },
           },
         },
       ]),
@@ -2870,9 +2899,7 @@ exports.getVendorPerformance = async (req, res) => {
           $group: {
             _id: null,
             totalOrdersCount: { $sum: 1 },
-            totalRevenue: {
-              $sum: { $ifNull: ["$totalAmount", "$subtotal", 0] },
-            },
+            totalRevenue: { $sum: "$vendorOrderRevenue" },
           },
         },
       ]),
@@ -2904,12 +2931,11 @@ exports.getVendorPerformance = async (req, res) => {
         {
           $group: {
             _id: { $hour: "$createdAt" },
-            totalSales: { $sum: { $ifNull: ["$totalAmount", "$subtotal", 0] } },
+            totalSales: { $sum: "$vendorOrderRevenue" },
           },
         },
       ]);
 
-      // Hourly slots (e.g., 00:00, 04:00, 08:00, 12:00, 16:00, 20:00)
       const hoursList = [0, 4, 8, 12, 16, 20];
       chartDataFormatted = hoursList.map((hr) => {
         const found = rawChartData.filter(
@@ -2926,7 +2952,7 @@ exports.getVendorPerformance = async (req, res) => {
         {
           $group: {
             _id: { $dayOfWeek: "$createdAt" }, // 1=Sun, 2=Mon...
-            totalSales: { $sum: { $ifNull: ["$totalAmount", "$subtotal", 0] } },
+            totalSales: { $sum: "$vendorOrderRevenue" },
           },
         },
       ]);
