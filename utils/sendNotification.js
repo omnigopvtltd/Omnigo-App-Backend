@@ -165,7 +165,7 @@ exports.sendNotificationToVendor = async ({
       "You have a new notification from OmniGo.";
 
     const newNotification = await Notification.create({
-      recipient: vendorId,
+      vendorId,
       orderId,
       title,
       message,
@@ -173,7 +173,7 @@ exports.sendNotificationToVendor = async ({
       role: role || "vendor",
       extraData,
     });
-
+     
     if (!vendor?.fcmToken) {
       console.log(
         `Vendor ${vendorId} does not have an FCM token. Saved in DB only.`,
