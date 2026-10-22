@@ -831,26 +831,26 @@ exports.readyOrder = async (req, res) => {
     }
 
     // // 2. Update Vendor Specific Stop Status to 'ready'
-    // let vendorStopFound = false;
-    // order.stops.forEach((stop) => {
-    //   if (stop.vendorId && stop.vendorId.toString() === vendorId.toString()) {
-    //     stop.status = "ready"; // Vendor level status
-    //     vendorStopFound = true;
-    //   }
-    // });
+    let vendorStopFound = false;
+    order.stops.forEach((stop) => {
+      if (stop.vendorId && stop.vendorId.toString() === vendorId.toString()) {
+        stop.status = "ready"; // Vendor level status
+        vendorStopFound = true;
+      }
+    });
 
-    // if (!vendorStopFound) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: "Vendor stop not matching order stops",
-    //   });
-    // }
+    if (!vendorStopFound) {
+      return res.status(400).json({
+        success: false,
+        message: "Vendor stop not matching order stops",
+      });
+    }
 
     // 3. Update Main Order Status to 'ready'
     order.status = "ready";
     await order.save();
-    vendor.status = "ready";
-    await vendor.save();
+    // vendor.status = "ready";
+    // await vendor.save();
 
     // 4. Socket IO Real-Time Notifications
     const io = req.app.get("io");
