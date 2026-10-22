@@ -300,7 +300,7 @@ exports.addToCart = async (req, res) => {
 
       // Serving
       const incomingServing = newItem.serving;
-      console.log(incomingAddOns, incomingVariations, incomingServing);
+      // console.log(incomingAddOns, incomingVariations, incomingServing);
 
       // Calculate Variations Sum & Add-Ons Sum
       const addOnsUnitSum = incomingAddOns.reduce(
