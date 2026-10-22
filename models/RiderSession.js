@@ -26,7 +26,7 @@ const riderSessionSchema = new mongoose.Schema(
     // Dynamically calculated: startedAt + timeLimitHours
     sessionEndTime: {
       type: Date,
-      required: true,
+      // required: true,
     },
     isActive: { type: Boolean, default: true },
     startDate: { type: Date },
