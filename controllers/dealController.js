@@ -419,14 +419,20 @@ exports.createDeal = async (req, res) => {
     if (!dealName || !dealType || !startDate || !endDate) {
       return res.status(400).json({
         success: false,
-        message: "dealName, dealType, startDate, and endDate are required fields.",
+        message:
+          "dealName, dealType, startDate, and endDate are required fields.",
       });
     }
 
     let bannerImage = "";
     if (typeof handleImageUploads === "function") {
-      const uploadedImages = await handleImageUploads(req, "dealBanner", "deals");
-      if (uploadedImages && uploadedImages.length > 0) bannerImage = uploadedImages[0];
+      const uploadedImages = await handleImageUploads(
+        req,
+        "dealBanner",
+        "deals",
+      );
+      if (uploadedImages && uploadedImages.length > 0)
+        bannerImage = uploadedImages[0];
     } else if (typeof uploadSingleToCloudinary === "function") {
       const fileObj =
         req.file ||
@@ -458,36 +464,44 @@ exports.createDeal = async (req, res) => {
             ? item.allowedAddOns.map((a) => ({
                 name: a.name || "",
                 price: Number(a.price) || 0,
-                isMandatory: a.isMandatory !== undefined ? String(a.isMandatory) === "true" : false,
+                isMandatory:
+                  a.isMandatory !== undefined
+                    ? String(a.isMandatory) === "true"
+                    : false,
               }))
             : [],
         }))
       : [];
 
-      let sanitizedFreeItemId = null;
-  if (rawOfferDetails.freeItemId) {
-    const fItem = rawOfferDetails.freeItemId;
-    sanitizedFreeItemId = {
-      product: fItem.product || fItem.productId || (typeof fItem === "string" ? fItem : null),
-      customItemName: fItem.customItemName || "",
-      quantity: Number(fItem.quantity) || 1,
-      allowedVariations: Array.isArray(fItem.allowedVariations)
-        ? fItem.allowedVariations.map((v) => ({
-            title: v.title || "",
-            selectedOption: v.selectedOption || v.name || "",
-            price: Number(v.price) || 0,
-          }))
-        : [],
-      allowedAddOns: Array.isArray(fItem.allowedAddOns)
-        ? fItem.allowedAddOns.map((a) => ({
-            name: a.name || "",
-            price: Number(a.price) || 0,
-            isMandatory: a.isMandatory !== undefined ? String(a.isMandatory) === "true" : false,
-          }))
-        : [],
-    };
-  }
-
+    let sanitizedFreeItemId = null;
+    if (rawOfferDetails.freeItemId) {
+      const fItem = rawOfferDetails.freeItemId;
+      sanitizedFreeItemId = {
+        product:
+          fItem.product ||
+          fItem.productId ||
+          (typeof fItem === "string" ? fItem : null),
+        customItemName: fItem.customItemName || "",
+        quantity: Number(fItem.quantity) || 1,
+        allowedVariations: Array.isArray(fItem.allowedVariations)
+          ? fItem.allowedVariations.map((v) => ({
+              title: v.title || "",
+              selectedOption: v.selectedOption || v.name || "",
+              price: Number(v.price) || 0,
+            }))
+          : [],
+        allowedAddOns: Array.isArray(fItem.allowedAddOns)
+          ? fItem.allowedAddOns.map((a) => ({
+              name: a.name || "",
+              price: Number(a.price) || 0,
+              isMandatory:
+                a.isMandatory !== undefined
+                  ? String(a.isMandatory) === "true"
+                  : false,
+            }))
+          : [],
+      };
+    }
 
     const formattedOfferDetails = {
       ...rawOfferDetails,
@@ -500,6 +514,19 @@ exports.createDeal = async (req, res) => {
       getQuantity: Number(rawOfferDetails.getQuantity) || 1,
       maxDeliveryDiscount: Number(rawOfferDetails.maxDeliveryDiscount) || 0,
     };
+
+    // // Handle custom fields formatting if dealType is custom_deal
+    // // let formattedOfferDetails = { ...offerDetails };
+    // if (dealType === "custom_deal") {
+    //   // Ensure customFields is stored safely as an array of objects or map
+    //   if (rawOfferDetails.customFields && Array.isArray(rawOfferDetails.customFields)) {
+    //     formattedOfferDetails.customFields = rawOfferDetails.customFields.map(field => ({
+    //       name: field.name || field.key,
+    //       value: field.value,
+    //     }));
+    //   }
+    // }
+
 
     // Sanitize applicableProducts array if passed in root body
     const rawAppProducts = parseJsonField(req.body.applicableProducts, []);
@@ -519,7 +546,10 @@ exports.createDeal = async (req, res) => {
             ? item.allowedAddOns.map((a) => ({
                 name: a.name || "",
                 price: Number(a.price) || 0,
-                isMandatory: a.isMandatory !== undefined ? String(a.isMandatory) === "true" : false,
+                isMandatory:
+                  a.isMandatory !== undefined
+                    ? String(a.isMandatory) === "true"
+                    : false,
               }))
             : [],
         }))
@@ -536,14 +566,20 @@ exports.createDeal = async (req, res) => {
       applicableCategories: parseObjectIdArray(req.body.applicableCategories),
       applicableProducts: sanitizedApplicableProducts,
       eligibleCustomers:
-        typeof req.body.eligibleCustomers === "string" && !req.body.eligibleCustomers.startsWith("[")
+        typeof req.body.eligibleCustomers === "string" &&
+        !req.body.eligibleCustomers.startsWith("[")
           ? req.body.eligibleCustomers
           : parseJsonField(req.body.eligibleCustomers, "all"),
       minOrderAmount: Number(req.body.minOrderAmount) || 0,
       maxDiscountAmount: Number(req.body.maxDiscountAmount) || 0,
       usageLimit: req.body.usageLimit ? Number(req.body.usageLimit) : null,
-      perCustomerLimit: req.body.perCustomerLimit ? Number(req.body.perCustomerLimit) : null,
-      isActive: req.body.isActive !== undefined ? String(req.body.isActive) === "true" : true,
+      perCustomerLimit: req.body.perCustomerLimit
+        ? Number(req.body.perCustomerLimit)
+        : null,
+      isActive:
+        req.body.isActive !== undefined
+          ? String(req.body.isActive) === "true"
+          : true,
     };
 
     const deal = await Deal.create(dealData);
@@ -816,13 +852,20 @@ exports.updateDeal = async (req, res) => {
   try {
     const deal = await Deal.findById(req.params.id);
     if (!deal) {
-      return res.status(404).json({ success: false, message: "Deal not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Deal not found" });
     }
 
     let bannerImage = "";
     if (typeof handleImageUploads === "function") {
-      const uploadedImages = await handleImageUploads(req, "dealBanner", "deals");
-      if (uploadedImages && uploadedImages.length > 0) bannerImage = uploadedImages[0];
+      const uploadedImages = await handleImageUploads(
+        req,
+        "dealBanner",
+        "deals",
+      );
+      if (uploadedImages && uploadedImages.length > 0)
+        bannerImage = uploadedImages[0];
     } else if (typeof uploadSingleToCloudinary === "function") {
       const fileObj =
         req.file ||
@@ -831,7 +874,10 @@ exports.updateDeal = async (req, res) => {
 
       if (fileObj) {
         bannerImage = await uploadSingleToCloudinary(fileObj, "deals");
-      } else if (typeof req.body.dealBanner === "string" && req.body.dealBanner.trim() !== "") {
+      } else if (
+        typeof req.body.dealBanner === "string" &&
+        req.body.dealBanner.trim() !== ""
+      ) {
         bannerImage = req.body.dealBanner;
       }
     }
@@ -843,7 +889,11 @@ exports.updateDeal = async (req, res) => {
         try {
           const parsed = JSON.parse(value);
           if (typeof parsed === "string") {
-            try { return JSON.parse(parsed); } catch { return parsed; }
+            try {
+              return JSON.parse(parsed);
+            } catch {
+              return parsed;
+            }
           }
           return parsed;
         } catch {
@@ -853,16 +903,38 @@ exports.updateDeal = async (req, res) => {
       return value;
     };
 
+// // Handle offerDetails and custom_deal custom fields formatting
+//     if (offerDetails) {
+//       let formattedOfferDetails = {
+//         ...(existingDeal.offerDetails?.toObject?.() || existingDeal.offerDetails || {}),
+//         ...offerDetails,
+//       };
+
+//       const targetDealType = dealType || existingDeal.dealType;
+//       if (targetDealType === "custom_deal" && offerDetails.customFields && Array.isArray(offerDetails.customFields)) {
+//         formattedOfferDetails.customFields = offerDetails.customFields.map((field) => ({
+//           name: field.name || field.key,
+//           value: field.value,
+//         }));
+//       }
+//       updateData.offerDetails = formattedOfferDetails;
+//     }
+
     // 1. Update offerDetails & itemsIncluded
     if (req.body.offerDetails !== undefined) {
-      const incomingOfferDetails = safeJsonParse(req.body.offerDetails, deal.offerDetails || {});
+      const incomingOfferDetails = safeJsonParse(
+        req.body.offerDetails,
+        deal.offerDetails || {},
+      );
       const updatedOfferDetails = {
         ...(deal.offerDetails ? deal.offerDetails.toObject() : {}),
         ...incomingOfferDetails,
       };
 
       if (incomingOfferDetails.itemsIncluded !== undefined) {
-        const rawItems = Array.isArray(incomingOfferDetails.itemsIncluded) ? incomingOfferDetails.itemsIncluded : [];
+        const rawItems = Array.isArray(incomingOfferDetails.itemsIncluded)
+          ? incomingOfferDetails.itemsIncluded
+          : [];
         updatedOfferDetails.itemsIncluded = rawItems.map((item) => ({
           product: item.product || item.productId || null,
           customItemName: item.customItemName || "",
@@ -878,13 +950,16 @@ exports.updateDeal = async (req, res) => {
             ? item.allowedAddOns.map((a) => ({
                 name: a.name || "",
                 price: Number(a.price) || 0,
-                isMandatory: a.isMandatory !== undefined ? String(a.isMandatory) === "true" : false,
+                isMandatory:
+                  a.isMandatory !== undefined
+                    ? String(a.isMandatory) === "true"
+                    : false,
               }))
             : [],
         }));
       }
 
-      // Sanitize freeItemId 
+      // Sanitize freeItemId
       if (incomingOfferDetails.freeItemId !== undefined) {
         const fItem = incomingOfferDetails.freeItemId;
         if (fItem && typeof fItem === "object") {
@@ -903,7 +978,10 @@ exports.updateDeal = async (req, res) => {
               ? fItem.allowedAddOns.map((a) => ({
                   name: a.name || "",
                   price: Number(a.price) || 0,
-                  isMandatory: a.isMandatory !== undefined ? String(a.isMandatory) === "true" : false,
+                  isMandatory:
+                    a.isMandatory !== undefined
+                      ? String(a.isMandatory) === "true"
+                      : false,
                 }))
               : [],
           };
@@ -913,11 +991,14 @@ exports.updateDeal = async (req, res) => {
       }
 
       if (incomingOfferDetails.discountValue !== undefined)
-        updatedOfferDetails.discountValue = Number(incomingOfferDetails.discountValue) || 0;
+        updatedOfferDetails.discountValue =
+          Number(incomingOfferDetails.discountValue) || 0;
       if (incomingOfferDetails.originalPrice !== undefined)
-        updatedOfferDetails.originalPrice = Number(incomingOfferDetails.originalPrice) || 0;
+        updatedOfferDetails.originalPrice =
+          Number(incomingOfferDetails.originalPrice) || 0;
       if (incomingOfferDetails.dealPrice !== undefined)
-        updatedOfferDetails.dealPrice = Number(incomingOfferDetails.dealPrice) || 0;
+        updatedOfferDetails.dealPrice =
+          Number(incomingOfferDetails.dealPrice) || 0;
 
       deal.offerDetails = updatedOfferDetails;
       deal.markModified("offerDetails");
@@ -942,7 +1023,10 @@ exports.updateDeal = async (req, res) => {
               ? item.allowedAddOns.map((a) => ({
                   name: a.name || "",
                   price: Number(a.price) || 0,
-                  isMandatory: a.isMandatory !== undefined ? String(a.isMandatory) === "true" : false,
+                  isMandatory:
+                    a.isMandatory !== undefined
+                      ? String(a.isMandatory) === "true"
+                      : false,
                 }))
               : [],
           }))
@@ -958,14 +1042,26 @@ exports.updateDeal = async (req, res) => {
 
     if (req.body.eligibleCustomers !== undefined) {
       const parsedCustomers = safeJsonParse(req.body.eligibleCustomers, "all");
-      deal.eligibleCustomers = typeof parsedCustomers === "string" ? parsedCustomers : "all";
+      deal.eligibleCustomers =
+        typeof parsedCustomers === "string" ? parsedCustomers : "all";
     }
 
     // 3. Primitive Fields
     const simpleFields = [
-      "dealName", "dealType", "branchId", "description", "appliesTo",
-      "startDate", "endDate", "startTime", "endTime",
-      "minOrderAmount", "maxDiscountAmount", "usageLimit", "perCustomerLimit", "isActive",
+      "dealName",
+      "dealType",
+      "branchId",
+      "description",
+      "appliesTo",
+      "startDate",
+      "endDate",
+      "startTime",
+      "endTime",
+      "minOrderAmount",
+      "maxDiscountAmount",
+      "usageLimit",
+      "perCustomerLimit",
+      "isActive",
     ];
 
     simpleFields.forEach((field) => {
@@ -973,9 +1069,17 @@ exports.updateDeal = async (req, res) => {
         if (field === "isActive") {
           deal.isActive = String(req.body[field]) === "true";
         } else if (
-          ["minOrderAmount", "maxDiscountAmount", "usageLimit", "perCustomerLimit"].includes(field)
+          [
+            "minOrderAmount",
+            "maxDiscountAmount",
+            "usageLimit",
+            "perCustomerLimit",
+          ].includes(field)
         ) {
-          deal[field] = req.body[field] !== null && req.body[field] !== "" ? Number(req.body[field]) : null;
+          deal[field] =
+            req.body[field] !== null && req.body[field] !== ""
+              ? Number(req.body[field])
+              : null;
         } else {
           deal[field] = req.body[field];
         }
@@ -1256,6 +1360,29 @@ exports.getDealFormConfig = async (req, res) => {
           },
         ];
         break;
+
+      // case "custom_deal":
+      //   offerFields = [
+      //     {
+      //       name: "offerDetails.customFields",
+      //       label: "Custom Deal Attributes",
+      //       type: "key_value_pairs",
+      //       required: true,
+      //       placeholder: "Add custom name and value pairs...",
+      //       defaultValue: [],
+      //       description:
+      //         "Add custom fields with their respective names and values for this deal.",
+      //     },
+      //     {
+      //       name: "offerDetails.dealPrice",
+      //       label: "Deal Price (Rs.)",
+      //       type: "number",
+      //       required: true,
+      //       placeholder: "e.g. 1500",
+      //       defaultValue: 0,
+      //     },
+      //   ];
+      //   break;
 
       default:
         offerFields = [

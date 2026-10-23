@@ -21,7 +21,7 @@ const {
 } = require("../utils/sendNotification");
 const Campaign = require("../models/Campaign");
 const Zone = require("../models/Zone");
-const { getFirestore } = require("firebase-admin/firestore"); 
+const { getFirestore } = require("firebase-admin/firestore");
 
 // ======================================================
 // CONFIGURATIONS & HELPERS
@@ -1030,6 +1030,19 @@ exports.register = async (req, res) => {
         message: `${vendor.businessName} joined Omnigo. Get ready for new pickup orders!`,
         data: { type: "NEW_VENDOR_RIDER", vendorId: String(vendor._id) },
       });
+
+      if (
+        !vendorData.incorporationCertificate ||
+        vendorData.incorporationCertificate === ""
+      ) {
+        await sendNotificationToVendor({
+          vendorId,
+          role: "vendor",
+          type: "system",
+          title: "Notice: Registeration not completed!",
+          message: `Official incorporation certificates are currently optional to streamline your onboarding. However, you must submit your valid documents within 7 days to ensure uninterrupted store operations and account verification.`,
+        });
+      }
     } catch (notifErr) {
       console.error("FCM Notification Error (Non-blocking):", notifErr.message);
     }
@@ -2336,7 +2349,9 @@ exports.getAllVendors = async (req, res) => {
 // =======================
 exports.getVendorById = async (req, res) => {
   try {
-    const vendorId = req.params.id ? req.params.id : req.user?.id || req.user?._id || req.params.vendorId;
+    const vendorId = req.params.id
+      ? req.params.id
+      : req.user?.id || req.user?._id || req.params.vendorId;
 
     if (!vendorId) {
       return res.status(400).json({
@@ -2346,7 +2361,7 @@ exports.getVendorById = async (req, res) => {
     }
 
     const vendor = await Vendor.findById(vendorId);
-    
+
     // FIX: Use findOne with vendorId field instead of findById
     const vendorBranch = await VendorBranch.findOne({ vendorId: vendorId });
 
@@ -2484,7 +2499,9 @@ exports.getVendorDashboardOverview = async (req, res) => {
           as: "productDetails",
         },
       },
-      { $unwind: { path: "$productDetails", preserveNullAndEmptyArrays: true } },
+      {
+        $unwind: { path: "$productDetails", preserveNullAndEmptyArrays: true },
+      },
       {
         $lookup: {
           from: "deals",
@@ -2508,10 +2525,15 @@ exports.getVendorDashboardOverview = async (req, res) => {
           computedItemTotal: {
             $ifNull: [
               "$items.total",
-              { $multiply: [{ $ifNull: ["$items.price", 0] }, { $ifNull: ["$items.quantity", 1] }] }
-            ]
-          }
-        }
+              {
+                $multiply: [
+                  { $ifNull: ["$items.price", 0] },
+                  { $ifNull: ["$items.quantity", 1] },
+                ],
+              },
+            ],
+          },
+        },
       },
       // Group by Order ID to calculate vendor's exact share per order
       {
@@ -2522,24 +2544,24 @@ exports.getVendorDashboardOverview = async (req, res) => {
           stops: { $first: "$stops" },
           vendorOrderRevenue: {
             $sum: {
-              $cond: ["$isThisVendorItem", "$computedItemTotal", 0]
-            }
+              $cond: ["$isThisVendorItem", "$computedItemTotal", 0],
+            },
           },
           hasVendorItems: { $max: "$isThisVendorItem" },
           hasVendorStop: {
             $max: {
-              $in: [vendorObjectId, { $ifNull: ["$stops.vendorId", []] }]
-            }
-          }
-        }
+              $in: [vendorObjectId, { $ifNull: ["$stops.vendorId", []] }],
+            },
+          },
+        },
       },
       // Filter orders belonging to this vendor
       {
         $match: {
           $expr: {
-            $or: ["$hasVendorItems", "$hasVendorStop"]
-          }
-        }
+            $or: ["$hasVendorItems", "$hasVendorStop"],
+          },
+        },
       },
       // Group for overall dashboard metrics
       {
@@ -2616,7 +2638,9 @@ exports.getVendorDashboardOverview = async (req, res) => {
           as: "productDetails",
         },
       },
-      { $unwind: { path: "$productDetails", preserveNullAndEmptyArrays: true } },
+      {
+        $unwind: { path: "$productDetails", preserveNullAndEmptyArrays: true },
+      },
       {
         $lookup: {
           from: "deals",
@@ -2639,10 +2663,15 @@ exports.getVendorDashboardOverview = async (req, res) => {
           computedItemTotal: {
             $ifNull: [
               "$items.total",
-              { $multiply: [{ $ifNull: ["$items.price", 0] }, { $ifNull: ["$items.quantity", 1] }] }
-            ]
-          }
-        }
+              {
+                $multiply: [
+                  { $ifNull: ["$items.price", 0] },
+                  { $ifNull: ["$items.quantity", 1] },
+                ],
+              },
+            ],
+          },
+        },
       },
       {
         $group: {
@@ -2651,24 +2680,24 @@ exports.getVendorDashboardOverview = async (req, res) => {
           createdAt: { $first: "$createdAt" },
           vendorOrderRevenue: {
             $sum: {
-              $cond: ["$isThisVendorItem", "$computedItemTotal", 0]
-            }
+              $cond: ["$isThisVendorItem", "$computedItemTotal", 0],
+            },
           },
           hasVendorItems: { $max: "$isThisVendorItem" },
           hasVendorStop: {
             $max: {
-              $in: [vendorObjectId, { $ifNull: ["$stops.vendorId", []] }]
-            }
-          }
-        }
+              $in: [vendorObjectId, { $ifNull: ["$stops.vendorId", []] }],
+            },
+          },
+        },
       },
       {
         $match: {
           status: { $ne: "cancelled" },
           $expr: {
-            $or: ["$hasVendorItems", "$hasVendorStop"]
-          }
-        }
+            $or: ["$hasVendorItems", "$hasVendorStop"],
+          },
+        },
       },
       {
         $group: {
@@ -2852,10 +2881,15 @@ exports.getVendorPerformance = async (req, res) => {
           computedItemTotal: {
             $ifNull: [
               "$items.total",
-              { $multiply: [{ $ifNull: ["$items.price", 0] }, { $ifNull: ["$items.quantity", 1] }] }
-            ]
-          }
-        }
+              {
+                $multiply: [
+                  { $ifNull: ["$items.price", 0] },
+                  { $ifNull: ["$items.quantity", 1] },
+                ],
+              },
+            ],
+          },
+        },
       },
       {
         $match: {
@@ -2863,10 +2897,10 @@ exports.getVendorPerformance = async (req, res) => {
           $expr: {
             $or: [
               "$isThisVendorItem",
-              { $in: [vendorObjectId, { $ifNull: ["$stops.vendorId", []] }] }
-            ]
-          }
-        }
+              { $in: [vendorObjectId, { $ifNull: ["$stops.vendorId", []] }] },
+            ],
+          },
+        },
       },
       {
         $group: {
@@ -2874,9 +2908,9 @@ exports.getVendorPerformance = async (req, res) => {
           createdAt: { $first: "$createdAt" },
           vendorOrderRevenue: {
             $sum: {
-              $cond: ["$isThisVendorItem", "$computedItemTotal", 0]
-            }
-          }
+              $cond: ["$isThisVendorItem", "$computedItemTotal", 0],
+            },
+          },
         },
       },
     ];
@@ -3630,7 +3664,6 @@ exports.vendorMenu = async (req, res) => {
   }
 };
 
-
 exports.vendorMenuProducts = async (req, res) => {
   try {
     let vendorId = req.params?.vendorId || req.user?.id || req.user?._id;
@@ -3910,7 +3943,6 @@ exports.vendorMenuProducts = async (req, res) => {
 //   }
 // };
 
-
 exports.toggleRushMode = async (req, res) => {
   try {
     const vendorId = req.user?.id || req.user?._id;
@@ -3924,7 +3956,7 @@ exports.toggleRushMode = async (req, res) => {
 
     // 1. Fetch main Vendor details for metadata
     const vendor = await Vendor.findById(vendorId).select(
-      "businessName isActive"
+      "businessName isActive",
     );
 
     if (!vendor) {
@@ -3936,7 +3968,7 @@ exports.toggleRushMode = async (req, res) => {
 
     // 2. Fetch current VendorBranch state
     let branch = await VendorBranch.findOne({ vendorId: vendorId }).select(
-      "isRushMode"
+      "isRushMode",
     );
 
     if (!branch) {
@@ -3966,7 +3998,7 @@ exports.toggleRushMode = async (req, res) => {
     const updatedBranch = await VendorBranch.findByIdAndUpdate(
       branch._id,
       { $set: { isRushMode: targetRushState } },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     ).select("isRushMode");
 
     // ====================================================
@@ -3974,13 +4006,16 @@ exports.toggleRushMode = async (req, res) => {
     // ====================================================
     try {
       const db = getFirestore(); // Uses app initialized in your existing firebase file
-      await db.collection("vendors").doc(vendorId.toString()).set(
-        {
-          isRushMode: Boolean(updatedBranch.isRushMode),
-          updatedAt: new Date().toISOString(),
-        },
-        { merge: true }
-      );
+      await db
+        .collection("vendors")
+        .doc(vendorId.toString())
+        .set(
+          {
+            isRushMode: Boolean(updatedBranch.isRushMode),
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true },
+        );
     } catch (fbErr) {
       console.error("Firebase Sync Warning:", fbErr.message);
     }
@@ -4003,7 +4038,7 @@ exports.toggleRushMode = async (req, res) => {
     // }
 
     // Send Notification
-       sendNotification(req.app, {
+    sendNotificationToVendor(req.app, {
       vendorId: vendorId,
       role: "Vendor",
       title: `Rush Mode ${
@@ -4012,7 +4047,9 @@ exports.toggleRushMode = async (req, res) => {
       message: `You have ${
         updatedBranch.isRushMode ? "activated" : "deactivated"
       } Rush Mode. ${
-        updatedBranch.isRushMode ? "Rush Mode activation may affect your orders" : ""
+        updatedBranch.isRushMode
+          ? "Rush Mode activation may affect your orders"
+          : ""
       }`,
       type: "rush_mode",
     });
@@ -4101,13 +4138,16 @@ exports.toggleAvailability = async (req, res) => {
     // ====================================================
     try {
       const db = getFirestore(); // Uses app initialized in your existing firebase file
-      await db.collection("vendors").doc(vendorId.toString()).set(
-        {
-          isOpen: Boolean(updatedBranch.isOpen),
-          updatedAt: new Date().toISOString(),
-        },
-        { merge: true }
-      );
+      await db
+        .collection("vendors")
+        .doc(vendorId.toString())
+        .set(
+          {
+            isOpen: Boolean(updatedBranch.isOpen),
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true },
+        );
     } catch (fbErr) {
       console.error("Firebase Sync Warning:", fbErr.message);
     }
@@ -4128,7 +4168,7 @@ exports.toggleAvailability = async (req, res) => {
     // }
 
     // Send Notification
-       sendNotification(req.app, {
+    sendNotification(req.app, {
       vendorId: vendorId,
       role: "Vendor",
       title: `${vendor.businessName} ${

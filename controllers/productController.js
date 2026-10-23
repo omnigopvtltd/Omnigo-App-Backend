@@ -9,6 +9,7 @@ const FoodCategories = require("../models/FoodCategories");
 const Campaign = require("../models/Campaign");
 const { handleImageUploads } = require("../utils/cloudinaryUpload");
 const Deal = require("../models/Deal");
+const { getFirestore } = require("firebase-admin/firestore"); 
 
 // Helper: Evaluates Best Storewide All-Items Deal for a given product
 const applyUniversalDealToProduct = (productObj, activePromos = []) => {
@@ -2017,6 +2018,20 @@ exports.toggleAvailability = async (req, res) => {
         success: false,
         message: "Product not found",
       });
+    }
+
+     try {
+      const db = getFirestore(); // Uses app initialized in your existing firebase file
+      await db.collection("products").doc(req.params.id.toString()).set(
+        {
+          productId: req.params.id.toString(),
+          isAvailable: Boolean(product.isAvailable),
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+    } catch (fbErr) {
+      console.error("Firebase Sync Warning:", fbErr.message);
     }
 
     return res.status(200).json({

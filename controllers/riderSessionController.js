@@ -321,15 +321,15 @@ exports.joinSession = async (req, res) => {
     //   return res.status(400).json({ success: false, message: "This session isn't currently open to join" });
     // }
 
-    // const walletBalance = rider.wallet?.balance || 0;
-    // if (walletBalance < session.minWalletBalance) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: `You need at least ${session.minWalletBalance} in your wallet to join this session`,
-    //     requiredAmount: session.minWalletBalance,
-    //     currentBalance: walletBalance,
-    //   });
-    // }
+    const walletBalance = rider.wallet?.balance || 0;
+    if (walletBalance < session.minWalletBalance) {
+      return res.status(400).json({
+        success: false,
+        message: `You need at least ${session.minWalletBalance} in your wallet to join this session`,
+        requiredAmount: session.minWalletBalance,
+        currentBalance: walletBalance,
+      });
+    }
 
     // Prevent booking the exact same session twice
     const alreadyParticipating = await RiderSessionParticipation.findOne({
@@ -357,7 +357,7 @@ exports.joinSession = async (req, res) => {
 
     const now = new Date();
     // Calculate individual expiration time (e.g., Now + 8 Hours)
-    const timeLimitHours = template.defaultTimeLimitHours || 8;
+    const timeLimitHours = session.timeLimitHours || 8;
     const sessionEndTime = new Date(
       now.getTime() + timeLimitHours * 60 * 60 * 1000,
     );
