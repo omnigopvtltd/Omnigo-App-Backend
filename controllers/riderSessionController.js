@@ -813,19 +813,19 @@ exports.getTodaySessions = async (req, res) => {
     endOfToday.setHours(23, 59, 59, 999);
 
     // 2. (Optional) Automatically mark sessions as "completed" if their endDate has passed
-    await RiderSession.updateMany(
-      {
-        isActive: true,
-         status: { $in: ["in_progress", "pending"] },
-        endDate: { $lt: now },
-      },
-      {
-        $set: {
-          status: "expired",
-          isActive: false,
-        },
-      }
-    );
+    // await RiderSession.updateMany(
+    //   {
+    //     isActive: true,
+    //      status: { $in: ["in_progress"] },
+    //     endDate: { $lt: now },
+    //   },
+    //   {
+    //     $set: {
+    //       status: "expired",
+    //       isActive: false,
+    //     },
+    //   }
+    // );
 
     // 3. Fetch all sessions scheduled for today using a date range
     const todaySessions = await RiderSession.find({
