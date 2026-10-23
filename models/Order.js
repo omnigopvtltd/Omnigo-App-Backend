@@ -231,6 +231,7 @@ const orderSchema = new mongoose.Schema(
             "preparing",
             "ready",
             "completed",
+            "confirmed",
             "cancelled",
           ],
           default: "assigned",
