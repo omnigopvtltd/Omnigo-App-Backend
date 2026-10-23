@@ -581,25 +581,25 @@ exports.cancelRiderOrder = async (req, res) => {
       console.log(rider);
       if (rider) {
         // Refund Float if held and unsettled
-        if (order.riderFloatAmount > 0 && !order.riderFloatSettled) {
-          const newBalance =
-            (rider.wallet?.balance || 0) + order.riderFloatAmount;
+        // if (order.riderFloatAmount > 0 && !order.riderFloatSettled) {
+        //   const newBalance =
+        //     (rider.wallet?.balance || 0) + order.riderFloatAmount;
 
-          rider.wallet = rider.wallet || {};
-          rider.wallet.balance = newBalance; // Safely update balance without wiping subdocument
+        //   rider.wallet = rider.wallet || {};
+        //   rider.wallet.balance = newBalance; // Safely update balance without wiping subdocument
 
-          await WalletTransaction.create({
-            userId: rider._id,
-            type: "credit",
-            amount: order.riderFloatAmount,
-            reason: `Float refunded — ${order.orderNumber} was cancelled`,
-            balanceAfter: newBalance,
-            source: "order_refund",
-            orderId: order._id,
-          });
+        //   await WalletTransaction.create({
+        //     userId: rider._id,
+        //     type: "credit",
+        //     amount: order.riderFloatAmount,
+        //     reason: `Float refunded — ${order.orderNumber} was cancelled`,
+        //     balanceAfter: newBalance,
+        //     source: "order_refund",
+        //     orderId: order._id,
+        //   });
 
-          order.riderFloatSettled = true;
-        }
+        //   order.riderFloatSettled = true;
+        // }
 
         // Update Rider Availability & Tracking
         if (rider.riderProfile) {
@@ -627,7 +627,7 @@ exports.cancelRiderOrder = async (req, res) => {
     // 3. Reset Order State so it can be picked up by another rider
     order.riderId = null;
     order.isAssigned = false;
-    order.status = "confirmed";
+    order.status = "ready";
 
     sendNotification(req.app, {
       userId: order.riderId,
