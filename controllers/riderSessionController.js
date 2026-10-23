@@ -812,30 +812,30 @@ exports.getTodaySessions = async (req, res) => {
     const endOfToday = new Date();
     endOfToday.setHours(23, 59, 59, 999);
 
-    // 2. Automatically mark sessions as "completed" if their endDate has passed
-    // await RiderSession.updateMany(
-    //   {
-    //     isActive: true,
-    //     endDate: { $lt: now },
-    //   },
-    //   {
-    //     $set: {
-    //       status: "completed",
-    //       isActive: false,
-    //     },
-    //   },
-    // );
+    // 2. (Optional) Automatically mark sessions as "completed" if their endDate has passed
+    await RiderSession.updateMany(
+      {
+        isActive: true,
+         status: { $in: ["in_progress", "pending"] },
+        endDate: { $lt: now },
+      },
+      {
+        $set: {
+          status: "expired",
+          isActive: false,
+        },
+      }
+    );
 
-    // 3. Fetch active sessions scheduled for today that haven't ended yet
+    // 3. Fetch all sessions scheduled for today using a date range
     const todaySessions = await RiderSession.find({
+      startDate: {
+        $gte: startOfToday,
+        $lte: endOfToday,
+      },
+      // Agar aapko sirf active ya pending sessions chahiyein toh in filters ko uncomment kar dein:
       isActive: true,
-      startDate: { $lte: now },
-      endDate: { $gte: now },
-      // startDate: {
-      //   $gte: startOfToday,
-      //   $lte: endOfToday,
-      // },
-      // endDate: { $gte: now }, // Ensures only ongoing or upcoming sessions for today are returned
+      status: "pending",
     }).sort({ startDate: 1 });
 
     return res.status(200).json({
