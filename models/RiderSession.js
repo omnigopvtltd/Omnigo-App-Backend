@@ -6,8 +6,8 @@ const riderSessionSchema = new mongoose.Schema(
     description: { type: String, default: "" },
     status: {
       type: String,
-      enum: ["in_progress", "booked", "completed", "expired", "cancelled"],
-      default: "in_progress",
+      enum: ["pending","in_progress", "booked", "completed", "expired", "cancelled"],
+      default: "pending",
     },
 
     requiredOrders: { type: Number, required: true, min: 1, default: 6 },
