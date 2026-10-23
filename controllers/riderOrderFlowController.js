@@ -2,6 +2,7 @@ const Order = require("../models/Order");
 const User = require("../models/User");
 const WalletTransaction = require("../models/WalletTransaction");
 const RiderSessionParticipation = require("../models/RiderSessionParticipation");
+const { sendNotification } = require("../utils/sendNotification");
 
 function isFullyVerified(rider) {
   return (

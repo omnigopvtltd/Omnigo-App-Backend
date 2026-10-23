@@ -59,6 +59,8 @@ exports.createSession = async (req, res) => {
       isActive,
     });
 
+
+
     return res.status(201).json({
       success: true,
       message: "Session created successfully",
@@ -302,12 +304,25 @@ exports.joinSession = async (req, res) => {
       status: "booked",
     });
 
+    const completedSession = await RiderSessionParticipation.findOne({
+      riderId: rider._id,
+      status: "completed",
+    });
+
     // Prevent booking more than 1 session in advance
     if (existingActive && existingBooked) {
       return res.status(400).json({
         success: false,
         message:
           "You already have an active session AND a booked session queued up.",
+      });
+    }
+
+    if (completedSession) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "You already completed this session",
       });
     }
     const session = await RiderSession.findById(req.params.id);
