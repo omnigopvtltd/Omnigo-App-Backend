@@ -3540,6 +3540,7 @@ exports.vendorMenu = async (req, res) => {
         tag,
         images: product.images || [],
         isFavourite: Boolean(product.isFavourite),
+        isAvailable: Boolean(product.isAvailable),
         rating: product.rating || { average: 0, count: 0 },
       };
     };

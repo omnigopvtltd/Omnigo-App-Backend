@@ -14,12 +14,20 @@ function isFullyVerified(rider) {
 const syncToFirestore = async (collectionName, docId, data) => {
   try {
     const db = getFirestore();
+
+    // 1. Convert Mongoose Document to plain object
+    const plainObject = data.toObject ? data.toObject() : data;
+
+    // 2. Safely serialize ObjectIds & complex types to plain JSON format
+    const cleanData = JSON.parse(JSON.stringify(plainObject));
+
+    // 3. Sync clean data to Firestore
     await db
       .collection(collectionName)
       .doc(docId.toString())
       .set(
         {
-          ...data,
+          ...cleanData,
           updatedAt: new Date().toISOString(),
         },
         { merge: true },
@@ -977,16 +985,29 @@ exports.extendSession = async (req, res) => {
   try {
     const { extendHours } = req.body;
     const session = await RiderSession.findById(req.params.id).select(
-      "timeLimitHours",
+      "timeLimitHours bonusAmount requiredOrders",
     );
     if (!session)
       return res
         .status(404)
         .json({ success: false, message: "Session not found" });
 
-    if (extendHours !== undefined) session.timeLimitHours = extendHours;
+    if (extendHours !== undefined && extendHours == 12) {
+      session.timeLimitHours = extendHours;
+      session.requiredOrders = 23;
+      session.bonusAmount = 230;
+      await session.save();
+    } else if (extendHours !== undefined && extendHours == 16) {
+      session.timeLimitHours = extendHours;
+      session.requiredOrders = 27;
+      session.bonusAmount = 486;
+      await session.save();
+    } else {
+      return res
+        .status(400)
+        .json({ success: false, message: "Extend Hours must be 12 or 16" });
+    }
 
-    await session.save();
     await syncToFirestore("rider_sessions", session._id, session.toObject());
 
     return res.status(200).json({
