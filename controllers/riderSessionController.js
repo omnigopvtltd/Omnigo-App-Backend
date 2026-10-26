@@ -277,6 +277,7 @@ exports.joinSession = async (req, res) => {
     });
 
     const completedSession = await RiderSessionParticipation.findOne({
+      sessionId: req.params?.id,
       riderId: rider._id,
       status: "completed",
     });
