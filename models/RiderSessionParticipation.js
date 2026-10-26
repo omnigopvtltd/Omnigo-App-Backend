@@ -88,14 +88,23 @@ const schema = new mongoose.Schema(
   { timestamps: true },
 );
 
-// Rider ka sirf 1 active
-schema.index({ riderId: 1 }, { unique: true, partialFilterExpression: { status: "in_progress" } });
-// Rider ka sirf 1 booked (queue)
-schema.index({ riderId: 1 }, { unique: true, partialFilterExpression: { status: "booked" } });
-// Rider ek session par sirf ek attempt (cancel hone par dobara allow)
-schema.index({ sessionId: 1, riderId: 1 }, { unique: true, partialFilterExpression: { attemptLocked: true } });
-// Expiry job ke liye
-schema.index({ status: 1, expiresAt: 1 });
+// ✅ FIXED: Added unique names to prevent Mongoose duplicate index warnings
+schema.index(
+  { riderId: 1 }, 
+  { unique: true, partialFilterExpression: { status: "in_progress" }, name: "idx_unique_active_rider" }
+);
+
+schema.index(
+  { riderId: 1 }, 
+  { unique: true, partialFilterExpression: { status: "booked" }, name: "idx_unique_booked_rider" }
+);
+
+schema.index(
+  { sessionId: 1, riderId: 1 }, 
+  { unique: true, partialFilterExpression: { attemptLocked: true }, name: "idx_unique_attempt_locked" }
+);
+
+schema.index({ status: 1, expiresAt: 1 }, { name: "idx_status_expires" });
 
 module.exports = mongoose.model("RiderSessionParticipation", schema);
 
