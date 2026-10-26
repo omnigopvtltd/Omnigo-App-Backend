@@ -7,195 +7,6 @@ const Deal = require("../models/Deal");
 const Campaign = require("../models/Campaign");
 const mongoose = require("mongoose");
 
-// ================= ADD TO CART =================
-// exports.addToCart = async (req, res) => {
-//   try {
-//     const io = req.app.get("io");
-//     const { items } = req.body;
-
-// console.log("ADD TO CART REQUEST BODY:", req.body);
-
-//     // 1. Array validation check
-//     if (!Array.isArray(items) || items.length === 0) {
-//       return res.status(400).json({
-//         success: false,
-//         msg: "Please select at least one item",
-//       });
-//     }
-
-//     // 2. Fetch or create user cart
-//     let cart = await Cart.findOne({ userId: req.user.id });
-//     if (!cart) {
-//       cart = new Cart({
-//         userId: req.user.id,
-//         items: [],
-//       });
-//     }
-
-//     console.log("CART BEFORE ADDITION:", cart);
-
-//     // 3. Process each item in the array
-//     for (const newItem of items) {
-
-//       const itemId = newItem.productId || newItem.itemId || newItem.id;
-//       if (!itemId) continue;
-
-//       const qty = Number(newItem.quantity) || 1;
-
-//       const incomingAddOns = Array.isArray(newItem.addOns)
-//         ? newItem.addOns
-//         : [];
-//       const addOnsPrice = incomingAddOns.reduce(
-//         (sum, addOn) => sum + (Number(addOn.price) || 0),
-//         0,
-//       );
-
-//       const incomingVariations = Array.isArray(newItem.variations)
-//         ? newItem.variations
-//         : [];
-//       const variationsPrice = incomingVariations.reduce(
-//         (sum, variations) => sum + (Number(variations.price) || 0),
-//         0,
-//       );
-
-//       // ----------------------------------------------------
-//       // AUTO-MATCH ID WITH PRODUCT, DEAL, OR CAMPAIGN
-//       // ----------------------------------------------------
-//       const [product, deal, campaign] = await Promise.all([
-//         Product.findById(itemId).lean(),
-//         Deal.findById(itemId).lean(),
-//         Campaign.findById(itemId).lean(),
-//       ]);
-
-//       const matchedEntity = product || deal || campaign;
-
-//       if (!matchedEntity) continue; // If ID doesn't match anything, skip
-
-//       // Determine entity type
-//       let entityType = "product";
-//       if (deal) entityType = "deal";
-//       else if (campaign) entityType = "campaign";
-
-//       // Check if item already exists in user's cart
-//       const existingIndex = cart.items.findIndex((item) => {
-//         if (entityType === "product" && item.productId) {
-//           return item.productId.toString() === itemId.toString();
-//         }
-//         if (entityType === "deal" && item.productId) {
-//           return item.productId.toString() === itemId.toString();
-//         }
-//         if (entityType === "campaign" && item.productId) {
-//           return item.productId.toString() === itemId.toString();
-//         }
-//         return false;
-//       });
-
-//       // // Price determination
-//       // const itemPrice = Number(
-//       //   item.discountPrice ||
-//       //     matchedEntity.price ||
-//       //     newItem.price ||
-//       //     0,
-//       // );
-
-//       // if (existingIndex > -1) {
-//       //   // Update quantity & total if already in cart
-//       //   cart.items[existingIndex].quantity += qty;
-//       //   cart.items[existingIndex].total =
-//       //     cart.items[existingIndex].addOns.reduce(
-//       //       (sum, addOn) => sum + (addOn.price || 0),
-//       //       0,
-//       //     ) +
-//       //     cart.items[existingIndex].quantity * cart.items[existingIndex].price;
-//       // }
-//       if (existingIndex > -1) {
-//         console.log("Item already exists in cart. Updating quantity and total.", existingIndex);
-//         const existingItem = cart.items[existingIndex];
-//         console.log("Item already exists in cart. Updating quantity and total.", existingItem);
-
-//   if (incomingAddOns.length > 0) existingItem.addOns = incomingAddOns;
-//   if (newItem.variations) existingItem.variations = newItem.variations;
-
-//   existingItem.quantity += qty;
-
-//   const currentAddOnsPrice = existingItem.addOns.reduce(
-//     (sum, addOn) => sum + (Number(addOn.price) || 0),
-//     0
-//   );
-//   const currentVariationsPrice = existingItem.variations.reduce(
-//     (sum, variations) => sum + (Number(variations.price) || 0),
-//     0
-//   );
-
-//   // Exact Total Calculation: (Price + AddOns) * Total Quantity
-//   existingItem.total = (existingItem.price) * existingItem.quantity;
-// }
-//       else {
-//         // Construct new cart item object
-//         const cartItem = {
-//           orderFrom: newItem.orderFrom || "fast-food",
-//           name:
-//             matchedEntity.name ||
-//             matchedEntity.title ||
-//             matchedEntity.dealName ||
-//             matchedEntity.campaignName ||
-//             newItem.name ||
-//             "Item",
-//           image:
-//             matchedEntity.image ||
-//             (matchedEntity.images && matchedEntity.images[0]) ||
-//             matchedEntity.campaignBanner ||
-//             matchedEntity.dealBanner ||
-//             newItem.image ||
-//             "",
-//           category: matchedEntity.category || newItem.category || entityType,
-//           weight: matchedEntity.weight || newItem.weight || "",
-//           price: newItem.price || matchedEntity.discountPrice,
-//           quantity: qty,
-//           variations: newItem.variations || matchedEntity.variations || [],
-//           addOns: newItem.addOns || matchedEntity.addOns || [],
-//           serving: newItem.serving || matchedEntity.serving || "full",
-//           isVeg: newItem.isVeg ?? matchedEntity.isVeg ?? false,
-//           total:
-//             (newItem.price) *
-//             qty,
-//         };
-
-//         // Attach specific ID based on match
-//         if (entityType === "deal") {
-//           cartItem.productId = matchedEntity._id;
-//         } else if (entityType === "campaign") {
-//           cartItem.productId = matchedEntity._id;
-//         } else {
-//           cartItem.productId = matchedEntity._id;
-//         }
-
-//         cart.items.push(cartItem);
-//       }
-//     }
-
-//     await cart.save();
-
-//     // 4. Emit socket event
-//     if (io) {
-//       io.to(`user:${req.user.id}`).emit("cart_updated", cart);
-//     }
-// console.log("CART AFTER ADDITION:", cart);
-//     return res.status(200).json({
-//       success: true,
-//       msg: "Added to cart successfully",
-//       items: cart.length,
-//       cart,
-//     });
-//   } catch (err) {
-//     console.error("ADD TO CART ERROR:", err);
-//     return res.status(500).json({
-//       success: false,
-//       msg: "Server Error",
-//       error: err.message,
-//     });
-//   }
-// };
 
 exports.addToCart = async (req, res) => {
   try {
@@ -359,7 +170,6 @@ exports.addToCart = async (req, res) => {
       // Updated existingIndex search in Cart Controller
       // ==========================================
       const existingIndex = cart.items.findIndex((item) => {
-        console.log(cart.items);
         // 1. Check Product ID & Type
         const isProductSame =
           item.productId.toString() === itemId.toString() &&
@@ -437,7 +247,7 @@ exports.addToCart = async (req, res) => {
       } else {
         // PUSH NEW CART ITEM
         const lineItemTotal =
-          (singleItemPriceWithVariations + addOnsUnitSum) * qty;
+          (unitPrice) * qty;
 
         const cartItem = {
           orderFrom: newItem.orderFrom || matchedEntity.category || "fast-food",
