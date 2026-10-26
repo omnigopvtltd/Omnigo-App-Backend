@@ -903,6 +903,9 @@ exports.register = async (req, res) => {
       businessEmail: businessEmail
         ? String(businessEmail).toLowerCase().trim()
         : "",
+      businessType: businessType
+        ? String(businessType).toLowerCase().trim()
+        : "",
       // password: hash,
 
       isPhoneVerified: false,
@@ -1723,7 +1726,7 @@ exports.updateVendorProfile = async (req, res) => {
       media.cnicBackPicture || vendor.cnicBackPicture || "";
 
     vendor.incorporationCertificate =
-      media.incorporationCertificate || vendor.incorporationCertificate || "";
+     media.incorporationCertificate || vendor.incorporationCertificate || "";
     vendor.foodSafetyLicense =
       media.foodSafetyLicense || vendor.foodSafetyLicense || "";
     vendor.ntnCertificate = media.ntnCertificate || vendor.ntnCertificate || "";

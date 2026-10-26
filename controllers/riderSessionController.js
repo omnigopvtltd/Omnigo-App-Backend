@@ -738,12 +738,19 @@ exports.getRiderSessionHistory = async (req, res) => {
     // Fetch all participation records where status is 'Cancelled' (queued)
     const cancelledSession = await RiderSessionParticipation.find({
       riderId,
-      status: "cancelled",
+      status: { $in: ["abandoned", "cancelled"]},
     })
       .populate("sessionId")
       .sort({ createdAt: 1 });
 
-    const getSessionHistory = [...completedSessions, ...cancelledSession];
+    const expiredSession = await RiderSessionParticipation.find({
+      riderId,
+      status: "expired",
+    })
+      .populate("sessionId")
+      .sort({ createdAt: 1 });
+
+    const getSessionHistory = [...completedSessions, ...cancelledSession, ...expiredSession];
 
     return res.status(200).json({
       success: true,
