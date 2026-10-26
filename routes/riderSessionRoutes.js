@@ -61,7 +61,7 @@ router.delete("/my/booked/:id", auth, cancelBookedSession);
 router.post("/:id/join", auth, joinSession);
 
 // admin (adminOnly middleware zaroor lagao)
-router.post("/", auth, auth, role("admin"), createSession);
+router.post("/create", auth, auth, createSession);
 router.get("/", auth, getAllSessions);
 router.get("/:id", auth, getSessionById);
 router.patch("/:id", auth, auth, role("admin"), updateSession);
