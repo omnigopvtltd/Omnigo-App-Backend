@@ -1381,6 +1381,8 @@ exports.getAvailableOrders = async (req, res) => {
       });
     }
 
+    
+
     // Get orders cancelled by this rider
     const cancelledOrderIds = (
       rider.riderProfile?.riderCancelledOrder || []
