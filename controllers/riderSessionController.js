@@ -242,77 +242,6 @@ exports.deleteSession = async (req, res) => {
   }
 };
 
-// // =====================================
-// // RIDER: JOIN SESSION
-// // =====================================
-// exports.joinSession = async (req, res) => {
-//   try {
-//     const rider = await User.findOne({ _id: req.user.id, role: "rider" });
-//     if (!rider) return res.status(404).json({ success: false, message: "Rider not found" });
-
-//     if (rider.isBlocked) {
-//       return res.status(403).json({ success: false, message: "Your account is blocked" });
-//     }
-//     if (!isFullyVerified(rider)) {
-//       return res.status(403).json({
-//         success: false,
-//         message: "Complete CNIC and face verification before joining a session",
-//       });
-//     }
-
-//     const existingActive = await RiderSessionParticipation.findOne({
-//       riderId: rider._id,
-//       status: "in_progress",
-//     });
-//     if (existingActive) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "You're already in an active session. Finish or leave it before joining another.",
-//       });
-//     }
-
-//     const session = await RiderSession.findById(req.params.id);
-//     if (!session) return res.status(404).json({ success: false, message: "Session not found" });
-//     if (!session.isCurrentlyJoinable()) {
-//       return res.status(400).json({ success: false, message: "This session isn't currently open to join" });
-//     }
-
-//     const walletBalance = rider.wallet?.balance || 0;
-//     if (walletBalance < session.minWalletBalance) {
-//       return res.status(400).json({
-//         success: false,
-//         message: `You need at least ${session.minWalletBalance} in your wallet to join this session`,
-//         requiredAmount: session.minWalletBalance,
-//         currentBalance: walletBalance,
-//       });
-//     }
-
-//     const expiresAt = session.timeLimitHours
-//       ? new Date(Date.now() + session.timeLimitHours * 60 * 60 * 1000)
-//       : null;
-
-//     const participation = await RiderSessionParticipation.create({
-//       sessionId: session._id,
-//       riderId: rider._id,
-//       bonusAmount: session.bonusAmount,
-//       requiredOrders: session.requiredOrders,
-//       expiresAt,
-//     });
-
-//     return res.status(201).json({
-//       success: true,
-//       message: `Joined session — complete ${session.requiredOrders} orders to earn ${session.bonusAmount}`,
-//       participation,
-//     });
-//   } catch (err) {
-//     if (err.code === 11000) {
-//       return res.status(400).json({ success: false, message: "You're already in an active session" });
-//     }
-//     console.log("JOIN SESSION ERROR:", err);
-//     return res.status(500).json({ success: false, message: err.message });
-//   }
-// };
-
 // =====================================
 // RIDER: JOIN / BOOK SESSION
 // =====================================
@@ -983,32 +912,51 @@ exports.cancelBookedSession = async (req, res) => {
 // =====================================
 exports.extendSession = async (req, res) => {
   try {
+     const riderId = req.user.id;
     const { extendHours } = req.body;
     const session = await RiderSession.findById(req.params.id).select(
-      "timeLimitHours bonusAmount requiredOrders",
+      "timeLimitHours bonusAmount requiredOrders status",
     );
-    if (!session)
+
+     const currentParticipation = await RiderSessionParticipation.findOne({
+      riderId: riderId,
+      status: "in_progress",
+    });
+
+    if (!session && currentParticipation)
       return res
         .status(404)
         .json({ success: false, message: "Session not found" });
 
     if (extendHours !== undefined && extendHours == 12) {
-      session.timeLimitHours = extendHours;
-      session.requiredOrders = 23;
-      session.bonusAmount = 230;
-      await session.save();
+      currentParticipation.timeLimitHours = extendHours;
+      currentParticipation.requiredOrders = 23;
+      currentParticipation.bonusAmount = 230;
+      currentParticipation.extendHours = extendHours;
+      currentParticipation.isExtend12 = true;
+
+      currentParticipation.status = "in_progress";
+      await currentParticipation.save();
     } else if (extendHours !== undefined && extendHours == 16) {
-      session.timeLimitHours = extendHours;
-      session.requiredOrders = 27;
-      session.bonusAmount = 486;
-      await session.save();
+      currentParticipation.timeLimitHours = extendHours;
+      currentParticipation.requiredOrders = 27;
+      currentParticipation.bonusAmount = 486;
+      currentParticipation.extendHours = extendHours;
+      currentParticipation.isExtend16 = true;
+
+      currentParticipation.status = "in_progress";
+      await currentParticipation.save();
     } else {
       return res
         .status(400)
         .json({ success: false, message: "Extend Hours must be 12 or 16" });
     }
 
-    await syncToFirestore("rider_sessions", session._id, session.toObject());
+    await syncToFirestore(
+      "rider_session_participations",
+      currentParticipation._id,
+      currentParticipation.toObject(),
+      );
 
     return res.status(200).json({
       success: true,
