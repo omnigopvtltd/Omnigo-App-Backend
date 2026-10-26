@@ -1021,7 +1021,7 @@ exports.getProductsByType = async (req, res) => {
     const products = await Product.find(query)
       .populate("vendorId", "businessName logo deliveryTime")
       .select(
-        "name images price discountPrice rating vendorId homeChefId belongsTo type isFavourite category"
+        "name images price discountPrice rating vendorId homeChefId belongsTo type isFavourite isAvailable category"
       );
 
     // 2. Fetch ALL Active Deals & Campaigns
