@@ -556,8 +556,8 @@ exports.cancelRiderOrder = async (req, res) => {
     const rider = await User.findById(req.user?.id);
 
     // Check if Rider previously cancelled this order
-    const isCancelledByRider = rider.riderProfile?.riderCanceledOrder?.some(
-      (orderId) => orderId.toString() === req.params.id,
+    const isCancelledByRider = rider.riderProfile?.riderCancelledOrder?.some(
+      (orderId) => orderId.toString() === req.params?.id,
     );
     console.log("is Order Cancelled By Rider", isCancelledByRider);
 
@@ -606,17 +606,17 @@ exports.cancelRiderOrder = async (req, res) => {
           rider.riderProfile.isBusy = false;
 
           // Ensure array exists and avoid duplicate entries
-          if (!rider.riderProfile.riderCanceledOrder) {
-            rider.riderProfile.riderCanceledOrder = [];
+          if (!rider.riderProfile.riderCancelledOrder) {
+            rider.riderProfile.riderCancelledOrder = [];
           }
 
           const orderIdStr = order._id.toString();
-          const alreadyInList = rider.riderProfile.riderCanceledOrder.some(
+          const alreadyInList = rider.riderProfile?.riderCancelledOrder?.some(
             (id) => id.toString() === orderIdStr,
           );
 
           if (!alreadyInList) {
-            rider.riderProfile.riderCanceledOrder.push(order._id);
+            rider.riderProfile?.riderCancelledOrder?.push(order._id);
           }
         }
 
@@ -628,6 +628,7 @@ exports.cancelRiderOrder = async (req, res) => {
     order.riderId = null;
     order.isAssigned = false;
     order.status = "ready";
+    await order.save();
 
     sendNotification(req.app, {
       userId: order.riderId,
@@ -644,7 +645,6 @@ exports.cancelRiderOrder = async (req, res) => {
       },
       // link: `/rider/orders/cancel/${order._id}`,
     });
-    await order.save();
 
     return res.status(200).json({
       success: true,
@@ -1370,11 +1370,28 @@ exports.getOngoingOrders = async (req, res) => {
 // =====================================
 exports.getAvailableOrders = async (req, res) => {
   try {
+    const rider = await User.findById(req.user.id).select(
+      "riderProfile.riderCancelledOrder"
+    );
+
+    if (!rider) {
+      return res.status(404).json({
+        success: false,
+        message: "Rider not found",
+      });
+    }
+
+    // Get orders cancelled by this rider
+    const cancelledOrderIds = (
+      rider.riderProfile?.riderCancelledOrder || []
+    ).map((id) => new mongoose.Types.ObjectId(id.toString()));
+
+    // FIXED: Moved _id out of status object to query root level
     const allOrders = await Order.find({
       status: {
-        $in: ["ready"],
-        // $in: ["confirmed", "preparing", "ready"],
+        $in: ["ready"], // Aap yahan baqi statuses bhi add kar sakte hain: ["confirmed", "preparing", "ready"]
       },
+      _id: { $nin: cancelledOrderIds },
       isAssigned: false,
     })
       .populate("userId", "name email phone")
