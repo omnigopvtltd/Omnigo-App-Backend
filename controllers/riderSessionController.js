@@ -1,6 +1,7 @@
 const RiderSession = require("../models/RiderSession");
 const RiderSessionParticipation = require("../models/RiderSessionParticipation");
 const User = require("../models/User");
+const { getFirestore } = require("firebase-admin/firestore");
 
 function isFullyVerified(rider) {
   return (
@@ -8,6 +9,34 @@ function isFullyVerified(rider) {
     rider.riderProfile?.faceVerification?.status === "verified"
   );
 }
+
+// Helper for Firebase sync safely
+const syncToFirestore = async (collectionName, docId, data) => {
+  try {
+    const db = getFirestore();
+    await db
+      .collection(collectionName)
+      .doc(docId.toString())
+      .set(
+        {
+          ...data,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true },
+      );
+  } catch (fbErr) {
+    console.error(`Firebase Sync Error (${collectionName}):`, fbErr.message);
+  }
+};
+
+const deleteFromFirestore = async (collectionName, docId) => {
+  try {
+    const db = getFirestore();
+    await db.collection(collectionName).doc(docId.toString()).delete();
+  } catch (fbErr) {
+    console.error(`Firebase Delete Error (${collectionName}):`, fbErr.message);
+  }
+};
 
 // =====================================
 // ADMIN: CREATE SESSION
@@ -59,7 +88,8 @@ exports.createSession = async (req, res) => {
       isActive,
     });
 
-
+    // 🔥 Real-time sync with Firebase Firestore
+    await syncToFirestore("rider_sessions", session._id, session.toObject());
 
     return res.status(201).json({
       success: true,
@@ -155,6 +185,8 @@ exports.updateSession = async (req, res) => {
     });
 
     await session.save();
+    // 🔥 Real-time sync with Firebase Firestore
+    await syncToFirestore("rider_sessions", session._id, session.toObject());
 
     return res.status(200).json({
       success: true,
@@ -189,6 +221,9 @@ exports.deleteSession = async (req, res) => {
       return res
         .status(404)
         .json({ success: false, message: "Session not found" });
+
+    // 🔥 Delete from Firebase Firestore
+    await deleteFromFirestore("rider_sessions", req.params.id);
 
     return res
       .status(200)
@@ -321,8 +356,7 @@ exports.joinSession = async (req, res) => {
     if (completedSession) {
       return res.status(400).json({
         success: false,
-        message:
-          "You already completed this session",
+        message: "You already completed this session",
       });
     }
     const session = await RiderSession.findById(req.params.id);
@@ -388,6 +422,13 @@ exports.joinSession = async (req, res) => {
       expiresAt,
     });
 
+    // 🔥 Real-time sync participation with Firebase Firestore
+    await syncToFirestore(
+      "rider_session_participations",
+      participation._id,
+      participation.toObject(),
+    );
+
     return res.status(201).json({
       success: true,
       message: isBookedMode
@@ -429,6 +470,14 @@ exports.activateNextBookedSession = async (riderId) => {
   bookedSession.expiresAt = expiresAt;
 
   await bookedSession.save();
+
+  // 🔥 Sync updated status to Firebase
+  await syncToFirestore(
+    "rider_session_participations",
+    bookedSession._id,
+    bookedSession.toObject(),
+  );
+
   return bookedSession;
 };
 
@@ -472,6 +521,11 @@ exports.completeSession = async (req, res) => {
       currentParticipation.status = "expired";
       await currentParticipation.save();
 
+      await syncToFirestore(
+        "rider_session_participations",
+        currentParticipation._id,
+        currentParticipation.toObject(),
+      );
       // Even if expired, try activating the next booked session
       const nextSession = await activateNextBookedSession(rider._id);
 
@@ -547,6 +601,12 @@ exports.leaveSession = async (req, res) => {
     participation.abandonReason = req.body.reason || "Left by rider";
     await participation.save();
 
+    await syncToFirestore(
+      "rider_session_participations",
+      participation._id,
+      participation.toObject(),
+    );
+
     return res.status(200).json({
       success: true,
       message:
@@ -581,6 +641,13 @@ exports.getMySessionStatus = async (req, res) => {
       participation.abandonedAt = new Date();
       participation.abandonReason = "Time limit expired";
       await participation.save();
+
+      await syncToFirestore(
+        "rider_session_participations",
+        participation._id,
+        participation.toObject(),
+      );
+
       return res
         .status(200)
         .json({ success: true, active: false, participation, expired: true });
@@ -880,6 +947,12 @@ exports.cancelBookedSession = async (req, res) => {
     bookedParticipation.cancelledAt = new Date();
     await bookedParticipation.save();
 
+    await syncToFirestore(
+      "rider_session_participations",
+      bookedParticipation._id,
+      bookedParticipation.toObject(),
+    );
+
     // Option B: If you prefer completely removing the record from DB instead:
     // await bookedParticipation.deleteOne();
 
@@ -914,6 +987,7 @@ exports.extendSession = async (req, res) => {
     if (extendHours !== undefined) session.timeLimitHours = extendHours;
 
     await session.save();
+    await syncToFirestore("rider_sessions", session._id, session.toObject());
 
     return res.status(200).json({
       success: true,
