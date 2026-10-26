@@ -24,7 +24,7 @@ const riderSessionParticipationSchema = new mongoose.Schema(
 
     bonusAmount: { type: Number, required: true }, // snapshot from the session at join time
     requiredOrders: { type: Number, required: true }, // snapshot from the session at join time
-    timeLimitHours: { type: Number, required: true }, // snapshot from the session at join time
+    timeLimitHours: { type: Number}, // snapshot from the session at join time
     extendHours: { type: Number }, // snapshot from the session at join time
     isExtend12: { type: Boolean, default: false }, // snapshot from the session at join time
     isExtend16: { type: Boolean, default: false }, // snapshot from the session at join time
