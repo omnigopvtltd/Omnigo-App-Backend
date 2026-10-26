@@ -352,6 +352,7 @@ exports.joinSession = async (req, res) => {
       sessionId: session._id,
       riderId: rider._id,
       status,
+      timeLimitHours: session.timeLimitHours,
       bonusAmount: session.bonusAmount,
       requiredOrders: session.requiredOrders,
       startedAt,
@@ -913,7 +914,7 @@ exports.cancelBookedSession = async (req, res) => {
 exports.extendSession = async (req, res) => {
   try {
      const riderId = req.user.id;
-    const { extendHours = 4 } = req.body;
+    const { extendHours } = req.body;
     const session = await RiderSession.findById(req.params.id).select(
       "timeLimitHours bonusAmount requiredOrders status",
     );
@@ -929,7 +930,7 @@ exports.extendSession = async (req, res) => {
         .json({ success: false, message: "Session not found" });
 
     if (extendHours !== undefined && currentParticipation.isExtend12 == false && extendHours == 4 ) {
-      currentParticipation.timeLimitHours = extendHours;
+      currentParticipation.timeLimitHours += extendHours;
       currentParticipation.requiredOrders = 23;
       currentParticipation.bonusAmount = 230;
       currentParticipation.extendHours = extendHours;
@@ -938,7 +939,7 @@ exports.extendSession = async (req, res) => {
       // currentParticipation.status = "in_progress";
       await currentParticipation.save();
     } else if (extendHours !== undefined && currentParticipation.isExtend12 == true && currentParticipation.isExtend16 == false && extendHours == 4) {
-      currentParticipation.timeLimitHours = extendHours;
+      currentParticipation.timeLimitHours += extendHours;
       currentParticipation.requiredOrders = 27;
       currentParticipation.bonusAmount = 486;
       currentParticipation.extendHours = extendHours;
@@ -961,7 +962,7 @@ exports.extendSession = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Session updated successfully",
-      session,
+      currentParticipation,
     });
   } catch (err) {
     console.log("UPDATE SESSION ERROR:", err);
