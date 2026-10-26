@@ -125,9 +125,15 @@ router.put(
 
 router.put(
   "/vendor-profile/update",
-  upload.diskUpload.fields([
+ upload.diskUpload.fields([
     { name: "logo", maxCount: 1 },
     { name: "coverImage", maxCount: 1 },
+    { name: "profilePicture", maxCount: 1 },
+    { name: "cnicFrontPicture", maxCount: 1 },
+    { name: "cnicBackPicture", maxCount: 1 },
+    { name: "incorporationCertificate", maxCount: 1 },
+    { name: "foodSafetyLicense", maxCount: 1 },
+    { name: "ntnCertificate", maxCount: 1 },
   ]),
   auth,
   updateVendorProfile,
@@ -137,6 +143,12 @@ router.put(
   upload.diskUpload.fields([
     { name: "logo", maxCount: 1 },
     { name: "coverImage", maxCount: 1 },
+    { name: "profilePicture", maxCount: 1 },
+    { name: "cnicFrontPicture", maxCount: 1 },
+    { name: "cnicBackPicture", maxCount: 1 },
+    { name: "incorporationCertificate", maxCount: 1 },
+    { name: "foodSafetyLicense", maxCount: 1 },
+    { name: "ntnCertificate", maxCount: 1 },
   ]),
   auth,
   updateVendor,
