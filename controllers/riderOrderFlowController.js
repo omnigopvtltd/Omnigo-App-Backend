@@ -329,7 +329,7 @@ exports.completeOrderDelivery = async (req, res) => {
       message:
         "Order delivered successfully — wallet credited & vendors updated",
       order,
-      walletBalance: newBalance,
+      // walletBalance: newBalance,
       session: sessionResult,
     });
   } catch (err) {

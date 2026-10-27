@@ -50,7 +50,7 @@ const {
 /////////////////////////////////////////
 
 router.get("/today", auth, getTodaySessions);
-router.get("/coming-soon", auth, getComingSoonSessions);
+router.get("/coming", auth, getComingSoonSessions);
 router.get("/my/status", auth, getMySessionStatus);
 router.get("/my/booked", auth, getBookedSessions);
 router.get("/my/history", auth, getRiderSessionHistory);   // ?status=completed|expired|abandoned|cancelled
