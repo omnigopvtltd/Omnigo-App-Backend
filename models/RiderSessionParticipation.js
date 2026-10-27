@@ -88,7 +88,7 @@ const schema = new mongoose.Schema(
   { timestamps: true },
 );
 
-// ✅ FIXED: Added unique names to prevent Mongoose duplicate index warnings
+// Added unique names to prevent Mongoose duplicate index warnings
 schema.index(
   { riderId: 1 }, 
   { unique: true, partialFilterExpression: { status: "in_progress" }, name: "idx_unique_active_rider" }

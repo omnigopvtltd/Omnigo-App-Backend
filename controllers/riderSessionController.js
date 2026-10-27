@@ -1010,9 +1010,7 @@
 //   }
 // };
 
-
 /////////////////////////////////////////////////////////////////////////////////////
-
 
 const mongoose = require("mongoose");
 const RiderSession = require("../models/RiderSession");
@@ -1039,7 +1037,10 @@ const serverError = (res, tag, err) => {
   return res.status(500).json({
     success: false,
     code: "SERVER_ERROR",
-    message: process.env.NODE_ENV === "production" ? "Something went wrong" : err.message,
+    message:
+      process.env.NODE_ENV === "production"
+        ? "Something went wrong"
+        : err.message,
   });
 };
 
@@ -1060,7 +1061,9 @@ function isFullyVerified(rider) {
 const PK_OFFSET = 5 * HOUR;
 const getPkDayRange = (now = new Date()) => {
   const local = new Date(now.getTime() + PK_OFFSET);
-  const startUtc = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) - PK_OFFSET;
+  const startUtc =
+    Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) -
+    PK_OFFSET;
   return { start: new Date(startUtc), end: new Date(startUtc + 24 * HOUR - 1) };
 };
 
@@ -1079,7 +1082,10 @@ const syncToFirestore = async (collectionName, docId, data) => {
 };
 const deleteFromFirestore = async (collectionName, docId) => {
   try {
-    await getFirestore().collection(collectionName).doc(docId.toString()).delete();
+    await getFirestore()
+      .collection(collectionName)
+      .doc(docId.toString())
+      .delete();
   } catch (e) {
     console.error(`Firebase Delete Error (${collectionName}):`, e.message);
   }
@@ -1092,12 +1098,18 @@ const syncP = (p) => syncToFirestore("rider_session_participations", p._id, p);
 
 // Queue se agla booked session start karo. Invalid/ended session skip hota hai.
 const activateNextBookedSession = async (riderId) => {
-  const alreadyActive = await RiderSessionParticipation.findOne({ riderId, status: "in_progress" });
+  const alreadyActive = await RiderSessionParticipation.findOne({
+    riderId,
+    status: "in_progress",
+  });
   if (alreadyActive) return null;
 
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const booked = await RiderSessionParticipation.findOne({ riderId, status: "booked" })
+    const booked = await RiderSessionParticipation.findOne({
+      riderId,
+      status: "booked",
+    })
       .sort({ createdAt: 1 })
       .populate("sessionId");
     if (!booked) return null;
@@ -1120,7 +1132,13 @@ const activateNextBookedSession = async (riderId) => {
     try {
       const activated = await RiderSessionParticipation.findOneAndUpdate(
         { _id: booked._id, status: "booked" },
-        { $set: { status: "in_progress", startedAt: now, expiresAt: new Date(now.getTime() + hours * HOUR) } },
+        {
+          $set: {
+            status: "in_progress",
+            startedAt: now,
+            expiresAt: new Date(now.getTime() + hours * HOUR),
+          },
+        },
         { new: true },
       );
       if (activated) {
@@ -1137,7 +1155,11 @@ const activateNextBookedSession = async (riderId) => {
 // Time khatam => expired (atomic) + next booked start
 const expireParticipation = async (participationId) => {
   const p = await RiderSessionParticipation.findOneAndUpdate(
-    { _id: participationId, status: "in_progress", expiresAt: { $ne: null, $lte: new Date() } },
+    {
+      _id: participationId,
+      status: "in_progress",
+      expiresAt: { $ne: null, $lte: new Date() },
+    },
     { $set: { status: "expired", abandonReason: "Time limit expired" } },
     { new: true },
   );
@@ -1165,7 +1187,10 @@ const finalizeCompletion = async (participationId) => {
 
   try {
     if (claimed.bonusAmount > 0) {
-      await User.updateOne({ _id: claimed.riderId }, { $inc: { "wallet.balance": claimed.bonusAmount } });
+      await User.updateOne(
+        { _id: claimed.riderId },
+        { $inc: { "wallet.balance": claimed.bonusAmount } },
+      );
       // TODO: yahan WalletTransaction record bhi banao (audit trail)
     }
   } catch (err) {
@@ -1180,15 +1205,25 @@ const finalizeCompletion = async (participationId) => {
   await syncP(claimed);
   const nextSession = await activateNextBookedSession(claimed.riderId);
   const rider = await User.findById(claimed.riderId).select("wallet");
-  return { participation: claimed, nextSession, walletBalance: rider?.wallet?.balance ?? 0 };
+  return {
+    participation: claimed,
+    nextSession,
+    walletBalance: rider?.wallet?.balance ?? 0,
+  };
 };
 
 // Rider ka current in_progress, expired ho to lazily expire kar do
 const getLiveParticipation = async (riderId) => {
-  const current = await RiderSessionParticipation.findOne({ riderId, status: "in_progress" });
+  const current = await RiderSessionParticipation.findOne({
+    riderId,
+    status: "in_progress",
+  });
   if (current && current.expiresAt && current.expiresAt <= new Date()) {
     await expireParticipation(current._id);
-    return RiderSessionParticipation.findOne({ riderId, status: "in_progress" });
+    return RiderSessionParticipation.findOne({
+      riderId,
+      status: "in_progress",
+    });
   }
   return current;
 };
@@ -1217,18 +1252,27 @@ exports.runExpiryJob = async () => {
   const due = await RiderSessionParticipation.find({
     status: "in_progress",
     expiresAt: { $ne: null, $lte: now },
-  }).select("_id").limit(500);
-  for (const d of due) await expireParticipation(d._id).catch((e) => console.error("EXPIRE ERR", e));
+  })
+    .select("_id")
+    .limit(500);
+  for (const d of due)
+    await expireParticipation(d._id).catch((e) =>
+      console.error("EXPIRE ERR", e),
+    );
 
   // Jin booked sessions ki window khatam ho gayi unhe cancel karo
   const bookings = await RiderSessionParticipation.find({ status: "booked" })
-    .populate("sessionId", "isActive endDate").limit(500);
+    .populate("sessionId", "isActive endDate")
+    .limit(500);
   for (const b of bookings) {
     const s = b.sessionId;
     if (!s || !s.isActive || s.endDate < now) {
-      b.status = "cancelled"; b.attemptLocked = false; b.cancelledAt = now;
+      b.status = "cancelled";
+      b.attemptLocked = false;
+      b.cancelledAt = now;
       b.abandonReason = "Session no longer available";
-      await b.save(); await syncP(b);
+      await b.save();
+      await syncP(b);
     }
   }
 };
@@ -1238,9 +1282,21 @@ exports.runExpiryJob = async () => {
 // =====================================================
 exports.createSession = async (req, res) => {
   try {
-    const { title, description, requiredOrders, bonusAmount, minWalletBalance, timeLimitHours, startDate, endDate, isActive } = req.body;
+    const now = new Date();
+    const {
+      title,
+      description,
+      requiredOrders,
+      bonusAmount,
+      minWalletBalance,
+      timeLimitHours,
+      startDate,
+      endDate,
+      isActive,
+    } = req.body;
 
-    if (!title?.trim()) return fail(res, 400, "VALIDATION", "Title is required");
+    if (!title?.trim())
+      return fail(res, 400, "VALIDATION", "Title is required");
     if (!Number.isFinite(Number(requiredOrders)) || Number(requiredOrders) < 1)
       return fail(res, 400, "VALIDATION", "requiredOrders must be at least 1");
     if (!Number.isFinite(Number(bonusAmount)) || Number(bonusAmount) < 0)
@@ -1248,17 +1304,31 @@ exports.createSession = async (req, res) => {
     if (startDate && endDate && new Date(endDate) <= new Date(startDate))
       return fail(res, 400, "VALIDATION", "endDate must be after startDate");
 
+    const start = getPkDayRange(now).start;
+    const end = getPkDayRange(now).end;
+
+    console.log(start, end, getPkDayRange(now));
+
     const session = await RiderSession.create({
-      title, description,
+      title,
+      description,
       requiredOrders: Number(requiredOrders),
       bonusAmount: Number(bonusAmount),
       minWalletBalance: Number(minWalletBalance) || 0,
       timeLimitHours: Number(timeLimitHours) || 8,
-      startDate, endDate, isActive,
+      startDate: start,
+      endDate: end,
+      isActive,
     });
 
     await syncToFirestore("rider_sessions", session._id, session);
-    return res.status(201).json({ success: true, message: "Session created successfully", session });
+    return res
+      .status(201)
+      .json({
+        success: true,
+        message: "Session created successfully",
+        session,
+      });
   } catch (err) {
     return serverError(res, "CREATE SESSION ERROR", err);
   }
@@ -1284,7 +1354,14 @@ exports.getAllSessions = async (req, res) => {
       RiderSession.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
       RiderSession.countDocuments(query),
     ]);
-    return res.json({ success: true, count: sessions.length, total, page, totalPages: Math.ceil(total / limit) || 1, sessions });
+    return res.json({
+      success: true,
+      count: sessions.length,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit) || 1,
+      sessions,
+    });
   } catch (err) {
     return serverError(res, "GET SESSIONS ERROR", err);
   }
@@ -1292,7 +1369,8 @@ exports.getAllSessions = async (req, res) => {
 
 exports.getSessionById = async (req, res) => {
   try {
-    if (!isValidId(req.params.id)) return fail(res, 400, "INVALID_ID", "Invalid session id");
+    if (!isValidId(req.params.id))
+      return fail(res, 400, "INVALID_ID", "Invalid session id");
     const session = await RiderSession.findById(req.params.id);
     if (!session) return fail(res, 404, "NOT_FOUND", "Session not found");
     return res.json({ success: true, session });
@@ -1303,21 +1381,36 @@ exports.getSessionById = async (req, res) => {
 
 exports.updateSession = async (req, res) => {
   try {
-    if (!isValidId(req.params.id)) return fail(res, 400, "INVALID_ID", "Invalid session id");
+    if (!isValidId(req.params.id))
+      return fail(res, 400, "INVALID_ID", "Invalid session id");
     const session = await RiderSession.findById(req.params.id);
     if (!session) return fail(res, 404, "NOT_FOUND", "Session not found");
 
-    ["title", "description", "requiredOrders", "bonusAmount", "minWalletBalance",
-     "timeLimitHours", "startDate", "endDate", "isActive"].forEach((f) => {
+    [
+      "title",
+      "description",
+      "requiredOrders",
+      "bonusAmount",
+      "minWalletBalance",
+      "timeLimitHours",
+      "startDate",
+      "endDate",
+      "isActive",
+    ].forEach((f) => {
       if (req.body[f] !== undefined) session[f] = req.body[f];
     });
 
     await session.save(); // pre-validate hook chalta hai
     await syncToFirestore("rider_sessions", session._id, session);
     // Note: purane participations ke snapshot par asar nahi padta (by design)
-    return res.json({ success: true, message: "Session updated successfully", session });
+    return res.json({
+      success: true,
+      message: "Session updated successfully",
+      session,
+    });
   } catch (err) {
-    if (err.message === "endDate must be after startDate") return fail(res, 400, "VALIDATION", err.message);
+    if (err.message === "endDate must be after startDate")
+      return fail(res, 400, "VALIDATION", err.message);
     return serverError(res, "UPDATE SESSION ERROR", err);
   }
 };
@@ -1325,21 +1418,36 @@ exports.updateSession = async (req, res) => {
 exports.deleteSession = async (req, res) => {
   try {
     const { id } = req.params;
-    if (!isValidId(id)) return fail(res, 400, "INVALID_ID", "Invalid session id");
+    if (!isValidId(id))
+      return fail(res, 400, "INVALID_ID", "Invalid session id");
 
-    const inProgress = await RiderSessionParticipation.countDocuments({ sessionId: id, status: "in_progress" });
+    const inProgress = await RiderSessionParticipation.countDocuments({
+      sessionId: id,
+      status: "in_progress",
+    });
     if (inProgress > 0)
-      return fail(res, 400, "SESSION_IN_USE", "Riders are currently in progress. Deactivate it instead.");
+      return fail(
+        res,
+        400,
+        "SESSION_IN_USE",
+        "Riders are currently in progress. Deactivate it instead.",
+      );
 
     const session = await RiderSession.findByIdAndDelete(id);
     if (!session) return fail(res, 404, "NOT_FOUND", "Session not found");
 
     // Booked participations orphan na hon
-    const booked = await RiderSessionParticipation.find({ sessionId: id, status: "booked" });
+    const booked = await RiderSessionParticipation.find({
+      sessionId: id,
+      status: "booked",
+    });
     for (const b of booked) {
-      b.status = "cancelled"; b.attemptLocked = false; b.cancelledAt = new Date();
+      b.status = "cancelled";
+      b.attemptLocked = false;
+      b.cancelledAt = new Date();
       b.abandonReason = "Session deleted by admin";
-      await b.save(); await syncP(b);
+      await b.save();
+      await syncP(b);
     }
 
     await deleteFromFirestore("rider_sessions", id);
@@ -1351,17 +1459,29 @@ exports.deleteSession = async (req, res) => {
 
 exports.getSessionParticipants = async (req, res) => {
   try {
-    if (!isValidId(req.params.id)) return fail(res, 400, "INVALID_ID", "Invalid session id");
+    if (!isValidId(req.params.id))
+      return fail(res, 400, "INVALID_ID", "Invalid session id");
     const { status } = req.query;
     const { page, limit, skip } = pageParams(req.query);
     const query = { sessionId: req.params.id };
     if (status && status !== "all") query.status = status;
 
     const [participants, total] = await Promise.all([
-      RiderSessionParticipation.find(query).populate("riderId", "name phone").sort({ createdAt: -1 }).skip(skip).limit(limit),
+      RiderSessionParticipation.find(query)
+        .populate("riderId", "name phone")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
       RiderSessionParticipation.countDocuments(query),
     ]);
-    return res.json({ success: true, count: participants.length, total, page, totalPages: Math.ceil(total / limit) || 1, participants });
+    return res.json({
+      success: true,
+      count: participants.length,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit) || 1,
+      participants,
+    });
   } catch (err) {
     return serverError(res, "GET PARTICIPANTS ERROR", err);
   }
@@ -1375,19 +1495,31 @@ exports.getSessionParticipants = async (req, res) => {
 exports.getTodaySessions = async (req, res) => {
   try {
     const now = new Date();
+    const serverTime = getPkDayRange(now);
     const { end } = getPkDayRange(now);
-    const query = { isActive: true, startDate: { $lte: end }, endDate: { $gte: now } };
+    const query = {
+      isActive: true,
+      startDate: { $lte: end },
+      endDate: { $gte: now },
+    };
 
     if (req.user.role !== "admin") {
       const taken = await RiderSessionParticipation.find({
         riderId: req.user.id,
-        status: { $in: ["in_progress", "booked", "completed", "expired", "abandoned"] },
+        status: {
+          $in: ["in_progress", "booked", "completed", "expired", "abandoned"],
+        },
       }).select("sessionId");
       query._id = { $nin: taken.map((p) => p.sessionId) };
     }
 
     const sessions = await RiderSession.find(query).sort({ startDate: 1 });
-    return res.json({ success: true, serverTime: now.toISOString(), count: sessions.length, data: sessions });
+    return res.json({
+      success: true,
+      serverTime,
+      count: sessions.length,
+      data: sessions,
+    });
   } catch (err) {
     return serverError(res, "GET TODAY SESSIONS ERROR", err);
   }
@@ -1399,7 +1531,9 @@ exports.getComingSoonSessions = async (req, res) => {
     const now = new Date();
     const taken = await RiderSessionParticipation.find({
       riderId: req.user.id,
-      status: { $in: ["in_progress", "booked", "completed", "expired", "abandoned"] },
+      status: {
+        $in: ["in_progress", "booked", "completed", "expired", "abandoned"],
+      },
     }).select("sessionId");
 
     const data = await RiderSession.find({
@@ -1408,7 +1542,12 @@ exports.getComingSoonSessions = async (req, res) => {
       startDate: { $gt: now },
     }).sort({ startDate: 1 });
 
-    return res.json({ success: true, serverTime: now.toISOString(), count: data.length, data });
+    return res.json({
+      success: true,
+      serverTime: now.toISOString(),
+      count: data.length,
+      data,
+    });
   } catch (err) {
     return serverError(res, "GET COMING SOON ERROR", err);
   }
@@ -1416,8 +1555,12 @@ exports.getComingSoonSessions = async (req, res) => {
 
 exports.getBookedSessions = async (req, res) => {
   try {
-    const data = await RiderSessionParticipation.find({ riderId: req.user.id, status: "booked" })
-      .populate("sessionId").sort({ createdAt: 1 });
+    const data = await RiderSessionParticipation.find({
+      riderId: req.user.id,
+      status: "booked",
+    })
+      .populate("sessionId")
+      .sort({ createdAt: 1 });
     return res.json({ success: true, count: data.length, data });
   } catch (err) {
     return serverError(res, "GET BOOKED ERROR", err);
@@ -1430,13 +1573,27 @@ exports.getRiderSessionHistory = async (req, res) => {
     const allowed = ["completed", "expired", "abandoned", "cancelled"];
     const { status } = req.query;
     const { page, limit, skip } = pageParams(req.query);
-    const query = { riderId: req.user.id, status: allowed.includes(status) ? status : { $in: allowed } };
+    const query = {
+      riderId: req.user.id,
+      status: allowed.includes(status) ? status : { $in: allowed },
+    };
 
     const [data, total] = await Promise.all([
-      RiderSessionParticipation.find(query).populate("sessionId").sort({ updatedAt: -1 }).skip(skip).limit(limit),
+      RiderSessionParticipation.find(query)
+        .populate("sessionId")
+        .sort({ updatedAt: -1 })
+        .skip(skip)
+        .limit(limit),
       RiderSessionParticipation.countDocuments(query),
     ]);
-    return res.json({ success: true, count: data.length, total, page, totalPages: Math.ceil(total / limit) || 1, data });
+    return res.json({
+      success: true,
+      count: data.length,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit) || 1,
+      data,
+    });
   } catch (err) {
     return serverError(res, "GET HISTORY ERROR", err);
   }
@@ -1447,45 +1604,80 @@ exports.getRiderSessionHistory = async (req, res) => {
 // =====================================================
 exports.joinSession = async (req, res) => {
   try {
-    if (!isValidId(req.params.id)) return fail(res, 400, "INVALID_ID", "Invalid session id");
+    if (!isValidId(req.params.id))
+      return fail(res, 400, "INVALID_ID", "Invalid session id");
 
     const rider = await User.findOne({ _id: req.user.id, role: "rider" });
     if (!rider) return fail(res, 404, "RIDER_NOT_FOUND", "Rider not found");
-    if (rider.isBlocked) return fail(res, 403, "BLOCKED", "Your account is blocked");
+    if (rider.isBlocked)
+      return fail(res, 403, "BLOCKED", "Your account is blocked");
     if (REQUIRE_VERIFICATION && !isFullyVerified(rider))
-      return fail(res, 403, "NOT_VERIFIED", "Complete CNIC and face verification before joining a session");
+      return fail(
+        res,
+        403,
+        "NOT_VERIFIED",
+        "Complete CNIC and face verification before joining a session",
+      );
 
     const session = await RiderSession.findById(req.params.id);
     if (!session) return fail(res, 404, "NOT_FOUND", "Session not found");
     if (!session.isCurrentlyJoinable())
-      return fail(res, 400, "SESSION_NOT_JOINABLE", "This session isn't currently open to join");
+      return fail(
+        res,
+        400,
+        "SESSION_NOT_JOINABLE",
+        "This session isn't currently open to join",
+      );
 
     const walletBalance = rider.wallet?.balance || 0;
     if (walletBalance < session.minWalletBalance)
-      return fail(res, 400, "LOW_WALLET",
+      return fail(
+        res,
+        400,
+        "LOW_WALLET",
         `You need at least ${session.minWalletBalance} in your wallet to join this session`,
-        { requiredAmount: session.minWalletBalance, currentBalance: walletBalance });
+        {
+          requiredAmount: session.minWalletBalance,
+          currentBalance: walletBalance,
+        },
+      );
 
     // purana expired session pehle clear karo (queue chalne do)
     const active = await getLiveParticipation(rider._id);
 
     const [booked, already] = await Promise.all([
-      RiderSessionParticipation.findOne({ riderId: rider._id, status: "booked" }),
+      RiderSessionParticipation.findOne({
+        riderId: rider._id,
+        status: "booked",
+      }),
       RiderSessionParticipation.findOne({
         riderId: rider._id,
         sessionId: session._id,
-        status: { $in: ["in_progress", "booked", "completed", "expired", "abandoned"] },
+        status: {
+          $in: ["in_progress", "booked", "completed", "expired", "abandoned"],
+        },
       }),
     ]);
 
     if (already)
-      return fail(res, 400, "ALREADY_PARTICIPATED",
-        already.status === "completed" ? "You already completed this session"
-          : ["in_progress", "booked"].includes(already.status) ? "You are already in or have booked this session"
-          : "You have already used your attempt on this session");
+      return fail(
+        res,
+        400,
+        "ALREADY_PARTICIPATED",
+        already.status === "completed"
+          ? "You already completed this session"
+          : ["in_progress", "booked"].includes(already.status)
+            ? "You are already in or have booked this session"
+            : "You have already used your attempt on this session",
+      );
 
     if (active && booked)
-      return fail(res, 400, "BOOKING_LIMIT", "You already have an active session and a booked session queued up");
+      return fail(
+        res,
+        400,
+        "BOOKING_LIMIT",
+        "You already have an active session and a booked session queued up",
+      );
 
     const isBooked = !!active;
     const now = new Date();
@@ -1514,7 +1706,12 @@ exports.joinSession = async (req, res) => {
     });
   } catch (err) {
     if (err.code === 11000)
-      return fail(res, 409, "DUPLICATE", "You already have a participation record for this session");
+      return fail(
+        res,
+        409,
+        "DUPLICATE",
+        "You already have a participation record for this session",
+      );
     return serverError(res, "JOIN SESSION ERROR", err);
   }
 };
@@ -1524,25 +1721,56 @@ exports.completeSession = async (req, res) => {
   try {
     const rider = await User.findOne({ _id: req.user.id, role: "rider" });
     if (!rider) return fail(res, 404, "RIDER_NOT_FOUND", "Rider not found");
-    if (rider.isBlocked) return fail(res, 403, "BLOCKED", "Your account is blocked");
+    if (rider.isBlocked)
+      return fail(res, 403, "BLOCKED", "Your account is blocked");
 
-    const current = await RiderSessionParticipation.findOne({ riderId: rider._id, status: "in_progress" });
-    if (!current) return fail(res, 404, "NO_ACTIVE_SESSION", "No active session found to complete");
+    const current = await RiderSessionParticipation.findOne({
+      riderId: rider._id,
+      status: "in_progress",
+    });
+    if (!current)
+      return fail(
+        res,
+        404,
+        "NO_ACTIVE_SESSION",
+        "No active session found to complete",
+      );
 
     if (current.expiresAt && current.expiresAt <= new Date()) {
       await expireParticipation(current._id);
-      const next = await RiderSessionParticipation.findOne({ riderId: rider._id, status: "in_progress" });
-      return fail(res, 400, "SESSION_EXPIRED", "Session time limit has expired. Bonus cannot be claimed.",
-        { nextSessionStarted: !!next });
+      const next = await RiderSessionParticipation.findOne({
+        riderId: rider._id,
+        status: "in_progress",
+      });
+      return fail(
+        res,
+        400,
+        "SESSION_EXPIRED",
+        "Session time limit has expired. Bonus cannot be claimed.",
+        { nextSessionStarted: !!next },
+      );
     }
 
     if (current.ordersCompleted < current.requiredOrders)
-      return fail(res, 400, "ORDERS_PENDING",
+      return fail(
+        res,
+        400,
+        "ORDERS_PENDING",
         `You haven't reached the required orders yet. (${current.ordersCompleted}/${current.requiredOrders})`,
-        { ordersCompleted: current.ordersCompleted, requiredOrders: current.requiredOrders });
+        {
+          ordersCompleted: current.ordersCompleted,
+          requiredOrders: current.requiredOrders,
+        },
+      );
 
     const result = await finalizeCompletion(current._id);
-    if (!result) return fail(res, 409, "ALREADY_PROCESSED", "This session was already processed");
+    if (!result)
+      return fail(
+        res,
+        409,
+        "ALREADY_PROCESSED",
+        "This session was already processed",
+      );
 
     return res.json({
       success: true,
@@ -1563,16 +1791,29 @@ exports.leaveSession = async (req, res) => {
   try {
     const p = await RiderSessionParticipation.findOneAndUpdate(
       { riderId: req.user.id, status: "in_progress" },
-      { $set: { status: "abandoned", abandonedAt: new Date(), abandonReason: req.body?.reason || "Left by rider" } },
+      {
+        $set: {
+          status: "abandoned",
+          abandonedAt: new Date(),
+          abandonReason: req.body?.reason || "Left by rider",
+        },
+      },
       { new: true },
     );
-    if (!p) return fail(res, 404, "NO_ACTIVE_SESSION", "You don't have an active session");
+    if (!p)
+      return fail(
+        res,
+        404,
+        "NO_ACTIVE_SESSION",
+        "You don't have an active session",
+      );
 
     await syncP(p);
     const next = await activateNextBookedSession(req.user.id);
     return res.json({
       success: true,
-      message: "You've left the session. No bonus will be paid for this attempt.",
+      message:
+        "You've left the session. No bonus will be paid for this attempt.",
       participation: p,
       nextSessionStarted: !!next,
       nextSession: next,
@@ -1586,18 +1827,36 @@ exports.getMySessionStatus = async (req, res) => {
   try {
     const now = new Date();
     const live = await getLiveParticipation(req.user.id);
-    const bookedCount = await RiderSessionParticipation.countDocuments({ riderId: req.user.id, status: "booked" });
+    const bookedCount = await RiderSessionParticipation.countDocuments({
+      riderId: req.user.id,
+      status: "booked",
+    });
 
-    if (!live) return res.json({ success: true, active: false, participation: null, bookedCount, serverTime: now.toISOString() });
+    if (!live)
+      return res.json({
+        success: true,
+        active: false,
+        participation: null,
+        bookedCount,
+        serverTime: now.toISOString(),
+      });
 
-    const participation = await live.populate("sessionId", "title description requiredOrders bonusAmount");
+    const participation = await live.populate(
+      "sessionId",
+      "title description requiredOrders bonusAmount",
+    );
     return res.json({
       success: true,
       active: true,
       participation,
       bookedCount,
-      progress: { ordersCompleted: live.ordersCompleted, requiredOrders: live.requiredOrders },
-      remainingSeconds: live.expiresAt ? Math.max(0, Math.floor((live.expiresAt - now) / 1000)) : null,
+      progress: {
+        ordersCompleted: live.ordersCompleted,
+        requiredOrders: live.requiredOrders,
+      },
+      remainingSeconds: live.expiresAt
+        ? Math.max(0, Math.floor((live.expiresAt - now) / 1000))
+        : null,
       serverTime: now.toISOString(),
     });
   } catch (err) {
@@ -1611,14 +1870,34 @@ exports.cancelBookedSession = async (req, res) => {
     if (!isValidId(id)) return fail(res, 400, "INVALID_ID", "Invalid id");
 
     const p = await RiderSessionParticipation.findOneAndUpdate(
-      { $or: [{ _id: id }, { sessionId: id }], riderId: req.user.id, status: "booked" },
-      { $set: { status: "cancelled", cancelledAt: new Date(), attemptLocked: false } },
+      {
+        $or: [{ _id: id }, { sessionId: id }],
+        riderId: req.user.id,
+        status: "booked",
+      },
+      {
+        $set: {
+          status: "cancelled",
+          cancelledAt: new Date(),
+          attemptLocked: false,
+        },
+      },
       { new: true },
     );
-    if (!p) return fail(res, 404, "NOT_FOUND", "No booked session found, or it is already active/completed");
+    if (!p)
+      return fail(
+        res,
+        404,
+        "NOT_FOUND",
+        "No booked session found, or it is already active/completed",
+      );
 
     await syncP(p);
-    return res.json({ success: true, message: "Booked session cancelled successfully", cancelledSession: p });
+    return res.json({
+      success: true,
+      message: "Booked session cancelled successfully",
+      cancelledSession: p,
+    });
   } catch (err) {
     return serverError(res, "CANCEL BOOKED ERROR", err);
   }
@@ -1629,15 +1908,27 @@ exports.extendMySession = async (req, res) => {
   try {
     const hours = Number(req.body.extendHours);
     const tier = EXTEND_TIERS[hours];
-    if (!tier) return fail(res, 400, "VALIDATION", "extendHours must be 12 or 16");
+    if (!tier)
+      return fail(res, 400, "VALIDATION", "extendHours must be 12 or 16");
 
     const current = await getLiveParticipation(req.user.id);
-    if (!current) return fail(res, 404, "NO_ACTIVE_SESSION", "No active session to extend");
+    if (!current)
+      return fail(res, 404, "NO_ACTIVE_SESSION", "No active session to extend");
     if (hours <= (current.timeLimitHours || 0))
-      return fail(res, 400, "ALREADY_EXTENDED", "Your session already has an equal or longer time limit");
+      return fail(
+        res,
+        400,
+        "ALREADY_EXTENDED",
+        "Your session already has an equal or longer time limit",
+      );
 
     const updated = await RiderSessionParticipation.findOneAndUpdate(
-      { _id: current._id, status: "in_progress", timeLimitHours: { $lt: hours }, expiresAt: { $gt: new Date() } },
+      {
+        _id: current._id,
+        status: "in_progress",
+        timeLimitHours: { $lt: hours },
+        expiresAt: { $gt: new Date() },
+      },
       {
         $set: {
           timeLimitHours: hours,
@@ -1651,15 +1942,19 @@ exports.extendMySession = async (req, res) => {
       },
       { new: true },
     );
-    if (!updated) return fail(res, 409, "CONFLICT", "Session changed, please retry");
+    if (!updated)
+      return fail(res, 409, "CONFLICT", "Session changed, please retry");
 
     await syncP(updated);
-    return res.json({ success: true, message: `Session extended to ${hours} hours`, participation: updated, serverTime: new Date().toISOString() });
+    return res.json({
+      success: true,
+      message: `Session extended to ${hours} hours`,
+      participation: updated,
+      serverTime: new Date().toISOString(),
+    });
   } catch (err) {
     return serverError(res, "EXTEND SESSION ERROR", err);
   }
 };
 
 exports.activateNextBookedSession = activateNextBookedSession;
-
-
