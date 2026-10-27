@@ -64,7 +64,7 @@ router.post("/:id/join", auth, joinSession);
 router.post("/create", auth, auth, createSession);
 router.get("/", auth, getAllSessions);
 router.get("/:id", auth, getSessionById);
-router.patch("/update/:id", auth, auth, role("admin"), updateSession);
+router.put("/update/:id", auth, auth, role("admin"), updateSession);
 router.delete("/delete/:id", auth, auth, role("admin"), deleteSession);
 router.get("/:id/participants", auth, auth, role("admin"), getSessionParticipants);
 
