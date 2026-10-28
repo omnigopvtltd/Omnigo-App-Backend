@@ -349,6 +349,10 @@ const participation =
   participation.ordersCompleted += 1;
   participation.orderIds.push(orderId);
 
+  if (participation.ordersCompleted >= participation.requiredOrders) {
+targetReached = true;
+    canExtend = true;
+  }
    await participation.save();
   return participation;
 }
