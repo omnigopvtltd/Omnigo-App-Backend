@@ -527,7 +527,6 @@ exports.createDeal = async (req, res) => {
     //   }
     // }
 
-
     // Sanitize applicableProducts array if passed in root body
     const rawAppProducts = parseJsonField(req.body.applicableProducts, []);
     const sanitizedApplicableProducts = Array.isArray(rawAppProducts)
@@ -773,6 +772,10 @@ exports.getAllVendorDeals = async (req, res) => {
     if (dealType && dealType !== "all") query.dealType = dealType;
     if (branchId) query.branchId = branchId;
 
+    if (endDate) {
+      query.endDate = { $gte: now };
+    }
+
     const pageNum = Math.max(parseInt(page, 10) || 1, 1);
     const limitNum = Math.max(parseInt(limit, 10) || 20, 1);
     const skip = (pageNum - 1) * limitNum;
@@ -903,22 +906,22 @@ exports.updateDeal = async (req, res) => {
       return value;
     };
 
-// // Handle offerDetails and custom_deal custom fields formatting
-//     if (offerDetails) {
-//       let formattedOfferDetails = {
-//         ...(existingDeal.offerDetails?.toObject?.() || existingDeal.offerDetails || {}),
-//         ...offerDetails,
-//       };
+    // // Handle offerDetails and custom_deal custom fields formatting
+    //     if (offerDetails) {
+    //       let formattedOfferDetails = {
+    //         ...(existingDeal.offerDetails?.toObject?.() || existingDeal.offerDetails || {}),
+    //         ...offerDetails,
+    //       };
 
-//       const targetDealType = dealType || existingDeal.dealType;
-//       if (targetDealType === "custom_deal" && offerDetails.customFields && Array.isArray(offerDetails.customFields)) {
-//         formattedOfferDetails.customFields = offerDetails.customFields.map((field) => ({
-//           name: field.name || field.key,
-//           value: field.value,
-//         }));
-//       }
-//       updateData.offerDetails = formattedOfferDetails;
-//     }
+    //       const targetDealType = dealType || existingDeal.dealType;
+    //       if (targetDealType === "custom_deal" && offerDetails.customFields && Array.isArray(offerDetails.customFields)) {
+    //         formattedOfferDetails.customFields = offerDetails.customFields.map((field) => ({
+    //           name: field.name || field.key,
+    //           value: field.value,
+    //         }));
+    //       }
+    //       updateData.offerDetails = formattedOfferDetails;
+    //     }
 
     // 1. Update offerDetails & itemsIncluded
     if (req.body.offerDetails !== undefined) {
