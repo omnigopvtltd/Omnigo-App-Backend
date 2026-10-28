@@ -68,6 +68,8 @@ const schema = new mongoose.Schema(
     // Join ke waqt session se snapshot (baad mein admin badle to rider par asar nahi)
     bonusAmount: { type: Number, required: true },
     requiredOrders: { type: Number, required: true },
+    targetReached:{ type: Boolean, default: false },
+    canExtend:{ type: Boolean, default: false },
     timeLimitHours: { type: Number },
     extendHours: { type: Number },
     isExtend12: { type: Boolean, default: false },
