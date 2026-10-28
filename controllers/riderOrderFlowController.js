@@ -265,7 +265,7 @@ exports.completeOrderDelivery = async (req, res) => {
     // 5. Advance session progress if active session exists
     let sessionResult = null;
     if (order.sessionParticipationId) {
-      sessionResult = await advanceSessionProgress(
+      sessionResult = await increaseCompletedOrderInSession(
         order.sessionParticipationId,
         order._id,
       );
@@ -340,13 +340,25 @@ exports.completeOrderDelivery = async (req, res) => {
 
 // Shared with riderSessionController's internal logic — kept here to avoid a
 // circular require, since order delivery is what drives session progress.
-async function advanceSessionProgress(participationId, orderId) {
-  const participation =
+
+async function increaseCompletedOrderInSession(participationId, orderId){
+const participation =
     await RiderSessionParticipation.findById(participationId);
   if (!participation || participation.status !== "in_progress") return null;
 
   participation.ordersCompleted += 1;
   participation.orderIds.push(orderId);
+
+}
+
+
+async function advanceSessionProgress(participationId, orderId) {
+  const participation =
+    await RiderSessionParticipation.findById(participationId);
+  if (!participation || participation.status !== "in_progress") return null;
+
+  // participation.ordersCompleted += 1;
+  // participation.orderIds.push(orderId);
 
   if (participation.ordersCompleted >= participation.requiredOrders) {
     participation.status = "completed";
@@ -377,4 +389,5 @@ async function advanceSessionProgress(participationId, orderId) {
   return participation;
 }
 
+exports._increaseCompletedOrderInSession = increaseCompletedOrderInSession; // exported for reuse/testing
 exports._advanceSessionProgress = advanceSessionProgress; // exported for reuse/testing
