@@ -349,6 +349,8 @@ const participation =
   participation.ordersCompleted += 1;
   participation.orderIds.push(orderId);
 
+   await participation.save();
+  return participation;
 }
 
 
