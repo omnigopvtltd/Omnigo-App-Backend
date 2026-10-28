@@ -40,12 +40,10 @@ exports.acceptOrderWithWallet = async (req, res) => {
       isAssigned: false,
     });
     if (!order) {
-      return res
-        .status(404)
-        .json({
-          success: false,
-          message: "Order already assigned or not found",
-        });
+      return res.status(404).json({
+        success: false,
+        message: "Order already assigned or not found",
+      });
     }
 
     const floatAmount = order.subtotal || 0;
@@ -217,12 +215,10 @@ exports.completeOrderDelivery = async (req, res) => {
     });
 
     if (!order) {
-      return res
-        .status(404)
-        .json({
-          success: false,
-          message: "Active order not found for this rider",
-        });
+      return res.status(404).json({
+        success: false,
+        message: "Active order not found for this rider",
+      });
     }
 
     const rider = await User.findById(riderId);
@@ -341,8 +337,8 @@ exports.completeOrderDelivery = async (req, res) => {
 // Shared with riderSessionController's internal logic — kept here to avoid a
 // circular require, since order delivery is what drives session progress.
 
-async function increaseCompletedOrderInSession(participationId, orderId){
-const participation =
+async function increaseCompletedOrderInSession(participationId, orderId) {
+  const participation =
     await RiderSessionParticipation.findById(participationId);
   if (!participation || participation.status !== "in_progress") return null;
 
@@ -350,13 +346,30 @@ const participation =
   participation.orderIds.push(orderId);
 
   if (participation.ordersCompleted >= participation.requiredOrders) {
-targetReached = true;
-    canExtend = true;
+   
+    participation.targetReached = true;
+    participation.canExtend = true;
+
+
+     const rider = await User.findById(participation.riderId);
+    if (rider?.fcmToken) {
+      await sendNotification(
+        rider.fcmToken,
+        "Session Completed",
+        `Your session is complete. Now, you can extend this session to get more bonus Or complete this existing session.`,
+        {
+          riderId: rider._id.toString(),
+          riderName: rider.name || "",
+          riderEmail: rider.email || "",
+          riderPhone: rider.phone || "",
+        },
+      );
+    }
+
   }
-   await participation.save();
+  await participation.save();
   return participation;
 }
-
 
 async function advanceSessionProgress(participationId, orderId) {
   const participation =
