@@ -1304,11 +1304,6 @@ exports.createSession = async (req, res) => {
     if (startDate && endDate && new Date(endDate) <= new Date(startDate))
       return fail(res, 400, "VALIDATION", "endDate must be after startDate");
 
-    const start = getPkDayRange(now).start;
-    const end = getPkDayRange(now).end;
-
-    console.log(start, end, getPkDayRange(now));
-
     const session = await RiderSession.create({
       title,
       description,
@@ -1316,8 +1311,8 @@ exports.createSession = async (req, res) => {
       bonusAmount: Number(bonusAmount),
       minWalletBalance: Number(minWalletBalance) || 0,
       timeLimitHours: Number(timeLimitHours) || 8,
-      startDate: start,
-      endDate: end,
+      startDate,
+      endDate,
       isActive,
     });
 
