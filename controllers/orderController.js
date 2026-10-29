@@ -263,7 +263,7 @@ exports.createOrder = async (req, res) => {
             coordinates: matchedBranch.location?.coordinates ||
               vendor.location?.coordinates || [0, 0],
           },
-          status: hasOnlyGroceryItems ? "confirmed" : "pending",
+          status: hasOnlyGroceryItems ? "ready" : "pending",
         };
       });
     }
@@ -310,7 +310,7 @@ exports.createOrder = async (req, res) => {
       promoDiscount: discount,
       totalAmount,
       routingMetrics,
-      status: hasOnlyGroceryItems ? "confirmed" : "pending",
+      status: hasOnlyGroceryItems ? "ready" : "pending",
       riderId: null,
       isAssigned: false,
     });
@@ -1213,7 +1213,7 @@ exports.cancelOrderByVendor = async (req, res) => {
 
         // Auto confirm if only Grocery/Mart remains
         if (onlyActiveStopsAreGrocery && remainingItemsAreGrocery) {
-          order.status = "confirmed";
+          order.status = "ready";
           order.cancellationReason =
             "Vendor stop cancelled; remaining Grocery items auto-confirmed";
         } else {
@@ -1443,6 +1443,7 @@ exports.acceptOrder = async (req, res) => {
       status: {
         $in: [
           "preparing",
+          "ready",
           "arrived_at_vendor",
           "picked_up",
           "ongoing",
@@ -2174,98 +2175,164 @@ exports.reorder = async (req, res) => {
         .json({ success: false, message: "Order has no items to reorder" });
     }
 
+    // Process items & subtotal with all necessary fields (variations, addOns, orderFrom, etc.)
     let subtotal = 0;
-    const newItems = oldOrder.items.map((item) => {
-      const total = Number(item.price) * Number(item.quantity);
+    const formattedItems = oldOrder.items.map((item) => {
+      const price = Number(item.price) || 0;
+      const quantity = Number(item.quantity) || 1;
+      const total = price * quantity;
       subtotal += total;
 
       return {
         productId: item.productId,
         name: item.name,
+        orderFrom: item.orderFrom || "fast-food",
         image: item.image,
         category: item.category,
         weight: item.weight,
-        price: item.price,
-        quantity: item.quantity,
+        variations: item.variations || [],
+        addOns: item.addOns || [],
+        price,
+        quantity,
         total,
       };
     });
 
-    const deliveryFee = oldOrder.deliveryFee || 200;
-    const salesAndServiceTaxForUser = oldOrder.salesAndServiceTaxForUser || 2.5;
-    const promoDiscount = 0;
+    // Extract item IDs to fetch vendor IDs from Products, Deals, and Campaigns
+    const itemIds = formattedItems.map((item) => item.productId).filter(Boolean);
+
+    const [products, deals, campaigns] = await Promise.all([
+      Product.find({ _id: { $in: itemIds } }).select("vendorId"),
+      Deal.find({ _id: { $in: itemIds } }).select("vendorId"),
+      Campaign.find({ _id: { $in: itemIds } }).select("vendorId"),
+    ]);
+
+    // Extract and combine all vendor IDs uniquely
+    const extractedVendorIds = [
+      ...products.map((p) => p.vendorId?.toString()),
+      ...deals.map((d) => d.vendorId?.toString()),
+      ...campaigns.map((c) => c.vendorId?.toString()),
+      ...formattedItems.map((item) => item.vendorId?.toString()), // Direct fallback if present
+      ...oldOrder.stops.map((stop) => stop.vendorId?.toString()), // Fallback to old order stops
+    ].filter(Boolean);
+
+    const vendorIds = [...new Set(extractedVendorIds)];
+
+    const hasOnlyGroceryItems =
+      formattedItems.length > 0 &&
+      formattedItems.every((item) => item.orderFrom === "grocery");
+
+    // Automatically generate stops from vendor branches
+    let stops = [];
+    if (vendorIds.length > 0) {
+      const vendors = await Vendor.find({ _id: { $in: vendorIds } });
+      const branches = await VendorBranch.find({
+        vendorId: { $in: vendorIds },
+        isActive: true,
+      });
+
+      stops = vendors.map((vendor, index) => {
+        const matchedBranch =
+          branches.find(
+            (b) => b.vendorId.toString() === vendor._id.toString(),
+          ) || {};
+
+        return {
+          stopNumber: index + 1,
+          vendorId: vendor._id,
+          branchId: matchedBranch._id || null,
+          logo: vendor.logo || "",
+          businessName:
+            vendor?.businessName || matchedBranch.branchName || "Branch Name",
+          businessType: vendor.businessType || "fast-food",
+          address: matchedBranch.address || vendor.address || "Vendor Address",
+          city: matchedBranch.city || vendor.city || "Vendor City",
+          country: matchedBranch.country || vendor.country || "Vendor Country",
+          location: {
+            type: "Point",
+            coordinates: matchedBranch.location?.coordinates ||
+              vendor.location?.coordinates || [0, 0],
+          },
+          status: hasOnlyGroceryItems ? "ready" : "pending",
+        };
+      });
+    } else {
+      // Fallback to old order stops if no vendors found
+      stops = oldOrder.stops || [];
+    }
+
+    const deliveryFee = Number(oldOrder.deliveryFee) || 200;
+    const salesAndServiceTaxForUser = Number(oldOrder.salesAndServiceTaxForUser) || 5;
+    const promoDiscount = Number(oldOrder.promoDiscount) || 0;
+    const instructions = oldOrder.instructions || "";
+    const routingMetrics = oldOrder.routingMetrics || { totalDistanceKm: 0, totalEtaMin: 0 };
+
+    const subtotalWithTax =
+      (salesAndServiceTaxForUser / 100) * subtotal;
     const totalAmount =
-      subtotal + deliveryFee + salesAndServiceTaxForUser - promoDiscount;
+      subtotal + subtotalWithTax + deliveryFee - promoDiscount;
 
     const newOrder = await Order.create({
       orderNumber: "ORD" + Date.now() + Math.floor(Math.random() * 1000),
       userId: req.user.id,
       address: oldOrder.address,
-      stops: oldOrder.stops,
-      items: newItems,
-      paymentMethod: oldOrder.paymentMethod,
+      stops,
+      items: formattedItems,
+      paymentMethod: oldOrder.paymentMethod || "cash_on_delivery",
       paymentStatus: "pending",
       subtotal,
       deliveryFee,
       salesAndServiceTaxForUser,
+      instructions,
       promoDiscount,
       totalAmount,
-      status: "pending",
+      routingMetrics,
+      status: hasOnlyGroceryItems ? "ready" : "pending",
       riderId: null,
       isAssigned: false,
     });
+
+    // Notify Admin and Vendors via Socket and Database Notifications
+    const io = req.app.get("io");
+    if (io) {
+      io.to("role:admin").emit("adminNewOrder", newOrder);
+    }
+
+    if (vendorIds.length > 0) {
+      const vendorNotifications = vendorIds.map((vId) =>
+        sendNotificationToVendor(req.app, {
+          vendorId: vId,
+          role: "Vendor",
+          title: "New Order Received!",
+          message: `You have received a new order #${newOrder.orderNumber}.`,
+          type: "new_order",
+          data: {
+            orderId: newOrder._id,
+            orderNumber: newOrder.orderNumber,
+            totalAmount: newOrder.totalAmount,
+            itemCount: newOrder.items?.length || 0,
+            screenToOpen: "VendorOrderDetails",
+          },
+          link: `/vendor/orders/${newOrder._id}`,
+        }),
+      );
+      await Promise.all(vendorNotifications);
+    }
 
     return res.status(201).json({
       success: true,
       message: "Reorder created successfully",
       order: newOrder,
+      orderId: newOrder._id,
     });
   } catch (err) {
+    console.error("REORDER ERROR:", err);
     return res.status(500).json({ success: false, message: err.message });
   }
 };
 
-// // =====================================
-// // TRACK ORDER
-// // =====================================
-// exports.trackOrder = async (req, res) => {
-//   try {
-//     const order = await Order.findById(req.params.id).populate(
-//       "riderId",
-//       "name phone",
-//     );
-
-//     if (!order) {
-//       return res
-//         .status(404)
-//         .json({ success: false, message: "Order not found" });
-//     }
-
-//     return res.status(200).json({
-//       success: true,
-//       tracking: {
-//         orderId: order._id,
-//         orderNumber: order.orderNumber,
-//         status: order.status,
-//         location: order.address?.address || null,
-//         coordinates: order.address?.location?.coordinates || null,
-//         stops: order.stops,
-//         rider: order.riderId,
-//         routingMetrics: order.routingMetrics,
-//         timeline: {
-//           orderPlaced: order.createdAt,
-//           riderAssigned: order.acceptedAt,
-//           updatedAt: order.updatedAt,
-//         },
-//       },
-//     });
-//   } catch (err) {
-//     return res.status(500).json({ success: false, message: err.message });
-//   }
-// };
-
 // =====================================
-// TRACK ORDER (Always fetches fresh stop status)
+// TRACK ORDER 
 // =====================================
 exports.trackOrder = async (req, res) => {
   try {
@@ -2376,48 +2443,6 @@ exports.trackOrder = async (req, res) => {
 // ================================
 // Vendor's Orders
 // ================================
-
-// =====================================
-// Vendor pending Orders (Unassigned)
-// =====================================
-// exports.getVendorIncomingOrders = async (req, res) => {
-//   try {
-//     const vendorId = req.user?.id;
-//     const vendor = await Vendor.findById({ id: vendorId });
-//     // Fetch all orders for this user
-//     const orders = await Order.find({
-//       isAssigned: false,
-//     }).sort({ createdAt: -1 });
-
-//     const vendorOrders = orders.stops.map((vendor) => {
-//       vendor.vendorId == vendorId;
-//     });
-
-//     // Filter orders to find pending/in-progress orders
-//     const pendingOrders = orders
-//       .filter((order) =>
-//         [
-//           "pending",
-//           "confirmed",
-//           "preparing",
-//           "in_progress",
-//           "on_the_way",
-//         ].includes(order.status),
-//       )
-//       .select(
-//         "orderNumber createdAt instructions items totalAmount deliveryFee status",
-//       );
-
-//     return res.status(200).json({
-//       success: true,
-//       count: pendingOrders.length,
-//       orders: pendingOrders,
-//     });
-//   } catch (err) {
-//     console.error("GET AVAILABLE ORDERS ERROR:", err);
-//     return res.status(500).json({ success: false, message: err.message });
-//   }
-// };
 
 // =====================================
 // Vendor Incoming / Active Orders Detail
