@@ -1024,8 +1024,8 @@ const REQUIRE_VERIFICATION = process.env.REQUIRE_RIDER_VERIFICATION === "true";
 
 // Extension tiers (ek jagah config)
 const EXTEND_TIERS = {
-  12: { requiredOrders: 23, bonusAmount: 230 },
-  16: { requiredOrders: 27, bonusAmount: 486 },
+  12: { requiredOrders: 1, bonusAmount: 230 },
+  16: { requiredOrders: 1, bonusAmount: 486 },
 };
 
 // ---------- helpers ----------
