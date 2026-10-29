@@ -358,9 +358,9 @@ async function increaseCompletedOrderInSession(participationId, orderId) {
         userId: rider._id,
         role: "rider",
         type: "session_target_reached",
-        title: "Order Target Reached",
+        title: "Required Orders Completed!",
         message:
-          "You have completed the required orders. You can now extend your session or complete it.",
+          "To continue earning bonuses, please extend your session now. Any deliveries completed without extending will not count toward this session's bonus.",
         extraData: {
           sessionId: participation.sessionId?.toString() || "",
           participationId: participation._id.toString(),
@@ -386,25 +386,44 @@ async function advanceSessionProgress(participationId, orderId) {
     participation.status = "completed";
     participation.completedAt = new Date();
 
-    const rider = await User.findById(participation.riderId);
-    if (rider) {
-      const newBalance =
-        (rider.wallet?.balance || 0) + participation.bonusAmount;
-      rider.wallet = { balance: newBalance };
-      await rider.save();
-
-      await WalletTransaction.create({
+     const rider = await User.findById(participation?.riderId);
+    console.log(rider);
+    if (rider?.fcmToken) {
+      await sendNotification({
         userId: rider._id,
-        type: "credit",
-        amount: participation.bonusAmount,
-        reason: `Session bonus — completed ${participation.requiredOrders} orders`,
-        balanceAfter: newBalance,
-        source: "session_bonus",
-        sessionParticipationId: participation._id,
+        role: "rider",
+        type: "session_completed",
+        title: "Session Completed!",
+        message:
+          "To continue earning bonuses, please extend your session now. Any deliveries completed without extending will not count toward this session's bonus.",
+        extraData: {
+          sessionId: participation.sessionId?.toString() || "",
+          participationId: participation._id.toString(),
+          targetReached: "true",
+          canExtend: String(participation.canExtend ?? false),
+        },
       });
-
-      participation.bonusPaid = true;
     }
+
+    // const rider = await User.findById(participation.riderId);
+    // if (rider) {
+    //   const newBalance =
+    //     (rider.wallet?.balance || 0) + participation.bonusAmount;
+    //   rider.wallet = { balance: newBalance };
+    //   await rider.save();
+
+    //   await WalletTransaction.create({
+    //     userId: rider._id,
+    //     type: "credit",
+    //     amount: participation.bonusAmount,
+    //     reason: `Session bonus — completed ${participation.requiredOrders} orders`,
+    //     balanceAfter: newBalance,
+    //     source: "session_bonus",
+    //     sessionParticipationId: participation._id,
+    //   });
+
+    //   participation.bonusPaid = true;
+    // }
   }
 
   await participation.save();

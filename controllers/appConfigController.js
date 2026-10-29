@@ -226,7 +226,29 @@ exports.checkAppVersion = async (req, res) => {
     }
 
     const platformConfig = (config.platforms && config.platforms[platform]) || {};
-    const { latestVersion, minRequiredVersion, storeUrl = "" } = platformConfig;
+    const { latestVersion, minRequiredVersion, storeUrl = "", reviewConfigs = [] } = platformConfig;
+
+    // ================================================
+    // Check if this specific version has Google Review login mode enabled
+    const matchedReview = reviewConfigs.find((rc) => rc.version === currentVersion);
+    const show_login_screen = matchedReview ? matchedReview.showLoginScreen : false;
+    const banner_message = matchedReview ? matchedReview.bannerMessage || "" : "";
+
+    const reviewPayload = { show_login_screen, banner_message };
+
+    // 1. Maintenance mode
+    if (config.isMaintenanceMode) {
+      return res.status(200).json({
+        success: true,
+        updateType: "maintenance",
+        isUpdateRequired: true,
+        title: config.maintenanceTitle,
+        message: config.maintenanceMessage,
+        ...reviewPayload,
+      });
+    }
+
+    // =============================================================
 
     // 2. Force update: currentVersion < minRequiredVersion
     if (minRequiredVersion && compareVersions(currentVersion, minRequiredVersion) === -1) {
@@ -239,6 +261,7 @@ exports.checkAppVersion = async (req, res) => {
         latestVersion: latestVersion || minRequiredVersion,
         minRequiredVersion,
         storeUrl,
+        ...reviewPayload,
       });
     }
 
@@ -253,6 +276,7 @@ exports.checkAppVersion = async (req, res) => {
         latestVersion,
         minRequiredVersion: minRequiredVersion || null,
         storeUrl,
+        ...reviewPayload,
       });
     }
 
@@ -301,8 +325,9 @@ exports.updateAppVersionConfig = async (req, res) => {
       const data = body[platform];
       if (data === undefined) continue;
 
-      const { latestVersion, minRequiredVersion, storeUrl } = data || {};
+      const { latestVersion, minRequiredVersion, storeUrl, reviewConfigs } = data || {};
 
+      if (latestVersion !== undefined && minRequiredVersion !== undefined) {
       if (!isStrictVersion(latestVersion) || !isStrictVersion(minRequiredVersion)) {
         return res.status(400).json({
           success: false,
@@ -318,6 +343,11 @@ exports.updateAppVersionConfig = async (req, res) => {
           message: `${platform}: minRequiredVersion cannot be higher than latestVersion`,
         });
       }
+      
+      set[`platforms.${platform}.latestVersion`] = latestVersion.trim();
+      set[`platforms.${platform}.minRequiredVersion`] = minRequiredVersion.trim();
+
+      }
 
       if (storeUrl !== undefined) {
         if (typeof storeUrl !== "string" || (storeUrl && !/^https:\/\//i.test(storeUrl.trim()))) {
@@ -330,9 +360,24 @@ exports.updateAppVersionConfig = async (req, res) => {
         set[`platforms.${platform}.storeUrl`] = storeUrl.trim();
       }
 
-      set[`platforms.${platform}.latestVersion`] = latestVersion.trim();
-      set[`platforms.${platform}.minRequiredVersion`] = minRequiredVersion.trim();
+
+
+      // Handle version-specific Google Review flags update
+        if (Array.isArray(reviewConfigs)) {
+          for (const rc of reviewConfigs) {
+            if (!isStrictVersion(rc.version)) {
+              return res.status(400).json({
+                success: false,
+                code: "INVALID_REVIEW_VERSION",
+                message: `${platform}: reviewConfig version must look like 1.2.3`,
+              });
+            }
+          }
+          set[`platforms.${platform}.reviewConfigs`] = reviewConfigs;
+        }
     }
+
+    
 
     // Optional text fields: only changed when sent.
     const textFields = [

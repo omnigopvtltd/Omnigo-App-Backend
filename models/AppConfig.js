@@ -53,12 +53,24 @@ const versionField = {
   match: [/^\d+\.\d+\.\d+$/, "Version must look like 1.2.3"],
 };
 
+// Sub-schema for version-specific Google Play Review flags
+const reviewConfigSchema = new mongoose.Schema(
+  {
+    version: versionField, // e.g., "1.0.0"
+    showLoginScreen: { type: Boolean, default: false },
+    bannerMessage: { type: String, trim: true, default: "" },
+  },
+  { _id: false }
+);
+
 // Android and iOS are released separately, so each has its own versions and store link.
 const platformSchema = new mongoose.Schema(
   {
     latestVersion: versionField, // newest version live on this store
     minRequiredVersion: versionField, // anything below this is force-blocked
     storeUrl: { type: String, trim: true, default: "" },
+    // ADDED: Array of version-specific review configs
+    reviewConfigs: [reviewConfigSchema],
   },
   { _id: false },
 );
