@@ -341,31 +341,34 @@ async function increaseCompletedOrderInSession(participationId, orderId) {
   const participation =
     await RiderSessionParticipation.findById(participationId);
   if (!participation || participation.status !== "in_progress") return null;
-
-  participation.ordersCompleted += 1;
-  participation.orderIds.push(orderId);
+  if (participation.ordersCompleted < participation.requiredOrders) {
+    participation.ordersCompleted += 1;
+    participation.orderIds.push(orderId);
+  }
 
   if (participation.ordersCompleted >= participation.requiredOrders) {
-   
     participation.targetReached = true;
     participation.canExtend = true;
+    participation.bonusEligible = true;
 
-
-     const rider = await User.findById(participation.riderId);
+    const rider = await User.findById(participation?.riderId);
+    console.log(rider);
     if (rider?.fcmToken) {
-      await sendNotification(
-        rider.fcmToken,
-        "Session Completed",
-        `Your session is complete. Now, you can extend this session to get more bonus Or complete this existing session.`,
-        {
-          riderId: rider._id.toString(),
-          riderName: rider.name || "",
-          riderEmail: rider.email || "",
-          riderPhone: rider.phone || "",
+      await sendNotification({
+        userId: rider._id,
+        role: "rider",
+        type: "session_target_reached",
+        title: "Order Target Reached",
+        message:
+          "You have completed the required orders. You can now extend your session or complete it.",
+        extraData: {
+          sessionId: participation.sessionId?.toString() || "",
+          participationId: participation._id.toString(),
+          targetReached: "true",
+          canExtend: String(participation.canExtend ?? false),
         },
-      );
+      });
     }
-
   }
   await participation.save();
   return participation;
