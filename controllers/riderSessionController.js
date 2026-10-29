@@ -1322,13 +1322,11 @@ exports.createSession = async (req, res) => {
     });
 
     await syncToFirestore("rider_sessions", session._id, session);
-    return res
-      .status(201)
-      .json({
-        success: true,
-        message: "Session created successfully",
-        session,
-      });
+    return res.status(201).json({
+      success: true,
+      message: "Session created successfully",
+      session,
+    });
   } catch (err) {
     return serverError(res, "CREATE SESSION ERROR", err);
   }
@@ -1938,6 +1936,8 @@ exports.extendMySession = async (req, res) => {
           expiresAt: new Date(current.startedAt.getTime() + hours * HOUR),
           isExtend12: hours === 12,
           isExtend16: hours === 16,
+          targetReached: false,
+          canExtend: false,
         },
       },
       { new: true },

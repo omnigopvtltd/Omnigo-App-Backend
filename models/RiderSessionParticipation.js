@@ -70,6 +70,8 @@ const schema = new mongoose.Schema(
     requiredOrders: { type: Number, required: true },
     targetReached:{ type: Boolean, default: false },
     canExtend:{ type: Boolean, default: false },
+    // bonusEligible:{ type: Boolean, default: false },
+    // bonusEligibleAmount:{ type: Number, required: true },
     timeLimitHours: { type: Number },
     extendHours: { type: Number },
     isExtend12: { type: Boolean, default: false },
