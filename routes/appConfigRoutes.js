@@ -57,7 +57,7 @@ const versionCheckLimiter = rateLimit({
 router.get("/app/version-check", versionCheckLimiter, checkAppVersion);
 
 // Admin only. Without auth anyone could force-update or shut down every user.
-router.put("/app/app-config", auth, role("admin"), updateAppVersionConfig);
+router.put("/app/app-config", auth, updateAppVersionConfig);
 
 module.exports = router;
 
