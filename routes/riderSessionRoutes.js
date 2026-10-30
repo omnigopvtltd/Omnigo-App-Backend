@@ -23,6 +23,7 @@ const {
   extendMySession,
   cancelBookedSession,
 } = require("../controllers/riderSessionController");
+const { paySessionBonus } = require("../controllers/riderOrderFlowController");
 
 // router.get("/", auth, getAllSessions);
 // router.get("/today", auth, getTodaySessions);
@@ -65,6 +66,7 @@ router.post("/create", auth, createSession);
 router.get("/", auth, getAllSessions);
 router.get("/:id", auth, getSessionById);
 router.put("/update/:id", auth, role("admin"), updateSession);
+router.put("/pay-session-bonus/:sessionId", auth, paySessionBonus);
 router.delete("/delete/:id", auth, deleteSession);
 router.get("/:id/participants", auth, role("admin"), getSessionParticipants);
 
