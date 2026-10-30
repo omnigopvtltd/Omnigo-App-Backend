@@ -163,7 +163,6 @@
 
 
 ////////////////////////////////////////////////////////////////////
-
 const AppConfig = require("../models/AppConfig");
 const { APP_TYPES, PLATFORMS } = AppConfig;
 const { isStrictVersion, parseVersion, compareVersions } = require("../utils/version");
@@ -171,18 +170,21 @@ const { isStrictVersion, parseVersion, compareVersions } = require("../utils/ver
 const asCleanString = (value) =>
   typeof value === "string" ? value.trim().toLowerCase() : "";
 
-const upToDate = (res, message = "You are on the latest version") =>
+const upToDate = (res, message, latestVersion, minRequiredVersion, storeUrl, reviewPayload) =>
   res.status(200).json({
     success: true,
     updateType: "none",
     isUpdateRequired: false,
-    // currentVersion: currentVersion,
-    message,
+    message: message || "You are on the latest version",
+    latestVersion: latestVersion || "",
+    minRequiredVersion: minRequiredVersion || "",
+    storeUrl: storeUrl || "",
+    ...reviewPayload,
   });
 
 // ==========================================
 // PUBLIC: Check app version (called by the app on every launch)
-// GET /app/version-check?appType=user&platform=android&currentVersion=1.0.0
+// GET /app/version-check?appType=rider&platform=android&currentVersion=1.0.0
 // ==========================================
 exports.checkAppVersion = async (req, res) => {
   try {
@@ -203,38 +205,49 @@ exports.checkAppVersion = async (req, res) => {
       });
     }
 
-    const config = await AppConfig.findOne({ appType }).lean();
+    const config = await AppConfig.findOne({ appType: appType.toLowerCase() }).lean();
+
+    // Default review payload agar config na mile
+    const defaultReviewPayload = {
+      // show_login_screen: false,
+      showLoginScreen: false,
+      // banner_message: "",
+      bannerMessage: "",
+    };
 
     // Fail-open: if nothing is configured yet, never block the app.
     if (!config) {
       console.warn(`APP CONFIG MISSING for appType='${appType}'`);
-      return upToDate(res, "App is up to date");
+      return upToDate(res, "App is up to date", "", "", "", defaultReviewPayload);
     }
 
     // Short cache: the app calls this on every launch.
     res.set("Cache-Control", "public, max-age=60");
 
-    // 1. Maintenance mode
-    if (config.isMaintenanceMode) {
-      return res.status(200).json({
-        success: true,
-        updateType: "maintenance",
-        isUpdateRequired: true,
-        title: config.maintenanceTitle,
-        message: config.maintenanceMessage,
-      });
-    }
-
     const platformConfig = (config.platforms && config.platforms[platform]) || {};
-    const { latestVersion, minRequiredVersion, storeUrl = "", reviewConfigs = [] } = platformConfig;
+    const { latestVersion = "", minRequiredVersion = "", storeUrl = "", reviewConfigs = [] } = platformConfig;
 
-    // ================================================
-    // Check if this specific version has Google Review login mode enabled
-    const matchedReview = reviewConfigs.find((rc) => rc.version === currentVersion);
-    const show_login_screen = matchedReview ? matchedReview.showLoginScreen : false;
-    const banner_message = matchedReview ? matchedReview.bannerMessage || "" : "";
+    console.log("")
+    // Strict version matching
+    const matchedReview = Array.isArray(reviewConfigs)
+      ? reviewConfigs.find((rc) => rc && String(rc.version).trim() === currentVersion)
+      : null;
 
-    const reviewPayload = { show_login_screen, banner_message };
+    const isLoginActive = matchedReview
+      ? (matchedReview.showLoginScreen === true || matchedReview.showLoginScreen === "true")
+      : false;
+
+    const bannerText = matchedReview && matchedReview.bannerMessage
+      ? String(matchedReview.bannerMessage).trim()
+      : "";
+
+    // Both snake_case & camelCase for 100% client compatibility
+    const reviewPayload = {
+      // show_login_screen: isLoginActive,
+      showLoginScreen: isLoginActive,
+      // banner_message: bannerText,
+      bannerMessage: bannerText,
+    };
 
     // 1. Maintenance mode
     if (config.isMaintenanceMode) {
@@ -242,13 +255,14 @@ exports.checkAppVersion = async (req, res) => {
         success: true,
         updateType: "maintenance",
         isUpdateRequired: true,
-        title: config.maintenanceTitle,
-        message: config.maintenanceMessage,
+        title: config.maintenanceTitle || "Under Maintenance",
+        message: config.maintenanceMessage || "System is undergoing scheduled maintenance.",
+        latestVersion,
+        minRequiredVersion,
+        storeUrl,
         ...reviewPayload,
       });
     }
-
-    // =============================================================
 
     // 2. Force update: currentVersion < minRequiredVersion
     if (minRequiredVersion && compareVersions(currentVersion, minRequiredVersion) === -1) {
@@ -257,7 +271,7 @@ exports.checkAppVersion = async (req, res) => {
         updateType: "force",
         isUpdateRequired: true,
         title: "Update Required",
-        message: config.forceUpdateMessage,
+        message: config.forceUpdateMessage || "Please update to continue using the app.",
         latestVersion: latestVersion || minRequiredVersion,
         minRequiredVersion,
         storeUrl,
@@ -271,8 +285,8 @@ exports.checkAppVersion = async (req, res) => {
         success: true,
         updateType: "normal",
         isUpdateRequired: false,
-        title: config.updateTitle,
-        message: config.updateMessage,
+        title: config.updateTitle || "New Update Available",
+        message: config.updateMessage || "A new version of the app is available.",
         latestVersion,
         minRequiredVersion: minRequiredVersion || null,
         storeUrl,
@@ -280,8 +294,15 @@ exports.checkAppVersion = async (req, res) => {
       });
     }
 
-    // 4. Nothing to do
-    return upToDate(res);
+    // 4. Up to date (Latest Version Case)
+    return upToDate(
+      res,
+      "You are on the latest version",
+      latestVersion,
+      minRequiredVersion,
+      storeUrl,
+      reviewPayload
+    );
   } catch (err) {
     console.error("CHECK APP VERSION ERROR:", err);
     return res.status(500).json({
@@ -293,17 +314,12 @@ exports.checkAppVersion = async (req, res) => {
 };
 
 // ==========================================
-// ADMIN: Set or update app config (partial update, only sent fields change)
+// ADMIN: Set or update app config & review flags
 // PUT /admin/app-config
-//
-// Example body:
-// {
-//   "appType": "user",
-//   "android": { "latestVersion": "1.2.0", "minRequiredVersion": "1.1.0", "storeUrl": "https://play.google.com/store/apps/details?id=com.example.app" },
-//   "ios":     { "latestVersion": "1.2.0", "minRequiredVersion": "1.1.0", "storeUrl": "https://apps.apple.com/app/id123456789" },
-//   "updateTitle": "New Feature Released!",
-//   "isMaintenanceMode": false
-// }
+// ==========================================
+// ==========================================
+// ADMIN: Set or update app config & review flags
+// PUT /admin/app-config
 // ==========================================
 exports.updateAppVersionConfig = async (req, res) => {
   try {
@@ -320,33 +336,35 @@ exports.updateAppVersionConfig = async (req, res) => {
 
     const set = {};
 
-    // Platform blocks: both versions are required when a platform is sent.
     for (const platform of PLATFORMS) {
-      const data = body[platform];
+      // ✅ FIX: Dono cases handle honge: body.android YA body.platforms.android
+      const data = body[platform] !== undefined 
+        ? body[platform] 
+        : (body.platforms && body.platforms[platform]);
+
       if (data === undefined) continue;
 
       const { latestVersion, minRequiredVersion, storeUrl, reviewConfigs } = data || {};
 
       if (latestVersion !== undefined && minRequiredVersion !== undefined) {
-      if (!isStrictVersion(latestVersion) || !isStrictVersion(minRequiredVersion)) {
-        return res.status(400).json({
-          success: false,
-          code: "INVALID_VERSION",
-          message: `${platform}: latestVersion and minRequiredVersion must look like 1.2.3`,
-        });
-      }
+        if (!isStrictVersion(latestVersion) || !isStrictVersion(minRequiredVersion)) {
+          return res.status(400).json({
+            success: false,
+            code: "INVALID_VERSION",
+            message: `${platform}: latestVersion and minRequiredVersion must look like 1.2.3`,
+          });
+        }
 
-      if (compareVersions(minRequiredVersion, latestVersion) === 1) {
-        return res.status(400).json({
-          success: false,
-          code: "MIN_GREATER_THAN_LATEST",
-          message: `${platform}: minRequiredVersion cannot be higher than latestVersion`,
-        });
-      }
-      
-      set[`platforms.${platform}.latestVersion`] = latestVersion.trim();
-      set[`platforms.${platform}.minRequiredVersion`] = minRequiredVersion.trim();
+        if (compareVersions(minRequiredVersion, latestVersion) === 1) {
+          return res.status(400).json({
+            success: false,
+            code: "MIN_GREATER_THAN_LATEST",
+            message: `${platform}: minRequiredVersion cannot be higher than latestVersion`,
+          });
+        }
 
+        set[`platforms.${platform}.latestVersion`] = latestVersion.trim();
+        set[`platforms.${platform}.minRequiredVersion`] = minRequiredVersion.trim();
       }
 
       if (storeUrl !== undefined) {
@@ -360,30 +378,30 @@ exports.updateAppVersionConfig = async (req, res) => {
         set[`platforms.${platform}.storeUrl`] = storeUrl.trim();
       }
 
-
-
-      // Handle version-specific Google Review flags update
-        if (Array.isArray(reviewConfigs)) {
-          for (const rc of reviewConfigs) {
-            if (!isStrictVersion(rc.version)) {
-              return res.status(400).json({
-                success: false,
-                code: "INVALID_REVIEW_VERSION",
-                message: `${platform}: reviewConfig version must look like 1.2.3`,
-              });
-            }
+      // ✅ FIX: Review Configs sanitize & ensure boolean showLoginScreen
+      if (Array.isArray(reviewConfigs)) {
+        const sanitizedConfigs = [];
+        for (const rc of reviewConfigs) {
+          if (!isStrictVersion(rc.version)) {
+            return res.status(400).json({
+              success: false,
+              code: "INVALID_REVIEW_VERSION",
+              message: `${platform}: reviewConfig version must look like 1.2.3`,
+            });
           }
-          set[`platforms.${platform}.reviewConfigs`] = reviewConfigs;
+          sanitizedConfigs.push({
+            version: rc.version.trim(),
+            showLoginScreen: rc.showLoginScreen === true || rc.showLoginScreen === "true",
+            bannerMessage: typeof rc.bannerMessage === "string" ? rc.bannerMessage.trim() : "",
+          });
         }
+        set[`platforms.${platform}.reviewConfigs`] = sanitizedConfigs;
+      }
     }
 
-    
-
-    // Optional text fields: only changed when sent.
     const textFields = [
       "updateTitle",
       "updateMessage",
-    //   "type",
       "forceUpdateMessage",
       "maintenanceTitle",
       "maintenanceMessage",
@@ -413,8 +431,11 @@ exports.updateAppVersionConfig = async (req, res) => {
       });
     }
 
-    if (req.user && req.user._id) set.updatedBy = req.user._id;
+    if (req.user && req.user._id) {
+      set.updatedBy = req.user._id;
+    }
 
+    // ✅ FORCE UPDATE
     const updatedConfig = await AppConfig.findOneAndUpdate(
       { appType },
       { $set: set },

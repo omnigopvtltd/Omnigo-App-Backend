@@ -386,7 +386,7 @@ async function advanceSessionProgress(participationId, orderId) {
     participation.status = "completed";
     participation.completedAt = new Date();
 
-     const rider = await User.findById(participation?.riderId);
+    const rider = await User.findById(participation?.riderId);
     console.log(rider);
     if (rider?.fcmToken) {
       await sendNotification({
@@ -430,5 +430,68 @@ async function advanceSessionProgress(participationId, orderId) {
   return participation;
 }
 
-exports._increaseCompletedOrderInSession = increaseCompletedOrderInSession; // exported for reuse/testing
-exports._advanceSessionProgress = advanceSessionProgress; // exported for reuse/testing
+exports.paySessionBonus = async (req, res) => {
+
+  const sessionId = req.params?.sessionId;
+  
+  const participation =
+    await RiderSessionParticipation.findById({sessionId});
+  if (!participation || participation.status !== "completed") {
+    return res
+        .status(404)
+        .json({ success: false, message: "Session Participation not found" });
+  };
+
+  // participation.ordersCompleted += 1;
+  // participation.orderIds.push(orderId);
+
+  if (participation.ordersCompleted >= participation.requiredOrders) {
+
+    const rider = await User.findById(participation?.riderId);
+    console.log(rider);
+
+    if (rider) {
+      const newBalance =
+        (rider.wallet?.balance || 0) + participation.bonusAmount;
+      rider.wallet = { balance: newBalance };
+      await rider.save();
+
+      await WalletTransaction.create({
+        userId: rider._id,
+        type: "credit",
+        amount: participation.bonusAmount,
+        reason: `Session bonus — completed ${participation.requiredOrders} orders`,
+        balanceAfter: newBalance,
+        source: "session_bonus",
+        sessionParticipationId: participation._id,
+      });
+
+      participation.bonusPaid = true;
+    }
+
+    await participation.save();
+
+    if (rider?.fcmToken) {
+      await sendNotification({
+        userId: rider._id,
+        role: "rider",
+        type: "session_bonus_paid",
+        title: "Bonus Paid!",
+        message:
+          "To continue earning bonuses, Join new session and get extra income",
+        extraData: {
+          sessionId: participation.sessionId?.toString() || "",
+          participationId: participation._id.toString(),
+          bonusPaid: "true",
+        },
+      });
+    }
+  }
+
+  
+  return participation;
+}
+
+// exports._paySessionBonus = paySessionBonus;
+exports._increaseCompletedOrderInSession = increaseCompletedOrderInSession; 
+exports._advanceSessionProgress = advanceSessionProgress; 
