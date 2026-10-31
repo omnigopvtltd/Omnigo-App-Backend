@@ -62,6 +62,7 @@ app.use("/api/main-category", categoryRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/quick-orders", require("./routes/quickOrderRoutes"));
 app.use("/api/cart", require("./routes/cartRoutes"));
+app.use("/api/location", require("./routes/locationRoutes"));
 
 // ================= VENDORS =================
 
