@@ -17,6 +17,27 @@ const { default: mongoose } = require("mongoose");
 const VendorBranch = require("../models/VendorBranch");
 const Deal = require("../models/Deal");
 const Campaign = require("../models/Campaign");
+const locationService = require('../services/locationService');
+
+exports.reverseGeocode = async (req, res) => {
+  try {
+    const { lat, lng } = req.query;
+
+    if (!lat || !lng) {
+      return res.status(400).json({ success: false, message: "Latitude and Longitude are required" });
+    }
+
+    const result = await locationService.getAddressFromCoordinates(Number(lat), Number(lng));
+    
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    return res.status(200).json(result);
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
 
 // Helper function to calculate distance in KM using Haversine Formula
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
