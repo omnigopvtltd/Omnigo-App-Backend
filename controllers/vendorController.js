@@ -3097,7 +3097,7 @@ exports.vendorsMenu = async (req, res) => {
     ] = await Promise.all([
       // Group Active Campaigns by campaignType for this Vendor
       Campaign.aggregate([
-        { $match: { vendorId: vendorObjectId, isActive: true } },
+        { $match: { vendorId: vendorObjectId, isActive: true, endDate : { $gte: now }, } },
         { $sort: { createdAt: -1 } },
         {
           $group: {
@@ -3128,7 +3128,7 @@ exports.vendorsMenu = async (req, res) => {
 
       // Group Active Deals by dealType for this Vendor
       Deal.aggregate([
-        { $match: { vendorId: vendorObjectId, isActive: true } },
+        { $match: { vendorId: vendorObjectId, isActive: true, endDate : { $gte: now } } },
         { $sort: { isFeatured: -1, createdAt: -1 } },
         {
           $group: {
@@ -3153,7 +3153,8 @@ exports.vendorsMenu = async (req, res) => {
         {
           $match: {
             vendorId: vendorObjectId,
-            type: { $in: ["special", "popular", "featured", "new"] },
+            type: { $in: ["special", "popular", "featured", "new"], },
+             endDate : { $gte: now }
           },
         },
         {
@@ -3181,7 +3182,7 @@ exports.vendorsMenu = async (req, res) => {
 
       // Fetch ALL Regular Products Grouped by Category in Database
       Product.aggregate([
-        { $match: { vendorId: vendorObjectId } },
+        { $match: { vendorId: vendorObjectId, endDate : { $gte: now } } },
         {
           $group: {
             _id: "$category",
@@ -3280,7 +3281,7 @@ exports.vendorsMenu = async (req, res) => {
     });
 
     // 5. Section 3: Vendor Categories (With Dynamic Fallback)
-    const storeCategories = vendorDoc?.categories || [];
+    const storeCategories = vendorDoc?.categories || vendorDoc?.category || [];
     const addedCategories = new Set();
 
     if (storeCategories.length > 0) {
@@ -3325,6 +3326,7 @@ exports.vendorsMenu = async (req, res) => {
 
 exports.vendorMenu = async (req, res) => {
   try {
+    //  const now = new Date();
     let vendorId;
     if (!req.params?.vendorId) {
       vendorId = req.user?.id || req.user?._id;
@@ -3353,7 +3355,7 @@ exports.vendorMenu = async (req, res) => {
     ] = await Promise.all([
       // Group Active Campaigns
       Campaign.aggregate([
-        { $match: { vendorId: vendorObjectId, isActive: true } },
+        { $match: { vendorId: vendorObjectId, isActive: true, endDate: { $gte: now } } },
         { $sort: { createdAt: -1 } },
         {
           $group: {
@@ -3379,7 +3381,7 @@ exports.vendorMenu = async (req, res) => {
 
       // Group Active Deals
       Deal.aggregate([
-        { $match: { vendorId: vendorObjectId, isActive: true } },
+        { $match: { vendorId: vendorObjectId, isActive: true, endDate: { $gte: now } } },
         { $sort: { isFeatured: -1, createdAt: -1 } },
         {
           $group: {
@@ -3408,6 +3410,7 @@ exports.vendorMenu = async (req, res) => {
           $match: {
             vendorId: vendorObjectId,
             type: { $in: ["special", "popular", "featured", "new"] },
+            endDate: { $gte: now },
           },
         },
         {
@@ -3436,7 +3439,7 @@ exports.vendorMenu = async (req, res) => {
 
       // Group Products by Category
       Product.aggregate([
-        { $match: { vendorId: vendorObjectId } },
+        { $match: { vendorId: vendorObjectId, endDate: { $gte: now } } },
         {
           $group: {
             _id: "$category",
@@ -3627,9 +3630,10 @@ exports.vendorMenu = async (req, res) => {
         });
       }
     });
+    
 
     // Section D: Vendor Categories
-    const storeCategories = vendorDoc?.categories || [];
+    const storeCategories = vendorDoc?.categories || vendorDoc?.category || [];
     const addedCategories = new Set();
 
     if (storeCategories.length > 0) {

@@ -57,6 +57,8 @@ exports.calculateFare = handle(async (req, res) => {
   assertInPakistan(from.lat, from.lon);
   assertInPakistan(to.lat, to.lon);
 
+  
   const data = await fareService.calculateFare(from, to);
+  console.log(data);
   return res.json({ success: true, data });
 });
