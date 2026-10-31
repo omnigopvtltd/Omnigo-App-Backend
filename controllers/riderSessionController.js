@@ -1180,17 +1180,26 @@ const finalizeCompletion = async (participationId) => {
       $expr: { $gte: ["$ordersCompleted", "$requiredOrders"] },
       $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }],
     },
-    { $set: { status: "completed", completedAt: now, bonusPaid: true } },
+    {
+      $set: {
+        status: "completed",
+        completedAt: now,
+        isBonusEligible: true,
+        bonusAmount: bonusEligibleAmount,
+        bonusPaid: false,
+      },
+    },
     { new: true },
   );
   if (!claimed) return null;
 
   try {
-    if (claimed.bonusAmount > 0) {
-      await User.updateOne(
-        { _id: claimed.riderId },
-        { $inc: { "wallet.balance": claimed.bonusAmount } },
-      );
+    if (claimed.bonusEligibleAmount > 0) {
+      // await User.updateOne(
+      //   { _id: claimed.riderId },
+      //   { $inc: { "wallet.balance": claimed.bonusAmount } },
+      // );
+      return { bonusAmount: claimed.bonusEligibleAmount};
       // TODO: yahan WalletTransaction record bhi banao (audit trail)
     }
   } catch (err) {
@@ -1720,6 +1729,7 @@ exports.completeSession = async (req, res) => {
     const current = await RiderSessionParticipation.findOne({
       riderId: rider._id,
       status: "in_progress",
+      isBonusEligible: true,
     });
     if (!current)
       return fail(
@@ -1767,8 +1777,8 @@ exports.completeSession = async (req, res) => {
 
     return res.json({
       success: true,
-      message: `Session completed! ${result.participation.bonusAmount} added to your wallet.`,
-      bonusEarned: result.participation.bonusAmount,
+      message: `Session completed! ${result.participation.bonusEligibleAmount} added to your wallet.`,
+      bonusEarned: result.participation.bonusEligibleAmount,
       updatedWalletBalance: result.walletBalance,
       completedSession: result.participation,
       nextSessionStarted: !!result.nextSession,
@@ -1783,7 +1793,7 @@ exports.completeSession = async (req, res) => {
 exports.leaveSession = async (req, res) => {
   try {
     const p = await RiderSessionParticipation.findOneAndUpdate(
-      { riderId: req.user.id, status: "in_progress" },
+      { riderId: req.user.id, status: "in_progress", isBonusEligible: false },
       {
         $set: {
           status: "abandoned",
@@ -1793,6 +1803,7 @@ exports.leaveSession = async (req, res) => {
       },
       { new: true },
     );
+
     if (!p)
       return fail(
         res,
@@ -1800,6 +1811,17 @@ exports.leaveSession = async (req, res) => {
         "NO_ACTIVE_SESSION",
         "You don't have an active session",
       );
+
+    if (p && p.isBonusEligible == true) {
+      const result = await finalizeCompletion(current._id);
+      if (!result)
+        return fail(
+          res,
+          409,
+          "ALREADY_PROCESSED",
+          "This session was already processed",
+        );
+    }
 
     await syncP(p);
     const next = await activateNextBookedSession(req.user.id);
@@ -1836,7 +1858,7 @@ exports.getMySessionStatus = async (req, res) => {
 
     const participation = await live.populate(
       "sessionId",
-      "title description requiredOrders bonusAmount",
+      "title description requiredOrders bonusAmount bonusEligibleAmout",
     );
     return res.json({
       success: true,

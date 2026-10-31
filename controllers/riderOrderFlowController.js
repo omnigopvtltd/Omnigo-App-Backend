@@ -349,7 +349,8 @@ async function increaseCompletedOrderInSession(participationId, orderId) {
   if (participation.ordersCompleted >= participation.requiredOrders) {
     participation.targetReached = true;
     participation.canExtend = true;
-    participation.bonusEligible = true;
+    participation.isBonusEligible = true;
+    participation.bonusEligibleAmount = participation.bonusAmount;
 
     const rider = await User.findById(participation?.riderId);
     console.log(rider);
