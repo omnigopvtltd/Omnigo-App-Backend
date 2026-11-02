@@ -1387,7 +1387,7 @@ exports.getDealFormConfig = async (req, res) => {
       //   ];
       //   break;
 
-      default:
+      // default:
         offerFields = [
           {
             name: "offerDetails.dealTitle",
@@ -1407,7 +1407,58 @@ exports.getDealFormConfig = async (req, res) => {
           },
         ];
         break;
-    }
+   
+    case "custom_deal":
+      default:
+        offerFields = [
+          {
+            name: "offerDetails.dealTitle",
+            label: "Deal Title",
+            type: "text",
+            required: true,
+            placeholder: "e.g. Special Weekend Deal",
+            defaultValue: "Weekend Special Offer",
+          },
+          {
+            name: "offerDetails.offerType",
+            label: "Offer Type",
+            type: "select",
+            required: true,
+            options: [
+              { label: "Percentage Discount", value: "percentage_discount" },
+              { label: "Fixed Discount", value: "fixed_discount" },
+              { label: "Special Price", value: "special_price" },
+              { label: "Buy X Get Y", value: "buy_x_get_y" },
+              { label: "Free Item", value: "free_item" },
+              { label: "Free Delivery", value: "free_delivery" },
+              {
+                label: "Payment Method Discount",
+                value: "payment_method_discount",
+              },
+              { label: "Other", value: "other" },
+            ],
+            defaultValue: "percentage_discount",
+          },
+          {
+            name: "offerDetails.discountValue",
+            label: "Discount / Value",
+            type: "number",
+            required: false,
+            placeholder: "30",
+            defaultValue: 30,
+          },
+          {
+            name: "minOrderAmount",
+            label: "Minimum Order Amount (Rs.)",
+            type: "number",
+            required: false,
+            placeholder: "1000",
+            defaultValue: 1000,
+          },
+        ];
+        break;
+    
+      }
 
     formConfig.sections.push({
       sectionId: "offer_details",
