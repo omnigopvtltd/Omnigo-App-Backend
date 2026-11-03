@@ -1412,7 +1412,7 @@ exports.getAvailableOrders = async (req, res) => {
     // FIXED: Moved _id out of status object to query root level
     const allOrders = await Order.find({
       status: {
-        $in: ["ready"], // Aap yahan baqi statuses bhi add kar sakte hain: ["confirmed", "preparing", "ready"]
+        $in: ["ready"],
       },
       _id: { $nin: cancelledOrderIds },
       isAssigned: false,
@@ -1476,7 +1476,7 @@ exports.acceptOrder = async (req, res) => {
     });
 
     // Check if Rider previously cancelled this order
-    const isCancelledByRider = rider.riderProfile?.riderCanceledOrder?.some(
+    const isCancelledByRider = rider.riderProfile?.riderCancelledOrder?.some(
       (orderId) => orderId.toString() === req.params.id,
     );
 
@@ -2495,7 +2495,7 @@ exports.getVendorOrders = async (req, res) => {
 
     const targetStatuses = tabStatusMap[status] || tabStatusMap.pending;
 
-    // 💡 DUAL MATCH EXPRESSION: Check Vendor Stop status first, fallback to Order status
+    //DUAL MATCH EXPRESSION: Check Vendor Stop status first, fallback to Order status
     const statusMatchExpr = {
       $expr: {
         $let: {
