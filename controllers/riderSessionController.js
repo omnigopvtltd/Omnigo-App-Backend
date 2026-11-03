@@ -1322,18 +1322,11 @@ exports.createSession = async (req, res) => {
 
       return getFormattedDate;
     };
+    
     // Dates ki proper validation aur conversion
-    // let parsedStartDate = startDate ? new Date(startDate) : null;
     let parsedStartDate = startDate ? formattedDate(startDate) : null;
-    let parsedEndDate = endDate ? new Date(endDate) : null;
-    console.log(parsedStartDate, parsedEndDate);
-    // if (parsedStartDate && isNaN(parsedStartDate.getTime())) {
-    //   return fail(res, 400, "VALIDATION", "Invalid startDate format");
-    // }
-    // if (parsedEndDate && isNaN(parsedEndDate.getTime())) {
-    //   return fail(res, 400, "VALIDATION", "Invalid endDate format");
-    // }
-
+    let parsedEndDate = endDate ? formattedDate(endDate) : null;
+   
     if (parsedStartDate && parsedEndDate && parsedEndDate <= parsedStartDate)
       return fail(res, 400, "VALIDATION", "endDate must be after startDate");
 
