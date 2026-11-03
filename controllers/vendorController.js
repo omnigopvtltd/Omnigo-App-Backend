@@ -3085,6 +3085,8 @@ exports.vendorsMenu = async (req, res) => {
       });
     }
 
+   const now = new Date();
+
     const vendorObjectId = new mongoose.Types.ObjectId(vendorId);
 
     // 1. Fetch Deals, Special Types, Vendor Schema, & Products Grouped by Category
@@ -3097,7 +3099,7 @@ exports.vendorsMenu = async (req, res) => {
     ] = await Promise.all([
       // Group Active Campaigns by campaignType for this Vendor
       Campaign.aggregate([
-        { $match: { vendorId: vendorObjectId, isActive: true, endDate : { $gte: now }, } },
+        { $match: { vendorId: vendorObjectId, isActive: true} },
         { $sort: { createdAt: -1 } },
         {
           $group: {
@@ -3128,7 +3130,7 @@ exports.vendorsMenu = async (req, res) => {
 
       // Group Active Deals by dealType for this Vendor
       Deal.aggregate([
-        { $match: { vendorId: vendorObjectId, isActive: true, endDate : { $gte: now } } },
+        { $match: { vendorId: vendorObjectId, isActive: true } },
         { $sort: { isFeatured: -1, createdAt: -1 } },
         {
           $group: {
@@ -3154,7 +3156,7 @@ exports.vendorsMenu = async (req, res) => {
           $match: {
             vendorId: vendorObjectId,
             type: { $in: ["special", "popular", "featured", "new"], },
-             endDate : { $gte: now }
+            //  endDate : { $gte: now }
           },
         },
         {
@@ -3182,7 +3184,7 @@ exports.vendorsMenu = async (req, res) => {
 
       // Fetch ALL Regular Products Grouped by Category in Database
       Product.aggregate([
-        { $match: { vendorId: vendorObjectId, endDate : { $gte: now } } },
+        { $match: { vendorId: vendorObjectId } },
         {
           $group: {
             _id: "$category",
@@ -3410,7 +3412,6 @@ exports.vendorMenu = async (req, res) => {
           $match: {
             vendorId: vendorObjectId,
             type: { $in: ["special", "popular", "featured", "new"] },
-            endDate: { $gte: now },
           },
         },
         {
@@ -3439,7 +3440,7 @@ exports.vendorMenu = async (req, res) => {
 
       // Group Products by Category
       Product.aggregate([
-        { $match: { vendorId: vendorObjectId, endDate: { $gte: now } } },
+        { $match: { vendorId: vendorObjectId } },
         {
           $group: {
             _id: "$category",

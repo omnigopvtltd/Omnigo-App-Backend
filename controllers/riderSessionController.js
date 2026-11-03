@@ -1291,7 +1291,6 @@ exports.runExpiryJob = async () => {
 // =====================================================
 exports.createSession = async (req, res) => {
   try {
-    const now = new Date();
     const {
       title,
       description,
@@ -1310,7 +1309,19 @@ exports.createSession = async (req, res) => {
       return fail(res, 400, "VALIDATION", "requiredOrders must be at least 1");
     if (!Number.isFinite(Number(bonusAmount)) || Number(bonusAmount) < 0)
       return fail(res, 400, "VALIDATION", "bonusAmount is required");
-    if (startDate && endDate && new Date(endDate) <= new Date(startDate))
+
+    // Dates ki proper validation aur conversion
+    let parsedStartDate = startDate ? new Date(startDate) : null;
+    let parsedEndDate = endDate ? new Date(endDate) : null;
+
+    if (parsedStartDate && isNaN(parsedStartDate.getTime())) {
+      return fail(res, 400, "VALIDATION", "Invalid startDate format");
+    }
+    if (parsedEndDate && isNaN(parsedEndDate.getTime())) {
+      return fail(res, 400, "VALIDATION", "Invalid endDate format");
+    }
+
+    if (parsedStartDate && parsedEndDate && parsedEndDate <= parsedStartDate)
       return fail(res, 400, "VALIDATION", "endDate must be after startDate");
 
     const session = await RiderSession.create({
@@ -1320,8 +1331,8 @@ exports.createSession = async (req, res) => {
       bonusAmount: Number(bonusAmount),
       minWalletBalance: Number(minWalletBalance) || 0,
       timeLimitHours: Number(timeLimitHours) || 8,
-      startDate,
-      endDate,
+      startDate: parsedStartDate,
+      endDate: parsedEndDate,
       isActive,
     });
 
@@ -1504,7 +1515,7 @@ exports.getTodaySessions = async (req, res) => {
       startDate: { $lte: end },
       endDate: { $gte: now },
     };
-
+    
     if (req.user.role !== "admin") {
       const taken = await RiderSessionParticipation.find({
         riderId: req.user.id,
@@ -1513,9 +1524,12 @@ exports.getTodaySessions = async (req, res) => {
         },
       }).select("sessionId");
       query._id = { $nin: taken.map((p) => p.sessionId) };
+      console.log("Taken",taken)
     }
-
+    
+    
     const sessions = await RiderSession.find(query).sort({ startDate: 1 });
+    console.log("sessions",sessions)
     return res.json({
       success: true,
       serverTime,
