@@ -1199,7 +1199,7 @@ const finalizeCompletion = async (participationId) => {
       //   { _id: claimed.riderId },
       //   { $inc: { "wallet.balance": claimed.bonusAmount } },
       // );
-      return { bonusAmount: claimed.bonusEligibleAmount};
+      return { bonusAmount: claimed.bonusEligibleAmount };
       // TODO: yahan WalletTransaction record bhi banao (audit trail)
     }
   } catch (err) {
@@ -1310,16 +1310,29 @@ exports.createSession = async (req, res) => {
     if (!Number.isFinite(Number(bonusAmount)) || Number(bonusAmount) < 0)
       return fail(res, 400, "VALIDATION", "bonusAmount is required");
 
-    // Dates ki proper validation aur conversion
-    let parsedStartDate = startDate ? new Date(startDate) : null;
-    let parsedEndDate = endDate ? new Date(endDate) : null;
+    const formattedDate = (date) => {
+      const getFormattedDate = new Date(date).toLocaleString(
+        "en-PK",
+        {
+          timeZone: "Asia/Karachi",
+          dateStyle: "medium",
+          timeStyle: "short",
+        },
+      );
 
-    if (parsedStartDate && isNaN(parsedStartDate.getTime())) {
-      return fail(res, 400, "VALIDATION", "Invalid startDate format");
-    }
-    if (parsedEndDate && isNaN(parsedEndDate.getTime())) {
-      return fail(res, 400, "VALIDATION", "Invalid endDate format");
-    }
+      return getFormattedDate;
+    };
+    // Dates ki proper validation aur conversion
+    // let parsedStartDate = startDate ? new Date(startDate) : null;
+    let parsedStartDate = startDate ? formattedDate(startDate) : null;
+    let parsedEndDate = endDate ? new Date(endDate) : null;
+    console.log(parsedStartDate, parsedEndDate);
+    // if (parsedStartDate && isNaN(parsedStartDate.getTime())) {
+    //   return fail(res, 400, "VALIDATION", "Invalid startDate format");
+    // }
+    // if (parsedEndDate && isNaN(parsedEndDate.getTime())) {
+    //   return fail(res, 400, "VALIDATION", "Invalid endDate format");
+    // }
 
     if (parsedStartDate && parsedEndDate && parsedEndDate <= parsedStartDate)
       return fail(res, 400, "VALIDATION", "endDate must be after startDate");
@@ -1515,7 +1528,7 @@ exports.getTodaySessions = async (req, res) => {
       startDate: { $lte: end },
       endDate: { $gte: now },
     };
-    
+
     if (req.user.role !== "admin") {
       const taken = await RiderSessionParticipation.find({
         riderId: req.user.id,
@@ -1524,12 +1537,11 @@ exports.getTodaySessions = async (req, res) => {
         },
       }).select("sessionId");
       query._id = { $nin: taken.map((p) => p.sessionId) };
-      console.log("Taken",taken)
+      console.log("Taken", taken);
     }
-    
-    
+
     const sessions = await RiderSession.find(query).sort({ startDate: 1 });
-    console.log("sessions",sessions)
+    console.log("sessions", sessions);
     return res.json({
       success: true,
       serverTime,
