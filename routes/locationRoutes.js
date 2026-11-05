@@ -7,15 +7,15 @@ const c = require("../controllers/locationController");
 const router = express.Router();
 
 // Per-user limit (auth ke baad req.user.id mojood hota ha). LocationIQ credits poore account ke han, is liye zaroori.
-const limiter = (limit) =>
-  rateLimit({
-    windowMs: 60 * 1000,
-    limit,
-    standardHeaders: true,
-    legacyHeaders: false,
-    keyGenerator: (req) => String(req.user?.id || req.ip),
-    message: { success: false, code: "RATE_LIMITED", message: "Bohat zyada requests, thori der baad try karein" },
-  });
+// const limiter = (limit) =>
+//   rateLimit({
+//     windowMs: 60 * 1000,
+//     limit,
+//     standardHeaders: true,
+//     legacyHeaders: false,
+//     keyGenerator: (req) => String(req.user?.id || req.ip),
+//     message: { success: false, code: "RATE_LIMITED", message: "Bohat zyada requests, thori der baad try karein" },
+//   });
 
 //   const limiter = rateLimit({
 //   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -30,7 +30,7 @@ const limiter = (limit) =>
 // });
 
 router.use(auth);
-router.get("/autocomplete", limiter(40), c.autocomplete);
-router.get("/reverse-geocode", limiter(30), c.reverseGeocode);
+router.get("/autocomplete",  c.autocomplete);
+router.get("/reverse-geocode",  c.reverseGeocode);
 
 module.exports = router;

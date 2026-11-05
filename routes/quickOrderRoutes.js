@@ -35,16 +35,16 @@ const rateLimit = require("express-rate-limit");              // npm i express-r
 const c = require("../controllers/quickOrderController");
 
 // AI endpoint par per-user limit: koi script aap ke credits na jala de
-const parseLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 5,
-  keyGenerator: (req) => req.user?.id || req.ip,
-  message: { success: false, message: "Bohat zyada requests, 1 minute baad try karein" },
-});
+// const parseLimiter = rateLimit({
+//   windowMs: 60 * 1000,
+//   max: 5,
+//   keyGenerator: (req) => req.user?.id || req.ip,
+//   message: { success: false, message: "Bohat zyada requests, 1 minute baad try karein" },
+// });
 
 router.use(auth);
 
-router.post("/parse", parseLimiter, upload.memoryUpload.single("image"), c.createQuickOrder);
+router.post("/parse", upload.memoryUpload.single("image"), c.createQuickOrder);
 router.get("/search", c.searchCatalog);                        // user khud product dhoond sake
 router.patch("/item", c.updateQuickOrderItem);                 // action: select | remove | keepCustom
 router.put("/edit", c.editQuickOrder);
