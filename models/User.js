@@ -65,8 +65,14 @@ const userSchema = new mongoose.Schema(
         zipCode: { type: String },
         country: { type: String },
         coordinates: {
-          type: [Number], // [longitude, latitude]
-          default: [0, 0],
+          lat: {
+            type: Number,
+            default: null,
+          },
+          lng: {
+            type: Number,
+            default: null,
+          },
         },
         isDefault: { type: Boolean, default: false },
         isSave: { type: Boolean, default: false },
