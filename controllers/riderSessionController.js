@@ -1823,13 +1823,13 @@ exports.leaveSession = async (req, res) => {
       { new: true },
     );
 
-    if (!p)
-      return fail(
-        res,
-        404,
-        "NO_ACTIVE_SESSION",
-        "You don't have an active session",
-      );
+    // if (!p)
+    //   return fail(
+    //     res,
+    //     404,
+    //     "NO_ACTIVE_SESSION",
+    //     "You don't have an active session",
+    //   );
 
     if (p && p.isBonusEligible == true) {
       const result = await finalizeCompletion(current._id);
