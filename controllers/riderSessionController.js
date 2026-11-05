@@ -1170,43 +1170,108 @@ const expireParticipation = async (participationId) => {
 };
 
 // Required orders poore + time baaki => bonus (sirf ek baar, atomic)
-const finalizeCompletion = async (participationId, bonusEligibleAmount) => {
+// const finalizeCompletion = async (participationId, bonusEligibleAmount) => {
+//   const now = new Date();
+//   const claimed = await RiderSessionParticipation.findOneAndUpdate(
+//     {
+//       _id: participationId,
+//       status: "in_progress",
+//       bonusPaid: false,
+//       $expr: { $gte: ["$ordersCompleted", "$requiredOrders"] },
+//       $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }],
+//     },
+//     {
+//       $set: {
+//         status: "completed",
+//         completedAt: now,
+//         isBonusEligible: true,
+//         // bonusAmount: bonusEligibleAmount,
+//         bonusPaid: false,
+//       },
+//     },
+//     { new: true },
+//   );
+//   if (!claimed) return null;
+
+//   try {
+//     if (claimed.bonusEligibleAmount > 0) {
+//       // await User.updateOne(
+//       //   { _id: claimed.riderId },
+//       //   { $inc: { "wallet.balance": claimed.bonusAmount } },
+//       // );
+//       return { bonusAmount: claimed.bonusEligibleAmount };
+//       // TODO: yahan WalletTransaction record bhi banao (audit trail)
+//     }
+//   } catch (err) {
+//     // wallet fail => claim wapas karo taake rider retry kar sake
+//     await RiderSessionParticipation.updateOne(
+//       { _id: claimed._id },
+//       { $set: { status: "in_progress", bonusPaid: false, completedAt: null } },
+//     );
+//     throw err;
+//   }
+
+//   await syncP(claimed);
+//   const nextSession = await activateNextBookedSession(claimed.riderId);
+//   const rider = await User.findById(claimed.riderId).select("wallet");
+//   return {
+//     participation: claimed,
+//     nextSession,
+//     walletBalance: rider?.wallet?.balance ?? 0,
+//   };
+// };
+
+const finalizeCompletion = async (participationId) => {
   const now = new Date();
+  
+  // 1. Session find karein taake hum uska bonusAmount/bonusEligibleAmount nikal sakein
+  const participationDoc = await RiderSessionParticipation.findById(participationId);
+  if (!participationDoc) return null;
+
+  // Agar pehle hi completed ya already processed hai toh null return karein
+  if (participationDoc.status === "completed" || participationDoc.bonusPaid) {
+    return null;
+  }
+
+  // 2. Atomic update to claim the session completion
   const claimed = await RiderSessionParticipation.findOneAndUpdate(
     {
       _id: participationId,
       status: "in_progress",
       bonusPaid: false,
-      $expr: { $gte: ["$ordersCompleted", "$requiredOrders"] },
-      $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }],
     },
     {
       $set: {
         status: "completed",
         completedAt: now,
         isBonusEligible: true,
-        bonusAmount: bonusEligibleAmount,
         bonusPaid: false,
       },
     },
-    { new: true },
+    { new: true }
   );
+
   if (!claimed) return null;
 
   try {
-    if (claimed.bonusEligibleAmount > 0) {
-      // await User.updateOne(
-      //   { _id: claimed.riderId },
-      //   { $inc: { "wallet.balance": claimed.bonusAmount } },
-      // );
-      return { bonusAmount: claimed.bonusEligibleAmount };
-      // TODO: yahan WalletTransaction record bhi banao (audit trail)
+    // 3. bonusEligibleAmount ya bonusAmount jo bhi set hai, usko use karein
+    const finalBonus = claimed.bonusEligibleAmount ?? claimed.bonusAmount ?? 0;
+    
+    if (finalBonus > 0) {
+      await User.updateOne(
+        { _id: claimed.riderId },
+        { $inc: { "wallet.balance": finalBonus } }
+      );
+      
+      claimed.bonusPaid = true;
+      claimed.bonusAmount = finalBonus; // Ensure kar lein ke dono synchronize rahein
+      await claimed.save();
     }
   } catch (err) {
-    // wallet fail => claim wapas karo taake rider retry kar sake
+    // Agar wallet fail ho jaye toh rollback karein
     await RiderSessionParticipation.updateOne(
       { _id: claimed._id },
-      { $set: { status: "in_progress", bonusPaid: false, completedAt: null } },
+      { $set: { status: "in_progress", bonusPaid: false, completedAt: null, isBonusEligible: false } }
     );
     throw err;
   }
@@ -1214,6 +1279,7 @@ const finalizeCompletion = async (participationId, bonusEligibleAmount) => {
   await syncP(claimed);
   const nextSession = await activateNextBookedSession(claimed.riderId);
   const rider = await User.findById(claimed.riderId).select("wallet");
+
   return {
     participation: claimed,
     nextSession,
@@ -1785,7 +1851,7 @@ exports.completeSession = async (req, res) => {
         },
       );
 
-    const result = await finalizeCompletion(current._id, current?.bonusEligibleAmount);
+    const result = await finalizeCompletion(current._id);
     if (!result)
       return fail(
         res,
@@ -1829,7 +1895,7 @@ exports.leaveSession = async (req, res) => {
     // 2. Check karein ke aya rider bonus eligible ho chuka tha ya nahi
     if (participation.isBonusEligible) {
       // Agar wo eligible ho gaya tha, toh usko abandon karne ke bajaye finalize karein
-      const result = await finalizeCompletion(participation._id, participation?.bonusEligibleAmount);
+      const result = await finalizeCompletion(participation._id);
       if (!result) {
         return fail(
           res,
@@ -1992,6 +2058,7 @@ exports.extendMySession = async (req, res) => {
       },
       { new: true },
     );
+    console.log(updated);
     if (!updated)
       return fail(res, 409, "CONFLICT", "Session changed, please retry");
 
