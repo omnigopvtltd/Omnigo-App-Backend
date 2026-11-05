@@ -755,6 +755,7 @@ exports.getAllVendorDeals = async (req, res) => {
       isActive,
       dealType,
       branchId,
+      endDate,
       page = 1,
       limit = 20,
     } = req.query;
