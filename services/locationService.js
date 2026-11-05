@@ -192,40 +192,13 @@ function mapSuggestion(p) {
 }
 
 // ---------------------------------------------------------------- public API
-// async function autocomplete(query, limit = 5) {
-//   const q = query.trim().replace(/\s+/g, " ");
-//   const { country } = cfg();
-//   return cached(autocompleteCache, `ac:${country}:${limit}:${q.toLowerCase()}`, async () => {
-//     const data = await upstream("/autocomplete", {
-//       q, countrycodes: country, limit, dedupe: 1, normalizecity: 1, "accept-language": "en",
-//     });
-//     return Array.isArray(data) ? data.map(mapSuggestion).filter(Boolean) : [];
-//   });
-// }
-async function autocomplete(query, limit = 5, viewbox = null) {
+async function autocomplete(query, limit = 5) {
   const q = query.trim().replace(/\s+/g, " ");
   const { country } = cfg();
-  
-  // Cache key mein viewbox bhi shamil kar dein taake alag cache bane
-  const cacheKey = `ac:${country}:${limit}:${q.toLowerCase()}:${viewbox ? JSON.stringify(viewbox) : 'no-vb'}`;
-
-  return cached(autocompleteCache, cacheKey, async () => {
-    const params = {
-      q, 
-      countrycodes: country, 
-      limit, 
-      dedupe: 1, 
-      normalizecity: 1, 
-      "accept-language": "en",
-    };
-
-    // Agar viewbox diya gaya ho toh LocationIQ parameters mein add karein
-    if (viewbox) {
-      params.viewbox = viewbox; // Format: min_lon,min_lat,max_lon,max_lat (ya LocationIQ ka standard format)
-      params.bounded = 1; // Strict restriction
-    }
-
-    const data = await upstream("/autocomplete", params);
+  return cached(autocompleteCache, `ac:${country}:${limit}:${q.toLowerCase()}`, async () => {
+    const data = await upstream("/autocomplete", {
+      q, countrycodes: country, limit, dedupe: 1, normalizecity: 1, "accept-language": "en",
+    });
     return Array.isArray(data) ? data.map(mapSuggestion).filter(Boolean) : [];
   });
 }

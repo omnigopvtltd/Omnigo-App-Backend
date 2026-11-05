@@ -34,9 +34,9 @@ exports.autocomplete = handle(async (req, res) => {
   // Chhoti query: error nahi, bas khali list (UI ko tootna nahi chahiye)
   if (query.length < MIN_QUERY_LEN) return res.json({ success: true, data: [] });
 
-const regionViewbox = "71.50,32.40,73.40,33.30";
+// const regionViewbox = "71.50,32.40,73.40,33.30";
 
-  const data = await locationiq.autocomplete(query, limit, regionViewbox);
+  const data = await locationiq.autocomplete(query, limit);
   return res.json({ success: true, data });
 });
 
