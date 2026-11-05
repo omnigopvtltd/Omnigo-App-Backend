@@ -40,7 +40,7 @@ const transporter = nodemailer.createTransport({
 // ======================================================
 const generateToken = (user) => {
   return jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
-    expiresIn: "7d",
+    expiresIn: "30d",
   });
 };
 
@@ -787,6 +787,179 @@ exports.facebookLogin = async (req, res) => {
 // ======================================================
 // FIREBASE SOCIAL LOGIN (GOOGLE / FACEBOOK)
 // ======================================================
+// exports.socialLogin = async (req, res) => {
+//   try {
+//     const {
+//       idToken,
+//       role = "user",
+//       provider = "google",
+//       riderProfile,
+//       phone,
+//     } = req.body;
+
+//     if (!idToken) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "ID token is required",
+//       });
+//     }
+
+//     // 1. Google ID Token Verification (No Firebase Admin dependencies needed)
+//     // const ticket = await googleClient.verifyIdToken({
+//     //   idToken: idToken,
+//     // });
+//     let sub, facebookId, email, name, picture;
+
+//     if (provider === "facebook") {
+//       // 1) Token valid ho aur hamari hi app ka ho
+//       const debug = await axios.get("https://graph.facebook.com/debug_token", {
+//         params: {
+//           input_token: idToken,
+//           access_token: `${process.env.FACEBOOK_APP_ID}|${process.env.FACEBOOK_APP_SECRET}`,
+//         },
+//       });
+//       const d = debug.data?.data;
+//       if (!d?.is_valid || d.app_id !== process.env.FACEBOOK_APP_ID) {
+//         return res.status(401).json({
+//           success: false,
+//           message: "Invalid Facebook token",
+//         });
+//       }
+
+//       // 2) Profile lein
+//       const { data } = await axios.get("https://graph.facebook.com/me", {
+//         params: {
+//           fields: "id,name,email,picture.type(large)",
+//           access_token: idToken,
+//         },
+//       });
+
+//       facebookId = data.id;
+//       name = data.name;
+//       email = data.email;
+//       picture = data.picture?.data?.url;
+//     } else {
+//       const ticket = await googleClient.verifyIdToken({
+//         idToken,
+//         audience: process.env.GOOGLE_CLIENT_ID,
+//       });
+//       ({ sub, email, name, picture } = ticket.getPayload());
+//     }
+
+//     //     if (provider === "facebook") {
+//     //   // firebase-admin (admin.initializeApp pehle kar lein)
+//     //   // const decoded = await admin.auth().verifyIdToken(idToken);
+//     //   // sub = decoded.uid;
+//     //    const response = await axios.get(
+//     //       `https://graph.facebook.com/me?fields=id,name,email&access_token=${idToken}`,
+//     //     );
+//     //   // ({ email, name, picture } = decoded);
+//     //    ({ id, name, email, picture } = response.data);
+//     // } else {
+//     //   const ticket = await googleClient.verifyIdToken({
+//     //     idToken,
+//     //     audience: process.env.GOOGLE_CLIENT_ID,
+//     //   });
+//     //   ({ sub, email, name, picture } = ticket.getPayload());
+//     // }
+
+//     // const ticket = await googleClient.verifyIdToken({
+//     //   idToken: idToken,
+//     //   audience: process.env.GOOGLE_CLIENT_ID, // yeh line add karein
+//     // });
+
+//     // const payload = ticket.getPayload();
+//     // const { sub, email, name, picture } = payload;
+
+//     if (!email) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Email permission is required",
+//       });
+//     }
+
+//     const normalizedEmail = email.toLowerCase().trim();
+
+//     // 2. Check if user already exists
+//     let user = await User.findOne({ email: normalizedEmail, role: role });
+
+//     if (!user) {
+//       // Admin check
+//       if (role === "admin") {
+//         const existingAdmin = await User.findOne({ role: "admin" });
+//         if (existingAdmin) {
+//           return res.status(403).json({
+//             success: false,
+//             message: "Admin account already exists.",
+//           });
+//         }
+//       }
+
+//       // Create new user object
+//       const newUserData = {
+//         name: name || `${role}_user`,
+//         email: normalizedEmail,
+//         role: role,
+//         facebookId: provider === "facebook" ? facebookId : null,
+//         googleId: provider === "google" ? sub : null,
+//         profilePicture: picture || "",
+//         isEmailVerified: true,
+//         phone: phone ? String(phone).trim() : "",
+//       };
+
+//       // Set Rider specific defaults if role is 'rider'
+//       if (role === "rider") {
+//         newUserData.riderProfile = {
+//           category: riderProfile?.category || null,
+//           vehicleType: riderProfile?.vehicleType || "bike",
+//           vehiclePlate: riderProfile?.vehiclePlate || "",
+//           vehicleModel: riderProfile?.vehicleModel || "",
+//           verificationSelfie: riderProfile?.verificationSelfie || null,
+//           verificationStatus:
+//             riderProfile?.verificationStatus || "not_submitted",
+//           isOnline: false,
+//         };
+//       }
+
+//       user = await User.create(newUserData);
+//     } else {
+//       // Existing User update
+//       if (!user.googleId) {
+//         user.googleId = sub;
+//       } else if (!user.facebookId) {
+//         user.facebookId = facebookId;
+//       }
+//       user.lastLogin = new Date();
+//       await user.save();
+//     }
+
+//     // 3. Generate App JWT Token
+//     const token = generateToken(user);
+
+//     const userResponse = user.toObject();
+//     delete userResponse.password;
+
+//     // await sendNotification({
+//     //   userId: user?._id,
+//     //   type: "login",
+//     // });
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Social login successful",
+//       token,
+//       data: userResponse,
+//     });
+//   } catch (err) {
+//     console.error("SOCIAL LOGIN ERROR:", err);
+//     return res.status(401).json({
+//       success: false,
+//       message: "Invalid or expired token",
+//       error: err.message,
+//     });
+//   }
+// };
+
 exports.socialLogin = async (req, res) => {
   try {
     const {
@@ -804,40 +977,59 @@ exports.socialLogin = async (req, res) => {
       });
     }
 
-    // 1. Google ID Token Verification (No Firebase Admin dependencies needed)
-    // const ticket = await googleClient.verifyIdToken({
-    //   idToken: idToken,
-    // });
     let sub, facebookId, email, name, picture;
 
     if (provider === "facebook") {
-      // 1) Token valid ho aur hamari hi app ka ho
-      const debug = await axios.get("https://graph.facebook.com/debug_token", {
-        params: {
-          input_token: idToken,
-          access_token: `${process.env.FACEBOOK_APP_ID}|${process.env.FACEBOOK_APP_SECRET}`,
-        },
-      });
-      const d = debug.data?.data;
-      if (!d?.is_valid || d.app_id !== process.env.FACEBOOK_APP_ID) {
-        return res.status(401).json({
+      // 1) Verify Facebook App ID & Secret environment variables exist
+      if (!process.env.FACEBOOK_APP_SECRET || !process.env.FACEBOOK_APP_ID) {
+        console.error("CRITICAL: FACEBOOK_APP_SECRET or FACEBOOK_APP_ID missing in backend .env");
+        return res.status(500).json({
           success: false,
-          message: "Invalid Facebook token",
+          message: "Facebook login server configuration missing",
         });
       }
 
-      // 2) Profile lein
-      const { data } = await axios.get("https://graph.facebook.com/me", {
+      // 2) Token Verification via Graph API
+      let debugResponse;
+      try {
+        debugResponse = await axios.get("https://graph.facebook.com/debug_token", {
+          params: {
+            input_token: idToken,
+            access_token: `${process.env.FACEBOOK_APP_ID}|${process.env.FACEBOOK_APP_SECRET}`,
+          },
+        });
+      } catch (fbAxiosErr) {
+        console.error("FB DEBUG TOKEN ERROR:", fbAxiosErr.response?.data || fbAxiosErr.message);
+        return res.status(401).json({
+          success: false,
+          message: "Facebook token verification failed",
+          detail: fbAxiosErr.response?.data?.error?.message || fbAxiosErr.message,
+        });
+      }
+
+      const d = debugResponse.data?.data;
+      if (!d?.is_valid || String(d.app_id) !== String(process.env.FACEBOOK_APP_ID)) {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid Facebook token or App ID mismatch",
+        });
+      }
+
+      // 3) Profile details
+      const profileResponse = await axios.get("https://graph.facebook.com/me", {
         params: {
           fields: "id,name,email,picture.type(large)",
           access_token: idToken,
         },
       });
 
+      const data = profileResponse.data;
       facebookId = data.id;
       name = data.name;
-      email = data.email;
+      // Fallback agar user ka Facebook email na ho
+      email = data.email || `${facebookId}@facebook.omnigo.com`;
       picture = data.picture?.data?.url;
+
     } else {
       const ticket = await googleClient.verifyIdToken({
         idToken,
@@ -846,56 +1038,12 @@ exports.socialLogin = async (req, res) => {
       ({ sub, email, name, picture } = ticket.getPayload());
     }
 
-    //     if (provider === "facebook") {
-    //   // firebase-admin (admin.initializeApp pehle kar lein)
-    //   // const decoded = await admin.auth().verifyIdToken(idToken);
-    //   // sub = decoded.uid;
-    //    const response = await axios.get(
-    //       `https://graph.facebook.com/me?fields=id,name,email&access_token=${idToken}`,
-    //     );
-    //   // ({ email, name, picture } = decoded);
-    //    ({ id, name, email, picture } = response.data);
-    // } else {
-    //   const ticket = await googleClient.verifyIdToken({
-    //     idToken,
-    //     audience: process.env.GOOGLE_CLIENT_ID,
-    //   });
-    //   ({ sub, email, name, picture } = ticket.getPayload());
-    // }
-
-    // const ticket = await googleClient.verifyIdToken({
-    //   idToken: idToken,
-    //   audience: process.env.GOOGLE_CLIENT_ID, // yeh line add karein
-    // });
-
-    // const payload = ticket.getPayload();
-    // const { sub, email, name, picture } = payload;
-
-    if (!email) {
-      return res.status(400).json({
-        success: false,
-        message: "Email permission is required",
-      });
-    }
-
     const normalizedEmail = email.toLowerCase().trim();
 
-    // 2. Check if user already exists
+    // User lookup & creation logic...
     let user = await User.findOne({ email: normalizedEmail, role: role });
 
     if (!user) {
-      // Admin check
-      if (role === "admin") {
-        const existingAdmin = await User.findOne({ role: "admin" });
-        if (existingAdmin) {
-          return res.status(403).json({
-            success: false,
-            message: "Admin account already exists.",
-          });
-        }
-      }
-
-      // Create new user object
       const newUserData = {
         name: name || `${role}_user`,
         email: normalizedEmail,
@@ -907,7 +1055,6 @@ exports.socialLogin = async (req, res) => {
         phone: phone ? String(phone).trim() : "",
       };
 
-      // Set Rider specific defaults if role is 'rider'
       if (role === "rider") {
         newUserData.riderProfile = {
           category: riderProfile?.category || null,
@@ -915,34 +1062,25 @@ exports.socialLogin = async (req, res) => {
           vehiclePlate: riderProfile?.vehiclePlate || "",
           vehicleModel: riderProfile?.vehicleModel || "",
           verificationSelfie: riderProfile?.verificationSelfie || null,
-          verificationStatus:
-            riderProfile?.verificationStatus || "not_submitted",
+          verificationStatus: riderProfile?.verificationStatus || "not_submitted",
           isOnline: false,
         };
       }
 
       user = await User.create(newUserData);
     } else {
-      // Existing User update
-      if (!user.googleId) {
+      if (provider === "google" && !user.googleId) {
         user.googleId = sub;
-      } else if (!user.facebookId) {
+      } else if (provider === "facebook" && !user.facebookId) {
         user.facebookId = facebookId;
       }
       user.lastLogin = new Date();
       await user.save();
     }
 
-    // 3. Generate App JWT Token
     const token = generateToken(user);
-
     const userResponse = user.toObject();
     delete userResponse.password;
-
-    // await sendNotification({
-    //   userId: user?._id,
-    //   type: "login",
-    // });
 
     return res.status(200).json({
       success: true,
@@ -951,10 +1089,10 @@ exports.socialLogin = async (req, res) => {
       data: userResponse,
     });
   } catch (err) {
-    console.error("SOCIAL LOGIN ERROR:", err);
-    return res.status(401).json({
+    console.error("SOCIAL LOGIN CRITICAL ERROR:", err);
+    return res.status(500).json({
       success: false,
-      message: "Invalid or expired token",
+      message: "Server internal error during social login",
       error: err.message,
     });
   }
