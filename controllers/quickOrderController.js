@@ -530,7 +530,8 @@ exports.createQuickOrder = async (req, res) => {
     const { textMessage = "" } = req.body;
     const category = CATEGORIES.includes(String(req.body.category).toLowerCase())
       ? String(req.body.category).toLowerCase() : "food";
-    const file = req.file;
+
+    const file = req.file || req.files;
     const isPharmacy = category === "pharmacy";
 
     if (!textMessage.trim() && !file) {

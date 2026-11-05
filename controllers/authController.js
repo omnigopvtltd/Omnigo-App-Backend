@@ -17,6 +17,7 @@ const Cart = require("../models/Cart");
 const admin = require("../config/firebase");
 const { sendNotification } = require("../utils/sendNotification");
 const RiderSessionParticipation = require("../models/RiderSessionParticipation");
+const AccountDeleteRequest = require("../models/AccountDeleteRequest");
 
 // ======================================================
 // GOOGLE CLIENT
@@ -1967,7 +1968,7 @@ exports.deleteUserLocation = async (req, res) => {
 
 exports.addAddress = async (req, res) => {
   try {
-    const { phone, address, city, zipCode, country, isSave } = req.body;
+    const { phone, address, zone, area, city, zipCode, country, isSave, coordinates } = req.body;
 
     const user = await User.findById(req.user.id);
 
@@ -1985,6 +1986,9 @@ exports.addAddress = async (req, res) => {
       zipCode,
       country,
       isSave: isSave || false,
+      coordinates,
+      zone,
+      area
     });
 
     await user.save();
@@ -2076,6 +2080,10 @@ exports.updateAddress = async (req, res) => {
     address.city = req.body.city || address.city;
     address.zipCode = req.body.zipCode || address.zipCode;
     address.country = req.body.country || address.country;
+    address.coordinates = req.body.coordinates || address.coordinates;
+    address.zone = req.body.zone || address.zone;
+    address.area = req.body.area || address.area;
+    address.isSave = req.body.isSave || address.isSave;
 
     await user.save();
 
@@ -2961,6 +2969,46 @@ exports.completeVendorProfile = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: err.message,
+    });
+  }
+};
+
+// ======================================================
+// ACCOUNT DELETE REQUEST
+// ======================================================
+exports.deleteAccountRequest = async (req, res) => {
+  try {
+    const { appName, name, email, request } = req.body;
+
+    // Check already deleted account
+    const deletedAccount = await AccountDeleteRequest.findOne({
+      $or: [{ appName }, { name }, { email }, { isDeleted: true }],
+    });
+
+    if (deletedAccount) {
+      return res.status(400).json({
+        success: false,
+        message: "Account Already Deleted",
+      });
+    }
+
+    const accountDeleteRequest = await AccountDeleteRequest.create({
+      appName,
+      name,
+      email,
+      request,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `${name} account delete request submitted successfully`,
+      data: accountDeleteRequest,
+    });
+  } catch (err) {
+    console.error("ACCOUNT DELETE ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error during account deletion",
     });
   }
 };
