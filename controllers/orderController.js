@@ -2480,6 +2480,19 @@ exports.getVendorOrders = async (req, res) => {
       });
     }
 
+      const formattedDate = (date) => {
+      const getFormattedDate = new Date(date).toLocaleString(
+        "en-PK",
+        {
+          timeZone: "Asia/Karachi",
+          dateStyle: "medium",
+          timeStyle: "short",
+        },
+      );
+
+      return getFormattedDate;
+    };
+
     const mongoose = require("mongoose");
     const targetVendorObjectId = new mongoose.Types.ObjectId(vendorId);
 

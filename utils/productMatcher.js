@@ -37,7 +37,7 @@ async function refreshCatalog(force = false) {
   if (!force && fuse && Date.now() - loadedAt < REFRESH_MS) return;
   if (loading) return loading; // parallel requests ek hi DB query share karein
   loading = (async () => {
-    const products = await Product.find({ isActive: true })
+    const products = await Product.find({ isAvailable: true })
       .select("name category price image vendorId brand")
       .lean();
     catalog = products.map((p) => ({
@@ -45,8 +45,9 @@ async function refreshCatalog(force = false) {
       name: p.name,
       brand: p.brand || "",
       category: p.category || "",
-      price: Number(p.price) || 0,
-      image: p.image || "",
+      subcategory: p.subcategory || "",
+      price: Number(p.discountPrice) < 1 ? Number(p.price) : Number(p.discountPrice) || 0,
+      image: p.images || p.image || "",
       vendorId: p.vendorId ? String(p.vendorId) : null,
       _norm: normalize(`${p.brand || ""} ${p.name}`),
     }));
@@ -66,7 +67,7 @@ const toPublic = (p, score) => ({
   productId: p.productId,
   name: p.name,
   price: p.price,
-  image: p.image,
+  image: p.image || p.images || p.images,
   vendorId: p.vendorId,
   category: p.category,
   confidence: Number((1 - score).toFixed(2)),
