@@ -1811,47 +1811,61 @@ exports.completeSession = async (req, res) => {
 // Active session chhodna (bonus forfeit) -> agla booked start
 exports.leaveSession = async (req, res) => {
   try {
-    const p = await RiderSessionParticipation.findOneAndUpdate(
-      { riderId: req.user.id, status: "in_progress", isBonusEligible: false },
-      {
-        $set: {
-          status: "abandoned",
-          abandonedAt: new Date(),
-          abandonReason: req.body?.reason || "Left by rider",
-        },
-      },
-      { new: true },
-    );
+    // 1. Pehle sirf active session ko find karein (bina isBonusEligible restriction ke)
+    const participation = await RiderSessionParticipation.findOne({
+      riderId: req.user.id,
+      status: "in_progress",
+    });
 
-    // if (!p)
-    //   return fail(
-    //     res,
-    //     404,
-    //     "NO_ACTIVE_SESSION",
-    //     "You don't have an active session",
-    //   );
+    if (!participation) {
+      return fail(
+        res,
+        404,
+        "NO_ACTIVE_SESSION",
+        "You don't have an active session to leave."
+      );
+    }
 
-    if (p && p.isBonusEligible == true) {
-      const result = await finalizeCompletion(current._id);
-      if (!result)
+    // 2. Check karein ke aya rider bonus eligible ho chuka tha ya nahi
+    if (participation.isBonusEligible) {
+      // Agar wo eligible ho gaya tha, toh usko abandon karne ke bajaye finalize karein
+      const result = await finalizeCompletion(participation._id);
+      if (!result) {
         return fail(
           res,
           409,
           "ALREADY_PROCESSED",
-          "This session was already processed",
+          "This session was already processed."
         );
+      }
+      
+      return res.json({
+        success: true,
+        message: "You have already earned the bonus for this session. It has been finalized.",
+        participation: result,
+      });
     }
 
-    await syncP(p);
+    // 3. Agar eligible nahi tha, tab status "abandoned" mark karein
+    participation.status = "abandoned";
+    participation.abandonedAt = new Date();
+    participation.abandonReason = req.body?.reason || "Left by rider";
+    await participation.save();
+
+    // 4. Firestore / Sync update
+    await syncP(participation);
+
+    // 5. Agar koi next booked session ho toh usko activate karein
     const next = await activateNextBookedSession(req.user.id);
+
     return res.json({
       success: true,
-      message:
-        "You've left the session. No bonus will be paid for this attempt.",
-      participation: p,
+      message: "You've left the session. No bonus will be paid for this attempt.",
+      participation,
       nextSessionStarted: !!next,
       nextSession: next,
     });
+
   } catch (err) {
     return serverError(res, "LEAVE SESSION ERROR", err);
   }
