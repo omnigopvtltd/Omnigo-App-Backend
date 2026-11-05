@@ -5,9 +5,20 @@ const addressSchema = new mongoose.Schema({
   title: String,
   address: String,
   street: String,
+  zone: String,
+  area: String,
   city: String,
   country: String,
-  coordinates: [{lat: 0}, {long: 0}]
+ coordinates: {
+  lat: {
+    type: Number,
+    default: null
+  },
+  lng: {
+    type: Number,
+    default: null
+  }
+}
 });
 
 module.exports = mongoose.model("Address", addressSchema);
