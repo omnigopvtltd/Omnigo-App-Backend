@@ -1170,7 +1170,7 @@ const expireParticipation = async (participationId) => {
 };
 
 // Required orders poore + time baaki => bonus (sirf ek baar, atomic)
-const finalizeCompletion = async (participationId) => {
+const finalizeCompletion = async (participationId, bonusEligibleAmount) => {
   const now = new Date();
   const claimed = await RiderSessionParticipation.findOneAndUpdate(
     {
@@ -1785,7 +1785,7 @@ exports.completeSession = async (req, res) => {
         },
       );
 
-    const result = await finalizeCompletion(current._id);
+    const result = await finalizeCompletion(current._id, current?.bonusEligibleAmount);
     if (!result)
       return fail(
         res,
@@ -1829,7 +1829,7 @@ exports.leaveSession = async (req, res) => {
     // 2. Check karein ke aya rider bonus eligible ho chuka tha ya nahi
     if (participation.isBonusEligible) {
       // Agar wo eligible ho gaya tha, toh usko abandon karne ke bajaye finalize karein
-      const result = await finalizeCompletion(participation._id);
+      const result = await finalizeCompletion(participation._id, participation?.bonusEligibleAmount);
       if (!result) {
         return fail(
           res,

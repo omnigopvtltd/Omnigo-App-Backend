@@ -90,15 +90,19 @@ let nextSlot = 0;
 let minuteWindow = [];
 async function acquireSlot() {
   const { rps, rpm, maxWaitMs } = cfg();
+  console.log("all",rps, rpm, maxWaitMs )
   const now = Date.now();
   if (rpm > 0) {
     minuteWindow = minuteWindow.filter((t) => now - t < 60000);
+    console.log("minute Window",minuteWindow);
     if (minuteWindow.length >= rpm) throw new AppError(503, "GEO_BUSY", "Location service par rush ha, thori der baad try karein");
   }
   if (rps > 0) {
     const slot = Math.max(now, nextSlot);
+    console.log("slot",slot);
     if (slot - now > maxWaitMs) throw new AppError(503, "GEO_BUSY", "Location service par rush ha, thori der baad try karein");
     nextSlot = slot + 1000 / rps;
+    console.log("next slot",nextSlot);
     if (slot > now) await sleep(slot - now);
   }
   if (rpm > 0) minuteWindow.push(Date.now());
@@ -114,7 +118,9 @@ async function upstream(path, params = {}, { retried = false } = {}) {
   await acquireSlot();
 
   const url = new URL(base + path);
+  console.log("URL",url);
   url.searchParams.set("key", key);
+  console.log("key", key)
   for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
 
   const ctrl = new AbortController();
@@ -130,22 +136,23 @@ async function upstream(path, params = {}, { retried = false } = {}) {
         return upstream(path, params, { retried: true });
       }
       console.error(`[LocationIQ] 429 ${body?.error || ""} on ${path}`);
-      throw new AppError(503, "GEO_BUSY", "Location service par rush ha, thori der baad try karein");
+      throw new Error(503, "GEO_BUSY", "Location service par rush ha, thori der baad try karein");
     }
     if (res.status === 401 || res.status === 403) {
       console.error(`[LocationIQ] auth error ${res.status} on ${path} - API key / token restrictions check karein`);
-      throw new AppError(502, "GEO_UPSTREAM", "Location service abhi available nahi");
+      throw new Error(502, "GEO_UPSTREAM", "Location service abhi available nahi");
     }
     if (!res.ok) {
       console.error(`[LocationIQ] HTTP ${res.status} on ${path}`);
-      throw new AppError(502, "GEO_UPSTREAM", "Location service abhi available nahi");
+      throw new Error(502, "GEO_UPSTREAM", "Location service abhi available nahi");
     }
+    console.log("res", res);
     return await res.json();
   } catch (err) {
-    if (err instanceof AppError) throw err;
-    if (err.name === "AbortError") throw new AppError(504, "GEO_TIMEOUT", "Location service ne jawab nahi diya");
+    if (err instanceof Error) throw err;
+    if (err.name === "AbortError") throw new Error(504, "GEO_TIMEOUT", "Location service ne jawab nahi diya");
     console.error(`[LocationIQ] network error on ${path}: ${err.message}`);   // URL log nahi karte (key hoti ha)
-    throw new AppError(502, "GEO_UPSTREAM", "Location service abhi available nahi");
+    throw new Error(502, "GEO_UPSTREAM", "Location service abhi available nahi");
   } finally {
     clearTimeout(timer);
   }
@@ -153,25 +160,34 @@ async function upstream(path, params = {}, { retried = false } = {}) {
 
 function cached(cache, key, loader) {
   const hit = cache.get(key);
+  console.log("hit", hit);
   if (hit !== undefined) return Promise.resolve(hit);
   if (inflight.has(key)) return inflight.get(key);
   const p = loader()
-    .then((v) => { cache.set(key, v); return v; })
-    .finally(() => inflight.delete(key));
+  .then((v) => { cache.set(key, v); return v; })
+  .finally(() => inflight.delete(key));
   inflight.set(key, p);
+  console.log("key 1", key);
+  console.log("p", p);
   return p;
 }
 
 // ---------------------------------------------------------------- mappers
 function pickAddress(a = {}) {
+  console.log("a",a);
   const street = [a.house_number, a.road].filter(Boolean).join(" ") || a.name || a.neighbourhood || "";
+
   return {
     street,
     suburb: a.suburb || a.neighbourhood || a.quarter || "",
     city: a.city || a.town || a.village || a.county || a.state_district || "",
+    subdistrict: a.subdistrict || "",
+    district: a.district || "",
+    state_district: a.state_district || "",
     state: a.state || "",
     postal_code: a.postcode || "",
     country: a.country || "",
+    country_code: a.country_code || "",
   };
 }
 
@@ -180,6 +196,7 @@ function mapSuggestion(p) {
   if (!p.place_id || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
   const display = String(p.display_name || "");
   const [first, ...rest] = display.split(",");
+  console.log("p p",p)
   return {
     place_id: String(p.place_id),
     display_name: display,
@@ -188,32 +205,41 @@ function mapSuggestion(p) {
     lat,
     lon,
     address: pickAddress(p.address),
+    boundingBox: p.boundingBox,
   };
 }
 
 // ---------------------------------------------------------------- public API
 async function autocomplete(query, limit = 5) {
   const q = query.trim().replace(/\s+/g, " ");
+  console.log("q", q)
   const { country } = cfg();
+  console.log("country", country)
+
   return cached(autocompleteCache, `ac:${country}:${limit}:${q.toLowerCase()}`, async () => {
     const data = await upstream("/autocomplete", {
       q, countrycodes: country, limit, dedupe: 1, normalizecity: 1, "accept-language": "en",
     });
+    console.log("data", data);
+    console.log("mapSuggestion", data.map(mapSuggestion));
     return Array.isArray(data) ? data.map(mapSuggestion).filter(Boolean) : [];
   });
 }
 
 async function reverseGeocode(lat, lon) {
   const key = `rv:${lat.toFixed(5)}:${lon.toFixed(5)}`;           // ~1 meter ki accuracy par cache
+  console.log("reverse key",key)
   return cached(reverseCache, key, async () => {
     const data = await upstream("/reverse", { lat, lon, format: "json", addressdetails: 1, normalizecity: 1, "accept-language": "en" });
     if (!data || data.error) return null;
+   console.log("reverse data",data);
     return {
       place_id: String(data.place_id || ""),
       display_name: data.display_name || "",
       lat: Number(data.lat) || lat,
       lon: Number(data.lon) || lon,
       address: pickAddress(data.address),
+      boundingbox,
     };
   });
 }
