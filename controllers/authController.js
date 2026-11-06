@@ -38,17 +38,19 @@ const transporter = nodemailer.createTransport({
 // ======================================================
 // GENERATE TOKEN
 // ======================================================
-const generateToken = (user) => {
+exports.generateToken = (user) => {
   return jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
-    expiresIn: "30d",
+    expiresIn: "7d",
   });
 };
+
 
 // ======================================================
 // SEND RESPONSE
 // ======================================================
 const sendResponse = (res, message, user) => {
-  const token = generateToken(user);
+  // const token = generateToken(user);
+  const token = exports.generateToken(user);
 
   return res.status(200).json({
     success: true,
@@ -970,15 +972,18 @@ exports.socialLogin = async (req, res) => {
       phone,
     } = req.body;
 
+    console.log(req.body);
+    
     if (!idToken) {
       return res.status(400).json({
         success: false,
         message: "ID token is required",
       });
     }
-
+    
     let sub, facebookId, email, name, picture;
-
+    
+    console.log(req.body);
     if (provider === "facebook") {
       // 1) Verify Facebook App ID & Secret environment variables exist
       if (!process.env.FACEBOOK_APP_SECRET || !process.env.FACEBOOK_APP_ID) {
@@ -1078,7 +1083,7 @@ exports.socialLogin = async (req, res) => {
       await user.save();
     }
 
-    const token = generateToken(user);
+    const token = exports.generateToken(user);
     const userResponse = user.toObject();
     delete userResponse.password;
 
@@ -2745,7 +2750,7 @@ exports.verifyRiderOTP = async (req, res) => {
     rider.lastLogin = new Date();
     await rider.save();
 
-    const token = generateToken(rider);
+    const token = exports.generateToken(rider);
 
     return res.status(200).json({
       success: true,
@@ -3201,3 +3206,5 @@ exports.deleteAccount = async (req, res) => {
     });
   }
 };
+
+
