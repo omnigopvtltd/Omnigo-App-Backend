@@ -36,7 +36,7 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-const generateToken = (vendor) => {
+exports.generateToken = (vendor) => {
   return jwt.sign({ id: vendor._id, role: "vendor" }, process.env.JWT_SECRET, {
     expiresIn: "7d",
   });
@@ -49,7 +49,7 @@ const sendVendorResponse = (res, message, payload, statusCode = 200) => {
   // const tempPassword = payload.tempPassword || null;
 
   // Generate token from the actual vendor object
-  const token = generateToken(vendorObj);
+  const token = exports.generateToken(vendorObj);
 
   const responseBody = {
     success: true,
@@ -1364,7 +1364,7 @@ exports.vendorSocialLogin = async (req, res) => {
     }
 
     // 3. Generate Auth JWT Token
-    const token = generateToken(vendor);
+    const token = exports.generateToken(vendor);
     const vendorResponse = vendor.toObject();
     delete vendorResponse.password;
 
