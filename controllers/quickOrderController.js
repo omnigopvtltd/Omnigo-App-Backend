@@ -462,6 +462,7 @@ function buildSlipItem(parsed, m, isPharmacy) {
   };
   if (m.status === "MATCHED") {
     const p = m.product;
+    console.log(m)
     return {
       ...base,
       name: p.name,
@@ -545,6 +546,8 @@ exports.createQuickOrder = async (req, res) => {
       mimeType: file ? file.mimetype : undefined,
       textPrompt: textMessage,
     });
+
+    console.log(parsed)
     if (!parsed.items.length) {
       return res.status(422).json({ success: false, message: "Koi item samajh nahi aya. Dobara wazeh likhein ya saaf photo bhejein." });
     }
@@ -552,6 +555,7 @@ exports.createQuickOrder = async (req, res) => {
     // Hamara code: DB se match
     const matches = await Promise.all(parsed.items.map((it) => matchItem(it, { isPharmacy })));
     const items = parsed.items.map((it, idx) => buildSlipItem(it, matches[idx], isPharmacy));
+    console.log("Matched Items",matches, items);
 
     const quickOrder = new QuickOrder({
       user: userId,
