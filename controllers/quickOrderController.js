@@ -603,7 +603,7 @@ exports.updateQuickOrderItem = async (req, res) => {
     if (!item) throw new HttpError(404, "Item nahi mila");
 
     if (action === "select") {
-      const p = await Product.findOne({ _id: productId, isActive: true }).select("name price image vendorId").lean();
+      const p = await Product.findOne({ _id: productId, isAvailable: true }).select("name price image vendorId").lean();
       if (!p) throw new HttpError(404, "Product available nahi");
       Object.assign(item, {
         name: p.name, productId: p._id, vendorId: p.vendorId || null, image: p.image || "",
@@ -695,7 +695,7 @@ exports.confirmQuickOrderToMainOrder = async (req, res) => {
 
     // 2) Price/availability dobara DB se (slip banne ke baad price badal sakti ha)
     const productIds = quickOrder.items.filter((i) => i.productId).map((i) => i.productId);
-    const products = await Product.find({ _id: { $in: productIds }, isActive: true }).lean();
+    const products = await Product.find({ _id: { $in: productIds }, isAvailable: true }).lean();
     const productMap = new Map(products.map((p) => [String(p._id), p]));
 
     const formattedItems = [];
