@@ -46,7 +46,7 @@ async function refreshCatalog(force = false) {
       brand: p.brand || "",
       category: p.category || "",
       subcategory: p.subcategory || "",
-      price: Number(p.discountPrice) < 1 ? Number(p.price) : Number(p.discountPrice) || 0,
+      price: Number(p.discountPrice) < 1 || Number(p.price) || 0,
       image: p.images || p.image || "",
       vendorId: p.vendorId ? String(p.vendorId) : null,
       _norm: normalize(`${p.brand || ""} ${p.name}`),
