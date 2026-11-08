@@ -4,15 +4,23 @@ const Fuse = require("fuse.js");
 const Product = require("../models/Product");
 
 const REFRESH_MS = 5 * 60 * 1000; // cache 5 min baad refresh
-const MATCH_SCORE = 0.25;         // Fuse score: 0 = perfect. Isse kam => auto-match
-const ALT_SCORE = 0.5;            // Isse kam => "similar product" ke tor par dikhao
+const MATCH_SCORE = 0.25; // Fuse score: 0 = perfect. Isse kam => auto-match
+const ALT_SCORE = 0.5; // Isse kam => "similar product" ke tor par dikhao
 const MAX_ALTERNATIVES = 5;
 
 // Sirf SPELLING variants (translation nahi). Apne catalog ke hisaab se barhate rahein.
 const SPELLING = {
-  briyani: "biryani", biriyani: "biryani", biryaani: "biryani", biriani: "biryani",
-  masalah: "masala", masaala: "masala", masalay: "masala",
-  shampu: "shampoo", biscuit: "biscuit", biscut: "biscuit", biscat: "biscuit",
+  briyani: "biryani",
+  biriyani: "biryani",
+  biryaani: "biryani",
+  biriani: "biryani",
+  masalah: "masala",
+  masaala: "masala",
+  masalay: "masala",
+  shampu: "shampoo",
+  biscuit: "biscuit",
+  biscut: "biscuit",
+  biscat: "biscuit",
 };
 
 let fuse = null;
@@ -46,8 +54,18 @@ async function refreshCatalog(force = false) {
       brand: p.brand || "",
       category: p.category || "",
       subcategory: p.subcategory || "",
-      price: Number(p.discountPrice) < 1 || Number(p.price) || 0,
+      price: Number(p.discountPrice) || Number(p.price) || 0,
       image: p.images || p.image || "",
+      weight: p.weight || "",
+      belongsTo: p.belongsTo || "restaurant",
+      variations: p.variations || [],
+      addOns: p.addOns || [],
+      tags: p.tags || [],
+      type: p.type || "",
+      dosage: p.dosage || "",
+      isRxRequired: p.isRxRequired || false,
+      isVeg: p.isVeg || false,
+      rating: p.rating || {},
       vendorId: p.vendorId ? String(p.vendorId) : null,
       _norm: normalize(`${p.brand || ""} ${p.name}`),
     }));
@@ -60,16 +78,31 @@ async function refreshCatalog(force = false) {
     });
     loadedAt = Date.now();
   })();
-  try { await loading; } finally { loading = null; }
+  try {
+    await loading;
+  } finally {
+    loading = null;
+  }
 }
 
 const toPublic = (p, score) => ({
   productId: p.productId,
   name: p.name,
   price: p.price,
-  image: p.image || p.images || p.images,
+  image: p.image || p.images,
   vendorId: p.vendorId,
   category: p.category,
+  subcategory: p.subcategory,
+  weight: p.weight,
+  belongsTo: p.belongsTo || "restaurant",
+  variations: p.variations || [],
+  addOns: p.addOns || [],
+  tags: p.tags || [],
+  type: p.type || "",
+  dosage: p.dosage || "",
+  isRxRequired: p.isRxRequired || false,
+  isVeg: p.isVeg || false,
+  rating: p.rating || {},
   confidence: Number((1 - score).toFixed(2)),
 });
 
@@ -79,7 +112,9 @@ const toPublic = (p, score) => ({
  */
 async function matchItem(item, { isPharmacy = false } = {}) {
   await refreshCatalog();
-  const query = normalize(`${item.name} ${isPharmacy ? item.dosage || "" : ""}`);
+  const query = normalize(
+    `${item.name} ${isPharmacy ? item.dosage || "" : ""}`,
+  );
   const brand = normalize(item.brand || "");
   if (!query) return { status: "UNAVAILABLE", confidence: 0, alternatives: [] };
 
@@ -115,7 +150,9 @@ async function matchItem(item, { isPharmacy = false } = {}) {
   const alternatives = [...genericHits, ...hits]
     .filter((h) => h.score <= ALT_SCORE)
     .sort((a, b) => a.score - b.score)
-    .filter((h) => (seen.has(h.item.productId) ? false : seen.add(h.item.productId)))
+    .filter((h) =>
+      seen.has(h.item.productId) ? false : seen.add(h.item.productId),
+    )
     .slice(0, MAX_ALTERNATIVES)
     .map((h) => toPublic(h.item, h.score));
 
@@ -137,7 +174,10 @@ function variants(query, excludeId, existingHits) {
 
 function stripWord(text, word) {
   if (!word) return text;
-  return text.split(" ").filter((w) => w !== word).join(" ");
+  return text
+    .split(" ")
+    .filter((w) => w !== word)
+    .join(" ");
 }
 
 // User khud search kare (manual search box)

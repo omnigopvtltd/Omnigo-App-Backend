@@ -1,6 +1,7 @@
 const RestaurantReview = require("../models/RestaurantReviews");
 const Restaurant = require("../models/Restaurant");
 const mongoose = require("mongoose");
+const Vendor = require("../models/Vendor");
 
 // Helper function to map numerical rating to reviewType enum
 const getReviewTypeFromRating = (rating) => {
@@ -26,13 +27,13 @@ const updateRestaurantRatingStats = async (restaurantId) => {
   ]);
 
   if (stats.length > 0) {
-    await Restaurant.findByIdAndUpdate(restaurantId, {
+    await Vendor.findByIdAndUpdate(restaurantId, {
       "rating.average": parseFloat(stats[0].averageRating.toFixed(1)),
       "rating.count": stats[0].count,
     });
   } else {
     // Reset to defaults if no reviews remain
-    await Restaurant.findByIdAndUpdate(restaurantId, {
+    await Vendor.findByIdAndUpdate(restaurantId, {
       "rating.average": 0,
       "rating.count": 0,
     });
@@ -61,7 +62,7 @@ exports.addReview = async (req, res) => {
       });
     }
 
-    const restaurant = await Restaurant.findById(restaurantId);
+    const restaurant = await Vendor.findById(restaurantId);
     if (!restaurant) {
       return res.status(404).json({
         success: false,
@@ -161,7 +162,7 @@ exports.getAllRestaurantReviews = async (req, res) => {
 
     const reviews = await RestaurantReview.find()
       .populate("user", "name rating message")
-      .populate("restaurantId", "name logo")
+      .populate("restaurantId", "businessName name logo")
       .sort({ createdAt: -1 })
 
     return res.status(200).json({
