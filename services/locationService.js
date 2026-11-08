@@ -239,7 +239,7 @@ async function reverseGeocode(lat, lon) {
       lat: Number(data.lat) || lat,
       lon: Number(data.lon) || lon,
       address: pickAddress(data.address),
-      boundingbox,
+      // boundingbox,
     };
   });
 }
