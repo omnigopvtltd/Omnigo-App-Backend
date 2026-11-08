@@ -10,7 +10,6 @@
 // // const QuickOrder = require("../models/QuickOrder.js");
 // const { parseOrderWithGemmaVision } = require("../utils/geminiHelper.js");
 
-
 // exports.createQuickOrder = async (req, res) => {
 //   try {
 //     const { userId, category, textMessage } = req.body;
@@ -88,7 +87,6 @@
 //     });
 //   }
 // };
-
 
 // const mapCategoryToEnum = (cat) => {
 //   const categoryStr = (cat || "").toLowerCase();
@@ -186,7 +184,7 @@
 
 //     if (!isPharmacyOrder && uniqueVendorIds.length > 0) {
 //       const realVendors = await Vendor.find({ _id: { $in: uniqueVendorIds } });
-      
+
 //       stops = realVendors.map((vendor, index) => ({
 //         stopNumber: index + 1,
 //         vendorId: vendor._id,
@@ -261,8 +259,8 @@
 
 //     return res.status(201).json({
 //       success: true,
-//       message: isPharmacyOrder 
-//         ? "Pharmacy prescription order placed successfully" 
+//       message: isPharmacyOrder
+//         ? "Pharmacy prescription order placed successfully"
 //         : "Order placed successfully with database product matching",
 //       order: newMainOrder,
 //       orderId: newMainOrder._id,
@@ -426,19 +424,27 @@ const Order = require("../models/Order");
 const User = require("../models/User");
 const Product = require("../models/Product");
 const Vendor = require("../models/Vendor");
-const VendorBranch = require("../models/VendorBranch");           // <- path apne project ke mutabiq
+const VendorBranch = require("../models/VendorBranch"); // <- path apne project ke mutabiq
 // const { sendNotificationToVendor } = require("../utils/notifications"); // <- jahan createOrder import karta ha wahi path
 
 const { parseOrder, AIParseError } = require("../utils/geminiHelper");
-const { matchItem, searchProducts, normalize } = require("../utils/productMatcher");
+const {
+  matchItem,
+  searchProducts,
+  normalize,
+} = require("../utils/productMatcher");
 
-const DELIVERY_FEE = Number(process.env.DELIVERY_FEE || 200);     // PKR (pehle yahan 2.0 tha - bug)
-const TAX_PERCENT = Number(process.env.USER_TAX_PERCENT || 5);    // createOrder wala salesAndServiceTaxForUser
+const DELIVERY_FEE = Number(process.env.DELIVERY_FEE || 200); // PKR (pehle yahan 2.0 tha - bug)
+const TAX_PERCENT = Number(process.env.USER_TAX_PERCENT || 5); // createOrder wala salesAndServiceTaxForUser
 const CATEGORIES = ["food", "mart", "pharmacy", "grocery"];
 const round2 = (n) => Number(Number(n).toFixed(2));
 
 class HttpError extends Error {
-  constructor(status, message, extra = {}) { super(message); this.status = status; this.extra = extra; }
+  constructor(status, message, extra = {}) {
+    super(message);
+    this.status = status;
+    this.extra = extra;
+  }
 }
 
 const mapCategoryToEnum = (cat) => {
@@ -459,20 +465,33 @@ function buildSlipItem(parsed, m, isPharmacy) {
     quantity: parsed.quantity || 1,
     dosage: parsed.dosage || "",
     size: parsed.size || "",
+    variations: parsed.variations || [],
   };
   if (m.status === "MATCHED") {
     const p = m.product;
-    console.log(m)
+    console.log(m);
     return {
       ...base,
       name: p.name,
       productId: p.productId,
       vendorId: p.vendorId,
       image: p.image,
+      category: p.category,
+      subcategory: p.subcategory,
+      weight: p.weight,
+      belongsTo: p.belongsTo || "restaurant",
+      variations: p.variations || [],
+      addOns: p.addOns || [],
+      tags: p.tags || [],
+      type: p.type || "",
+      dosage: p.dosage || "",
+      isRxRequired: p.isRxRequired || false,
+      isVeg: p.isVeg || false,
+      rating: p.rating || {},
       matchStatus: "MATCHED",
       matchConfidence: m.confidence,
       alternatives: m.alternatives,
-      estimatedUnitPrice: p.price,                       // price HAMESHA DB se, AI se kabhi nahi
+      estimatedUnitPrice: p.price, // price HAMESHA DB se, AI se kabhi nahi
       totalItemPrice: round2(p.price * base.quantity),
     };
   }
@@ -489,54 +508,87 @@ function buildSlipItem(parsed, m, isPharmacy) {
 }
 
 function recalc(quickOrder) {
-  const subtotal = quickOrder.items.reduce((s, i) => s + Number(i.totalItemPrice || 0), 0);
+  const subtotal = quickOrder.items.reduce(
+    (s, i) => s + Number(i.totalItemPrice || 0),
+    0,
+  );
   quickOrder.subtotal = round2(subtotal);
-  quickOrder.grandTotal = round2(subtotal + (quickOrder.deliveryFee || DELIVERY_FEE));
+  quickOrder.grandTotal = round2(
+    subtotal + (quickOrder.deliveryFee || DELIVERY_FEE),
+  );
 }
 
 // Demand tracking: kaunsa product kitni baar maanga gaya. Order ko block nahi karta.
 function logUnmatched(items, userId, category) {
   const ops = items
-    .filter((i) => i.matchStatus === "UNAVAILABLE" || i.matchStatus === "SUGGESTED" || i.matchStatus === "CUSTOM")
+    .filter(
+      (i) =>
+        i.matchStatus === "UNAVAILABLE" ||
+        i.matchStatus === "SUGGESTED" ||
+        i.matchStatus === "CUSTOM",
+    )
     .map((i) => ({
       updateOne: {
-        filter: { normalizedName: normalize(i.requestedName || i.name), category },
+        filter: {
+          normalizedName: normalize(i.requestedName || i.name),
+          category,
+        },
         update: {
           $inc: { requestCount: 1 },
           $set: {
             lastRequestedAt: new Date(),
-            reason: i.matchStatus === "SUGGESTED" ? "BRAND_NOT_AVAILABLE" : "NOT_FOUND",
+            reason:
+              i.matchStatus === "SUGGESTED"
+                ? "BRAND_NOT_AVAILABLE"
+                : "NOT_FOUND",
             suggestedInstead: i.alternatives?.[0]?.name || "",
           },
           $addToSet: { users: userId },
-          $setOnInsert: { itemName: i.requestedName || i.name, brand: i.brand || "", status: "PENDING" },
+          $setOnInsert: {
+            itemName: i.requestedName || i.name,
+            brand: i.brand || "",
+            status: "PENDING",
+          },
         },
         upsert: true,
       },
     }));
-  if (ops.length) UnmatchedProduct.bulkWrite(ops, { ordered: false }).catch((e) => console.error("logUnmatched:", e.message));
+  if (ops.length)
+    UnmatchedProduct.bulkWrite(ops, { ordered: false }).catch((e) =>
+      console.error("logUnmatched:", e.message),
+    );
 }
 
-async function findOwnedQuickOrder(id, userId, allowedStatuses = ["PROPOSED", "PRICE_UPDATED"]) {
+async function findOwnedQuickOrder(
+  id,
+  userId,
+  allowedStatuses = ["PROPOSED", "PRICE_UPDATED"],
+) {
   const qo = await QuickOrder.findOne({ _id: id, user: userId });
   if (!qo) throw new HttpError(404, "Quick Order not found");
-  if (!allowedStatuses.includes(qo.status)) throw new HttpError(400, `Order ab ${qo.status} ha, edit nahi ho sakta`);
+  if (!allowedStatuses.includes(qo.status))
+    throw new HttpError(400, `Order ab ${qo.status} ha, edit nahi ho sakta`);
   return qo;
 }
 
 // ------------------------------------------------------------------ 1) PARSE
 exports.createQuickOrder = async (req, res) => {
   try {
-    const userId = req.user.id;                          // body se userId kabhi nahi (koi aur ke naam par order ban sakta tha)
+    const userId = req.user.id; // body se userId kabhi nahi (koi aur ke naam par order ban sakta tha)
     const { textMessage = "" } = req.body;
-    const category = CATEGORIES.includes(String(req.body.category).toLowerCase())
-      ? String(req.body.category).toLowerCase() : "food";
+    const category = CATEGORIES.includes(
+      String(req.body.category).toLowerCase(),
+    )
+      ? String(req.body.category).toLowerCase()
+      : "food";
 
     const file = req.file || req.files;
     const isPharmacy = category === "pharmacy";
 
     if (!textMessage.trim() && !file) {
-      return res.status(400).json({ success: false, message: "Text message ya image dein" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Text message ya image dein" });
     }
 
     // AI: sirf "kya maanga" nikalta ha
@@ -547,22 +599,30 @@ exports.createQuickOrder = async (req, res) => {
       textPrompt: textMessage,
     });
 
-    console.log(parsed)
+    console.log(parsed);
     if (!parsed.items.length) {
-      return res.status(422).json({ success: false, message: "Koi item samajh nahi aya. Dobara wazeh likhein ya saaf photo bhejein." });
+      return res.status(422).json({
+        success: false,
+        message:
+          "Koi item samajh nahi aya. Dobara wazeh likhein ya saaf photo bhejein.",
+      });
     }
 
     // Hamara code: DB se match
-    const matches = await Promise.all(parsed.items.map((it) => matchItem(it, { isPharmacy })));
-    const items = parsed.items.map((it, idx) => buildSlipItem(it, matches[idx], isPharmacy));
-    console.log("Matched Items",matches, items);
+    const matches = await Promise.all(
+      parsed.items.map((it) => matchItem(it, { isPharmacy })),
+    );
+    const items = parsed.items.map((it, idx) =>
+      buildSlipItem(it, matches[idx], isPharmacy),
+    );
+    console.log("Matched Items", matches, items);
 
     const quickOrder = new QuickOrder({
       user: userId,
       category,
       orderType: file ? "IMAGE" : "TEXT",
       rawInputText: textMessage,
-      prescriptionImageUrl: "",                          // TODO: image S3/Cloudinary par upload karke URL yahan (memoryStorage mein file disk par nahi hoti)
+      prescriptionImageUrl: "", // TODO: image S3/Cloudinary par upload karke URL yahan (memoryStorage mein file disk par nahi hoti)
       parsedBy: parsed.parsedBy,
       items,
       deliveryFee: DELIVERY_FEE,
@@ -580,17 +640,28 @@ exports.createQuickOrder = async (req, res) => {
       unavailable: items.filter((i) => i.matchStatus === "UNAVAILABLE").length,
       custom: items.filter((i) => i.matchStatus === "CUSTOM").length,
     };
-    return res.status(201).json({ success: true, message: "Order slip ready", summary, data: quickOrder });
+    return res.status(201).json({
+      success: true,
+      message: "Order slip ready",
+      summary,
+      data: quickOrder,
+    });
   } catch (error) {
     console.error("Quick Order Parse Error:", error);
     const map = {
-      AI_NO_CREDITS: [503, "Service abhi available nahi. Baad mein koshish karein."],
+      AI_NO_CREDITS: [
+        503,
+        "Service abhi available nahi. Baad mein koshish karein.",
+      ],
       AI_RATE_LIMIT: [503, "Bohat rush ha, thori der baad koshish karein."],
       AI_TIMEOUT: [504, "Request lambi ho gayi, dobara koshish karein."],
       BAD_IMAGE: [400, error.message],
     };
-    const [status, message] = map[error.code] || [500, "Order parse nahi ho saka"];
-    return res.status(status).json({ success: false, message });   // internal error.message user ko nahi bhejte
+    const [status, message] = map[error.code] || [
+      500,
+      "Order parse nahi ho saka",
+    ];
+    return res.status(status).json({ success: false, message }); // internal error.message user ko nahi bhejte
   }
 };
 
@@ -603,45 +674,88 @@ exports.updateQuickOrderItem = async (req, res) => {
     if (!item) throw new HttpError(404, "Item nahi mila");
 
     if (action === "select") {
-      const p = await Product.findOne({ _id: productId, isAvailable: true }).select("name price image vendorId").lean();
+      const p = await Product.findOne({ _id: productId })
+        // .select("name price image vendorId")
+        .lean();
       if (!p) throw new HttpError(404, "Product available nahi");
       Object.assign(item, {
-        name: p.name, productId: p._id, vendorId: p.vendorId || null, image: p.image || "",
-        matchStatus: "MATCHED", matchConfidence: 1, alternatives: [], needsPriceConfirmation: false,
-        estimatedUnitPrice: p.price, totalItemPrice: round2(p.price * item.quantity),
+        name: p.name,
+        productId: p._id,
+        vendorId: p.vendorId || null,
+        image: p.image || "",
+        category: p.category,
+        subcategory: p.subcategory,
+        weight: p.weight,
+        belongsTo: p.belongsTo || "restaurant",
+        variations: p.variations || [],
+        addOns: p.addOns || [],
+        tags: p.tags || [],
+        type: p.type || "",
+        dosage: p.dosage || "",
+        isRxRequired: p.isRxRequired || false,
+        isVeg: p.isVeg || false,
+        rating: p.rating || {},
+        matchStatus: "MATCHED",
+        matchConfidence: 1,
+        alternatives: [],
+        needsPriceConfirmation: false,
+        estimatedUnitPrice: p.price,
+        totalItemPrice: round2(p.price * item.quantity),
       });
     } else if (action === "remove") {
       item.deleteOne();
     } else if (action === "keepCustom" && qo.category === "pharmacy") {
-      Object.assign(item, { matchStatus: "CUSTOM", alternatives: [] });     // pharmacy: apni hi dawai chahiye
+      Object.assign(item, { matchStatus: "CUSTOM", alternatives: [] }); // pharmacy: apni hi dawai chahiye
     } else {
       throw new HttpError(400, "Invalid action");
     }
     recalc(qo);
     await qo.save();
     return res.json({ success: true, data: qo });
-  } catch (e) { return sendError(res, e, "Item update nahi ho saka"); }
+  } catch (e) {
+    return sendError(res, e, "Item update nahi ho saka");
+  }
 };
 
 // ------------------------------------------------------------------ 3) EDIT (qty / notes / naye items / remove)
 exports.editQuickOrder = async (req, res) => {
   try {
-    const { quickOrderId, items = [], addItems = [], removeItemIds = [], customerNotes } = req.body;
+    const {
+      quickOrderId,
+      items = [],
+      addItems = [],
+      removeItemIds = [],
+      customerNotes,
+    } = req.body;
     const qo = await findOwnedQuickOrder(quickOrderId, req.user.id);
     const isPharmacy = qo.category === "pharmacy";
 
-    if (customerNotes !== undefined) qo.customerNotes = String(customerNotes).slice(0, 300);
+    if (customerNotes !== undefined)
+      qo.customerNotes = String(customerNotes).slice(0, 300);
 
-    for (const inc of items) {                                    // quantity badalna
+    for (const inc of items) {
+      // quantity badalna
       const it = qo.items.id(inc._id || inc.id);
       if (!it || inc.quantity === undefined) continue;
-      it.quantity = Math.min(50, Math.max(1, Math.round(Number(inc.quantity)) || 1));
+      it.quantity = Math.min(
+        50,
+        Math.max(1, Math.round(Number(inc.quantity)) || 1),
+      );
       it.totalItemPrice = round2(it.estimatedUnitPrice * it.quantity);
     }
     for (const id of removeItemIds) qo.items.id(id)?.deleteOne();
 
-    for (const add of addItems.slice(0, 10)) {                    // naye items bhi DB se match honge
-      const parsed = { name: String(add.name || "").trim().slice(0, 100), brand: "", quantity: Math.min(50, Math.max(1, Number(add.quantity) || 1)), dosage: add.dosage || "", size: "" };
+    for (const add of addItems.slice(0, 10)) {
+      // naye items bhi DB se match honge
+      const parsed = {
+        name: String(add.name || "")
+          .trim()
+          .slice(0, 100),
+        brand: "",
+        quantity: Math.min(50, Math.max(1, Number(add.quantity) || 1)),
+        dosage: add.dosage || "",
+        size: "",
+      };
       if (!parsed.name) continue;
       const m = await matchItem(parsed, { isPharmacy });
       const slipItem = buildSlipItem(parsed, m, isPharmacy);
@@ -650,8 +764,14 @@ exports.editQuickOrder = async (req, res) => {
     }
     recalc(qo);
     await qo.save();
-    return res.json({ success: true, message: "Quick Order updated", data: qo });
-  } catch (e) { return sendError(res, e, "Edit nahi ho saka"); }
+    return res.json({
+      success: true,
+      message: "Quick Order updated",
+      data: qo,
+    });
+  } catch (e) {
+    return sendError(res, e, "Edit nahi ho saka");
+  }
 };
 
 // ------------------------------------------------------------------ 4) MANUAL SEARCH
@@ -659,7 +779,9 @@ exports.searchCatalog = async (req, res) => {
   try {
     const results = await searchProducts(String(req.query.q || ""), 10);
     return res.json({ success: true, data: results });
-  } catch (e) { return sendError(res, e, "Search fail"); }
+  } catch (e) {
+    return sendError(res, e, "Search fail");
+  }
 };
 
 // ------------------------------------------------------------------ 5) CONFIRM -> real Order (createOrder jesa)
@@ -668,15 +790,29 @@ exports.confirmQuickOrderToMainOrder = async (req, res) => {
   let previousStatus = null;
   try {
     const userId = req.user.id;
-    const { quickOrderId, addressId, paymentMethod = "cash_on_delivery", instructions = "", promoDiscount = 0 } = req.body;
+    const {
+      quickOrderId,
+      addressId,
+      paymentMethod = "cash_on_delivery",
+      instructions = "",
+      promoDiscount = 0,
+    } = req.body;
 
     // Double-tap / double request se 2 orders na banein: pehle atomic lock
     const locked = await QuickOrder.findOneAndUpdate(
-      { _id: quickOrderId, user: userId, status: { $in: ["PROPOSED", "PRICE_UPDATED"] } },
+      {
+        _id: quickOrderId,
+        user: userId,
+        status: { $in: ["PROPOSED", "PRICE_UPDATED"] },
+      },
       { $set: { status: "CONFIRMING" } },
-      { new: false }
+      { new: false },
     );
-    if (!locked) throw new HttpError(409, "Order mojood nahi ya pehle hi confirm ho chuka ha");
+    if (!locked)
+      throw new HttpError(
+        409,
+        "Order mojood nahi ya pehle hi confirm ho chuka ha",
+      );
     lockedId = locked._id;
     previousStatus = locked.status;
     const quickOrder = await QuickOrder.findById(lockedId);
@@ -685,29 +821,50 @@ exports.confirmQuickOrderToMainOrder = async (req, res) => {
     const defaultOrderFrom = mapCategoryToEnum(quickOrder.category);
 
     // 1) Jab tak user ne alternative na chuna ho ya item hataya na ho, confirm nahi
-    const unresolved = quickOrder.items.filter((i) => i.matchStatus === "SUGGESTED" || i.matchStatus === "UNAVAILABLE");
+    const unresolved = quickOrder.items.filter(
+      (i) => i.matchStatus === "SUGGESTED" || i.matchStatus === "UNAVAILABLE",
+    );
     if (unresolved.length) {
-      throw new HttpError(409, "Kuch items available nahi han. Alternative chunein ya item hata dein.", {
-        unresolved: unresolved.map((i) => ({ itemId: i._id, name: i.requestedName || i.name, matchStatus: i.matchStatus })),
-      });
+      throw new HttpError(
+        409,
+        "Kuch items available nahi han. Alternative chunein ya item hata dein.",
+        {
+          unresolved: unresolved.map((i) => ({
+            itemId: i._id,
+            name: i.requestedName || i.name,
+            matchStatus: i.matchStatus,
+          })),
+        },
+      );
     }
-    if (!quickOrder.items.length) throw new HttpError(400, "Order mein koi item nahi");
+    if (!quickOrder.items.length)
+      throw new HttpError(400, "Order mein koi item nahi");
 
     // 2) Price/availability dobara DB se (slip banne ke baad price badal sakti ha)
-    const productIds = quickOrder.items.filter((i) => i.productId).map((i) => i.productId);
-    const products = await Product.find({ _id: { $in: productIds }, isAvailable: true }).lean();
+    const productIds = quickOrder.items
+      .filter((i) => i.productId)
+      .map((i) => i.productId);
+    const products = await Product.find({
+      _id: { $in: productIds },
+      // isAvailable: true,
+    }).lean();
     const productMap = new Map(products.map((p) => [String(p._id), p]));
 
     const formattedItems = [];
     let subtotal = 0;
     for (const it of quickOrder.items) {
-      let price, p = null;
+      let price,
+        p = null;
       if (it.matchStatus === "MATCHED") {
         p = productMap.get(String(it.productId));
-        if (!p) throw new HttpError(409, `"${it.name}" ab available nahi. Slip edit karein.`);
+        if (!p)
+          throw new HttpError(
+            409,
+            `"${it.name}" ab available nahi. Slip edit karein.`,
+          );
         price = Number(p.price) || 0;
       } else {
-        price = Number(it.estimatedUnitPrice) || 0;       // CUSTOM (pharmacy): price admin/rider confirm karega
+        price = Number(it.estimatedUnitPrice) || 0; // CUSTOM (pharmacy): price admin/rider confirm karega
       }
       const total = round2(price * it.quantity);
       subtotal += total;
@@ -716,9 +873,19 @@ exports.confirmQuickOrderToMainOrder = async (req, res) => {
         productId: p ? p._id : null,
         name: it.dosage ? `${it.name} (${it.dosage})` : it.name,
         orderFrom: mapped !== "other" ? mapped : defaultOrderFrom,
-        image: p?.image || "",
+        image: p?.images || p.image || "",
         category: p?.category || quickOrder.category,
+        subcategory: p?.subcategory || quickOrder.subcategory || "",
         weight: p?.weight,
+        belongsTo: p.belongsTo || quickOrder.belongsTo || "",
+        variations: p.variations || quickOrder.variations || [],
+        addOns: p.addOns || quickOrder.addOns || [],
+        tags: p.tags || quickOrder.tags || [],
+        type: p.type || quickOrder.type || "",
+        dosage: p.dosage || quickOrder.dosage || "",
+        isRxRequired: p.isRxRequired || quickOrder.isRxRequired || false,
+        isVeg: p.isVeg || quickOrder.isVeg || false,
+        rating: p.rating || quickOrder.rating || {},
         price,
         quantity: it.quantity,
         total,
@@ -727,31 +894,55 @@ exports.confirmQuickOrderToMainOrder = async (req, res) => {
 
     // 3) Address (selected addressId ko priority)
     const user = await User.findById(userId);
-    if (!user || !user.addresses?.length) throw new HttpError(400, "User ka koi saved address nahi");
-    const addr = (addressId && user.addresses.id(addressId)) || user.addresses.find((a) => a.isSave) || user.addresses[0];
+    if (!user || !user.addresses?.length)
+      throw new HttpError(400, "User ka koi saved address nahi");
+    const addr =
+      (addressId && user.addresses.id(addressId)) ||
+      user.addresses.find((a) => a.isSave) ||
+      user.addresses[0];
     const formattedAddress = {
       phone: addr.phone || user.phone || "",
       address: addr.address || addr.street || "",
       city: addr.city || "Karachi",
       zipCode: addr.zipCode || "",
       country: addr.country || "Pakistan",
-      location: { type: "Point", coordinates: addr.location?.coordinates || user.location?.coordinates || [0, 0] },
+      location: {
+        type: "Point",
+        coordinates: addr.location?.coordinates ||
+          user.location?.coordinates || [0, 0],
+      },
     };
 
     // 4) Stops (createOrder wali logic: Vendor + VendorBranch)
-    const hasOnlyGroceryItems = formattedItems.every((i) => i.orderFrom === "grocery");
-    const vendorIds = [...new Set(products.map((p) => p.vendorId?.toString()).filter(Boolean))];
+    const hasOnlyGroceryItems = formattedItems.every(
+      (i) => i.orderFrom === "grocery",
+    );
+    const vendorIds = [
+      ...new Set(products.map((p) => p.vendorId?.toString()).filter(Boolean)),
+    ];
     const stops = await buildStops(vendorIds, hasOnlyGroceryItems);
 
     const hasCustom = quickOrder.items.some((i) => i.matchStatus === "CUSTOM");
     if (hasCustom && stops.length === 0) {
-      const fb = await Vendor.findOne({ businessType: isPharmacy ? "pharmacy" : defaultOrderFrom });   // field name apne Vendor schema se check karein
-      stops.push({
-        stopNumber: 1, vendorId: fb?._id || null, branchId: null, logo: fb?.logo || "",
-        businessName: fb?.businessName || (isPharmacy ? "OmniGo Partner Pharmacy" : "OmniGo Mart"),
+      const fb = await Vendor.findOne({
         businessType: isPharmacy ? "pharmacy" : defaultOrderFrom,
-        address: fb?.address || "Assigned Regional Merchant", city: fb?.city || "", country: fb?.country || "",
-        location: { type: "Point", coordinates: fb?.location?.coordinates || [0, 0] },
+      }); // field name apne Vendor schema se check karein
+      stops.push({
+        stopNumber: 1,
+        vendorId: fb?._id || null,
+        branchId: null,
+        logo: fb?.logo || "",
+        businessName:
+          fb?.businessName ||
+          (isPharmacy ? "OmniGo Partner Pharmacy" : "OmniGo Mart"),
+        businessType: isPharmacy ? "pharmacy" : defaultOrderFrom,
+        address: fb?.address || "Assigned Regional Merchant",
+        city: fb?.city || "",
+        country: fb?.country || "",
+        location: {
+          type: "Point",
+          coordinates: fb?.location?.coordinates || [0, 0],
+        },
         status: "pending",
       });
     }
@@ -762,7 +953,9 @@ exports.confirmQuickOrderToMainOrder = async (req, res) => {
     const deliveryFee = quickOrder.deliveryFee || DELIVERY_FEE;
     const totalAmount = round2(subtotal + tax + deliveryFee - discount);
 
-    const note = hasCustom ? " | NOTE: Kuch items ki price confirm honi baqi ha" : "";
+    const note = hasCustom
+      ? " | NOTE: Kuch items ki price confirm honi baqi ha"
+      : "";
     const order = await Order.create({
       orderNumber: "ORD" + Date.now() + Math.floor(Math.random() * 1000),
       userId,
@@ -774,13 +967,14 @@ exports.confirmQuickOrderToMainOrder = async (req, res) => {
       subtotal: round2(subtotal),
       deliveryFee,
       salesAndServiceTaxForUser: TAX_PERCENT,
-      instructions: (instructions || quickOrder.customerNotes || "Quick Order") + note,
+      instructions:
+        (instructions || quickOrder.customerNotes || "Quick Order") + note,
       promoDiscount: discount,
       totalAmount,
       status: hasOnlyGroceryItems && !hasCustom ? "ready" : "pending",
       riderId: null,
       isAssigned: false,
-      source: "QUICK_ORDER",                              // Order schema mein field add karein (analytics ke liye)
+      source: "QUICK_ORDER", // Order schema mein field add karein (analytics ke liye)
     });
 
     quickOrder.status = "CONFIRMED";
@@ -797,11 +991,22 @@ exports.confirmQuickOrderToMainOrder = async (req, res) => {
         data: { orderId: order._id, orderNumber: order.orderNumber, totalAmount: order.totalAmount, itemCount: order.items.length, screenToOpen: "VendorOrderDetails" },
         link: `/vendor/orders/${order._id}`,
       }))); */
-    } catch (n) { console.error("Notification error:", n.message); }
+    } catch (n) {
+      console.error("Notification error:", n.message);
+    }
 
-    return res.status(201).json({ success: true, message: "Order placed successfully", order, orderId: order._id });
+    return res.status(201).json({
+      success: true,
+      message: "Order placed successfully",
+      order,
+      orderId: order._id,
+    });
   } catch (error) {
-    if (lockedId) await QuickOrder.updateOne({ _id: lockedId, status: "CONFIRMING" }, { $set: { status: previousStatus } }).catch(() => {});
+    if (lockedId)
+      await QuickOrder.updateOne(
+        { _id: lockedId, status: "CONFIRMING" },
+        { $set: { status: previousStatus } },
+      ).catch(() => {});
     return sendError(res, error, "Order confirm nahi ho saka");
   }
 };
@@ -813,7 +1018,9 @@ async function buildStops(vendorIds, hasOnlyGroceryItems) {
     VendorBranch.find({ vendorId: { $in: vendorIds }, isActive: true }),
   ]);
   return vendors.map((vendor, index) => {
-    const b = branches.find((x) => x.vendorId.toString() === vendor._id.toString()) || {};
+    const b =
+      branches.find((x) => x.vendorId.toString() === vendor._id.toString()) ||
+      {};
     return {
       stopNumber: index + 1,
       vendorId: vendor._id,
@@ -824,14 +1031,21 @@ async function buildStops(vendorIds, hasOnlyGroceryItems) {
       address: b.address || vendor.address || "Vendor Address",
       city: b.city || vendor.city || "Vendor City",
       country: b.country || vendor.country || "Vendor Country",
-      location: { type: "Point", coordinates: b.location?.coordinates || vendor.location?.coordinates || [0, 0] },
+      location: {
+        type: "Point",
+        coordinates: b.location?.coordinates ||
+          vendor.location?.coordinates || [0, 0],
+      },
       status: hasOnlyGroceryItems ? "ready" : "pending",
     };
   });
 }
 
 function sendError(res, error, fallbackMessage) {
-  if (error instanceof HttpError) return res.status(error.status).json({ success: false, message: error.message, ...error.extra });
+  if (error instanceof HttpError)
+    return res
+      .status(error.status)
+      .json({ success: false, message: error.message, ...error.extra });
   console.error(fallbackMessage + ":", error);
   return res.status(500).json({ success: false, message: fallbackMessage });
 }

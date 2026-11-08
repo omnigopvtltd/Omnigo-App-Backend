@@ -623,6 +623,16 @@ exports.signup = async (req, res) => {
     } = req.body;
 
     const files = req.files || {};
+     const media = processLocalMediaFields(req.files, req.body, [
+      "profilePicture",
+      "cnicFrontPicture",
+      "cnicBackPicture",
+      "incorporationCertificate",
+      "foodSafetyLicense",
+      "ntnCertificate",
+      "logo",
+      "coverImage",
+    ])
     const normalizedPhone = String(businessPhone).trim();
 
     // 1. Check existing vendor
@@ -659,39 +669,20 @@ exports.signup = async (req, res) => {
       ownerEmail: ownerEmail
         ? String(ownerEmail).toLowerCase().trim()
         : String(businessEmail).toLowerCase().trim(),
-      profilePicture: processMediaField(
-        profilePicture,
-        files.profilePicture?.[0],
-      ),
+      profilePicture: media.profilePicture || "",
 
       cnicNumber: cnicNumber || "",
-      cnicFrontPicture: processMediaField(
-        cnicFrontPicture,
-        files.cnicFrontPicture?.[0],
-      ),
-      cnicBackPicture: processMediaField(
-        cnicBackPicture,
-        files.cnicBackPicture?.[0],
-      ),
+      cnicFrontPicture: media.cnicFrontPicture || "",
+      cnicBackPicture: media.cnicBackPicture || "",
 
-      incorporationCertificate: processMediaField(
-        incorporationCertificate,
-        files.incorporationCertificate?.[0],
-      ),
-      foodSafetyLicense: processMediaField(
-        foodSafetyLicense,
-        files.foodSafetyLicense?.[0],
-      ),
-      ntnCertificate: processMediaField(
-        ntnCertificate,
-        files.ntnCertificate?.[0],
-      ),
+      incorporationCertificate: media.incorporationCertificate || "",
+      foodSafetyLicense: media.foodSafetyLicense || "",
+      ntnCertificate: media.ntnCertificate || "",
 
       businessType: businessType || "restaurant",
       category: category || "",
-      logo: processMediaField(logo, files.logo?.[0]),
-      coverImage: processMediaField(coverImage, files.coverImage?.[0]),
-      description: description || "",
+      logo: media.logo || "",
+      coverImage: media.coverImage || "",
       businessRegistrationNumber: businessRegistrationNumber || "",
       taxNumber: taxNumber || "",
       foodLicenseNumber: foodLicenseNumber || "",
