@@ -736,7 +736,15 @@ exports.editQuickOrder = async (req, res) => {
     for (const inc of items) {
       // quantity badalna
       const it = qo.items.id(inc._id || inc.id);
+      console.log(it, inc);
       if (!it || inc.quantity === undefined) continue;
+      it.productId = inc._id;
+      it.name = inc.name;
+      it.requestedName = inc.name;
+      // it.price = inc.price;
+      it.dosage = inc.dosage;
+      it.image = inc.images || inc.image;
+
       it.quantity = Math.min(
         50,
         Math.max(1, Math.round(Number(inc.quantity)) || 1),
