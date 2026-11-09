@@ -2228,6 +2228,12 @@ exports.reorder = async (req, res) => {
       Campaign.find({ _id: { $in: itemIds } }).select("vendorId"),
     ]);
 
+    if(!products || !deals || !campaigns) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Items not available" });
+    }
+
     // Extract and combine all vendor IDs uniquely
     const extractedVendorIds = [
       ...products.map((p) => p.vendorId?.toString()),
@@ -2238,6 +2244,12 @@ exports.reorder = async (req, res) => {
     ].filter(Boolean);
 
     const vendorIds = [...new Set(extractedVendorIds)];
+
+    if(!vendorIds) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Vendor not available" });
+    }
 
     const hasOnlyGroceryItems =
       formattedItems.length > 0 &&
