@@ -4527,6 +4527,10 @@ exports.deleteAccount = async (req, res) => {
     //   sameSite: "strict",
     // });
 
+     // Keep the catalog consistent — a vendor's products can't exist without it
+    await Product.deleteMany({ vendorId: vendor._id });
+
+    
     return res.status(200).json({
       success: true,
       message: `${vendor ? vendor.businessName : "Vendor"} account deleted successfully`,

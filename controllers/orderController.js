@@ -2221,6 +2221,12 @@ exports.reorder = async (req, res) => {
 
     // Extract item IDs to fetch vendor IDs from Products, Deals, and Campaigns
     const itemIds = formattedItems.map((item) => item.productId).filter(Boolean);
+    
+    if(!itemIds) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Items not available" });
+    }
 
     const [products, deals, campaigns] = await Promise.all([
       Product.find({ _id: { $in: itemIds } }).select("vendorId"),
@@ -2228,7 +2234,7 @@ exports.reorder = async (req, res) => {
       Campaign.find({ _id: { $in: itemIds } }).select("vendorId"),
     ]);
 
-    if(!products || !deals || !campaigns) {
+    if(!products.length || !deals.length || !campaigns.length) {
       return res
         .status(400)
         .json({ success: false, message: "Items not available" });
