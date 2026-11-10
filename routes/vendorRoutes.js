@@ -37,6 +37,7 @@ const {
   vendorSocialLogin,
   deleteAccount,
   toggleAvailability,
+  firebaseToken,
 } = require("../controllers/vendorController");
 const { saveFcmToken } = require("../controllers/vendorController");
 const upload = require("../middleware/upload");
