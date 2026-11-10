@@ -97,6 +97,7 @@ router.post("/login", login);
 router.post("/social-login", vendorSocialLogin);
 router.post("/google-login", googleLogin);
 // router.post("/facebook-login", facebookLogin);
+router.get("/firebase-token", auth,  firebaseToken);
 
 router.post("/send-otp", sendOTP);
 router.post("/verify-otp", verifyOTP);

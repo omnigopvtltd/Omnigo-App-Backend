@@ -27,6 +27,7 @@ module.exports = (req, res, next) => {
       res.setHeader("x-new-token", newToken);
     }
 
+
     next();
   } catch (err) {
     return res.status(401).json({ message: "Invalid token" });

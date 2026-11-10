@@ -752,21 +752,28 @@ exports.editQuickOrder = async (req, res) => {
       it.totalItemPrice = round2(it.estimatedUnitPrice * it.quantity);
     }
     for (const id of removeItemIds) qo.items.id(id)?.deleteOne();
+    console.log("id", removeItemIds, qo.items);
+    // for (const id of removeItemIds) qo.items.productId(id)?.deleteOne();
 
     for (const add of addItems.slice(0, 10)) {
       // naye items bhi DB se match honge
       const parsed = {
+        productId: add._id,
+        vendorId: add.vendorId,
         name: String(add.name || "")
-          .trim()
-          .slice(0, 100),
+        .trim()
+        .slice(0, 100),
         brand: "",
         quantity: Math.min(50, Math.max(1, Number(add.quantity) || 1)),
         dosage: add.dosage || "",
         size: "",
       };
       if (!parsed.name) continue;
+      console.log(parsed);
       const m = await matchItem(parsed, { isPharmacy });
+      console.log("m", m);
       const slipItem = buildSlipItem(parsed, m, isPharmacy);
+      console.log("splitItems", slipItem);
       qo.items.push(slipItem);
       logUnmatched([slipItem], req.user.id, qo.category);
     }
