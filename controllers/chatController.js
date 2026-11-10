@@ -972,6 +972,32 @@ const { getFirestore } = require("firebase-admin/firestore");
 // App instance pass karein taaki Firestore ko sahi credentials milein
 const db = getFirestore(app);
 
+const { FieldValue } = require("firebase-admin/firestore");
+
+const syncConversationToFirestore = async (conv) => {
+  // populate ke baad field object hoti hai, is liye _id nikalo
+  const idOf = (v) => (v && v._id ? v._id : v);
+
+  const participants = [conv.userId, conv.riderId, conv.vendorId, conv.adminId]
+    .map(idOf)
+    .filter(Boolean)
+    .map(String);
+
+  if (participants.length === 0) return;
+
+  await db
+    .collection("conversations")
+    .doc(conv._id.toString())
+    .set(
+      {
+        participants: FieldValue.arrayUnion(...participants),
+        type: conv.type,
+        orderId: conv.orderId ? String(conv.orderId) : null,
+      },
+      { merge: true },
+    );
+};
+
 /**
  * Helper function to fetch sender details based on role
  */
@@ -1097,6 +1123,15 @@ exports.getOrCreateConversation = async (req, res) => {
         .populate("vendorId", "name fullName email phone")
         .populate("adminId", "name fullName email phone");
     }
+
+// Firestore doc + participants sync (fail ho to API fail na ho)
+    try {
+      await syncConversationToFirestore(conversation);
+    } catch (e) {
+      console.error("Firestore conversation sync error:", e.message);
+    }
+
+    return res.status(200).json({ success: true, conversation });
 
     return res.status(200).json({ success: true, conversation });
   } catch (error) {
@@ -1252,21 +1287,41 @@ exports.sendMessage = async (req, res) => {
       });
 
     // 4. Update Main Conversation doc in Firestore
+    // await db
+    //   .collection("conversations")
+    //   .doc(conversationId)
+    //   .set(
+    //     {
+    //       lastMessage: {
+    //         text,
+    //         senderId,
+    //         senderRole,
+    //         sentAt: newMessage.createdAt,
+    //       },
+    //       updatedAt: newMessage.createdAt,
+    //     },
+    //     { merge: true },
+    //   );
+
     await db
-      .collection("conversations")
-      .doc(conversationId)
-      .set(
-        {
-          lastMessage: {
-            text,
-            senderId,
-            senderRole,
-            sentAt: newMessage.createdAt,
-          },
-          updatedAt: newMessage.createdAt,
-        },
-        { merge: true },
-      );
+  .collection("conversations")
+  .doc(conversationId)
+  .set(
+    {
+      participants: FieldValue.arrayUnion(
+        String(senderId),
+        String(receiverId),
+      ),
+      lastMessage: {
+        text,
+        senderId,
+        senderRole,
+        sentAt: newMessage.createdAt,
+      },
+      updatedAt: newMessage.createdAt,
+    },
+    { merge: true },
+  );
 
     // FCM Push Notification
     // Dynamic Sender Name Resolution & FCM Push Notification
