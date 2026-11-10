@@ -15,9 +15,21 @@ const Order = require("../models/Order");
 const Product = require("../models/Product");
 const Cart = require("../models/Cart");
 const admin = require("../config/firebase");
+const app = require("../config/firebase");
+const { getAuth } = require("firebase-admin/auth");
 const { sendNotification } = require("../utils/sendNotification");
 const RiderSessionParticipation = require("../models/RiderSessionParticipation");
 const AccountDeleteRequest = require("../models/AccountDeleteRequest");
+// ======================================================
+// FIREBASE TOKEN
+// ======================================================
+
+
+exports.createFirebaseToken = (userId, role) => {
+  return getAuth(app).createCustomToken(userId, { role });
+}
+
+// module.exports = { createFirebaseToken };
 
 // ======================================================
 // GOOGLE CLIENT
@@ -48,7 +60,7 @@ exports.generateToken = (user) => {
 // ======================================================
 // SEND RESPONSE
 // ======================================================
-const sendResponse = (res, message, user) => {
+const sendResponse = (res, message, user, firebaseToken) => {
   // const token = generateToken(user);
   const token = exports.generateToken(user);
 
@@ -56,6 +68,7 @@ const sendResponse = (res, message, user) => {
     success: true,
     message,
     token,
+    firebaseToken,
     user: {
       id: user._id,
       name: user.name,
@@ -618,6 +631,15 @@ exports.signup = async (req, res) => {
     //   type: "signup",
     // });
 
+
+    let firebaseToken = null;
+    try {
+      firebaseToken = await exports.createFirebaseToken(user._id.toString(), user?.role);
+    } catch (e) {
+      console.error('Firebase custom token error:', e);
+      // login fail nahi karna, sirf chat ke liye token missing hoga
+    }
+
     return sendResponse(res, "Signup successful", userResponse);
   } catch (err) {
     console.error("SIGNUP ERROR:", err);
@@ -687,7 +709,15 @@ exports.login = async (req, res) => {
     const userResponse = user.toObject();
     delete userResponse.password;
 
-    console.log(user);
+     let firebaseToken = null;
+    try {
+      firebaseToken = await exports.createFirebaseToken(user._id.toString(), user?.role);
+    } catch (e) {
+      console.error('Firebase custom token error:', e);
+      // login fail nahi karna, sirf chat ke liye token missing hoga
+    }
+
+    // console.log(user);
     // Send Notification
     // await sendNotification({
     //   userId: user?._id,
@@ -695,7 +725,7 @@ exports.login = async (req, res) => {
     //   type: "login",
     // });
 
-    return sendResponse(res, "Login successful", userResponse);
+    return sendResponse(res, "Login successful", userResponse, firebaseToken);
   } catch (err) {
     console.error("LOGIN ERROR:", err);
     return res.status(500).json({
@@ -785,182 +815,6 @@ exports.facebookLogin = async (req, res) => {
     });
   }
 };
-
-// ======================================================
-// FIREBASE SOCIAL LOGIN (GOOGLE / FACEBOOK)
-// ======================================================
-// exports.socialLogin = async (req, res) => {
-//   try {
-//     const {
-//       idToken,
-//       role = "user",
-//       provider = "google",
-//       riderProfile,
-//       phone,
-//     } = req.body;
-
-//     if (!idToken) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "ID token is required",
-//       });
-//     }
-
-//     // 1. Google ID Token Verification (No Firebase Admin dependencies needed)
-//     // const ticket = await googleClient.verifyIdToken({
-//     //   idToken: idToken,
-//     // });
-//     let sub, facebookId, email, name, picture;
-
-//     if (provider === "facebook") {
-//       // 1) Token valid ho aur hamari hi app ka ho
-//       const debug = await axios.get("https://graph.facebook.com/debug_token", {
-//         params: {
-//           input_token: idToken,
-//           access_token: `${process.env.FACEBOOK_APP_ID}|${process.env.FACEBOOK_APP_SECRET}`,
-//         },
-//       });
-//       const d = debug.data?.data;
-//       if (!d?.is_valid || d.app_id !== process.env.FACEBOOK_APP_ID) {
-//         return res.status(401).json({
-//           success: false,
-//           message: "Invalid Facebook token",
-//         });
-//       }
-
-//       // 2) Profile lein
-//       const { data } = await axios.get("https://graph.facebook.com/me", {
-//         params: {
-//           fields: "id,name,email,picture.type(large)",
-//           access_token: idToken,
-//         },
-//       });
-
-//       facebookId = data.id;
-//       name = data.name;
-//       email = data.email;
-//       picture = data.picture?.data?.url;
-//     } else {
-//       const ticket = await googleClient.verifyIdToken({
-//         idToken,
-//         audience: process.env.GOOGLE_CLIENT_ID,
-//       });
-//       ({ sub, email, name, picture } = ticket.getPayload());
-//     }
-
-//     //     if (provider === "facebook") {
-//     //   // firebase-admin (admin.initializeApp pehle kar lein)
-//     //   // const decoded = await admin.auth().verifyIdToken(idToken);
-//     //   // sub = decoded.uid;
-//     //    const response = await axios.get(
-//     //       `https://graph.facebook.com/me?fields=id,name,email&access_token=${idToken}`,
-//     //     );
-//     //   // ({ email, name, picture } = decoded);
-//     //    ({ id, name, email, picture } = response.data);
-//     // } else {
-//     //   const ticket = await googleClient.verifyIdToken({
-//     //     idToken,
-//     //     audience: process.env.GOOGLE_CLIENT_ID,
-//     //   });
-//     //   ({ sub, email, name, picture } = ticket.getPayload());
-//     // }
-
-//     // const ticket = await googleClient.verifyIdToken({
-//     //   idToken: idToken,
-//     //   audience: process.env.GOOGLE_CLIENT_ID, // yeh line add karein
-//     // });
-
-//     // const payload = ticket.getPayload();
-//     // const { sub, email, name, picture } = payload;
-
-//     if (!email) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Email permission is required",
-//       });
-//     }
-
-//     const normalizedEmail = email.toLowerCase().trim();
-
-//     // 2. Check if user already exists
-//     let user = await User.findOne({ email: normalizedEmail, role: role });
-
-//     if (!user) {
-//       // Admin check
-//       if (role === "admin") {
-//         const existingAdmin = await User.findOne({ role: "admin" });
-//         if (existingAdmin) {
-//           return res.status(403).json({
-//             success: false,
-//             message: "Admin account already exists.",
-//           });
-//         }
-//       }
-
-//       // Create new user object
-//       const newUserData = {
-//         name: name || `${role}_user`,
-//         email: normalizedEmail,
-//         role: role,
-//         facebookId: provider === "facebook" ? facebookId : null,
-//         googleId: provider === "google" ? sub : null,
-//         profilePicture: picture || "",
-//         isEmailVerified: true,
-//         phone: phone ? String(phone).trim() : "",
-//       };
-
-//       // Set Rider specific defaults if role is 'rider'
-//       if (role === "rider") {
-//         newUserData.riderProfile = {
-//           category: riderProfile?.category || null,
-//           vehicleType: riderProfile?.vehicleType || "bike",
-//           vehiclePlate: riderProfile?.vehiclePlate || "",
-//           vehicleModel: riderProfile?.vehicleModel || "",
-//           verificationSelfie: riderProfile?.verificationSelfie || null,
-//           verificationStatus:
-//             riderProfile?.verificationStatus || "not_submitted",
-//           isOnline: false,
-//         };
-//       }
-
-//       user = await User.create(newUserData);
-//     } else {
-//       // Existing User update
-//       if (!user.googleId) {
-//         user.googleId = sub;
-//       } else if (!user.facebookId) {
-//         user.facebookId = facebookId;
-//       }
-//       user.lastLogin = new Date();
-//       await user.save();
-//     }
-
-//     // 3. Generate App JWT Token
-//     const token = generateToken(user);
-
-//     const userResponse = user.toObject();
-//     delete userResponse.password;
-
-//     // await sendNotification({
-//     //   userId: user?._id,
-//     //   type: "login",
-//     // });
-
-//     return res.status(200).json({
-//       success: true,
-//       message: "Social login successful",
-//       token,
-//       data: userResponse,
-//     });
-//   } catch (err) {
-//     console.error("SOCIAL LOGIN ERROR:", err);
-//     return res.status(401).json({
-//       success: false,
-//       message: "Invalid or expired token",
-//       error: err.message,
-//     });
-//   }
-// };
 
 exports.socialLogin = async (req, res) => {
   try {
@@ -1087,11 +941,21 @@ exports.socialLogin = async (req, res) => {
     const userResponse = user.toObject();
     delete userResponse.password;
 
+    // =======================================
+   let firebaseToken = null;
+    try {
+      firebaseToken = await exports.createFirebaseToken(user._id.toString(), user?.role);
+    } catch (e) {
+      console.error('Firebase custom token error:', e);
+      // login fail nahi karna, sirf chat ke liye token missing hoga
+    }
+
     return res.status(200).json({
       success: true,
       message: "Social login successful",
       token,
       data: userResponse,
+      firebaseToken,
     });
   } catch (err) {
     console.error("SOCIAL LOGIN CRITICAL ERROR:", err);
@@ -1115,6 +979,17 @@ exports.updateFcmToken = async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+exports.firebaseToken = async (req, res) => {
+  // console.log(req.user)
+  try {
+    const firebaseToken = await exports.createFirebaseToken(req.user.id, req.user?.role);
+    res.json({ success: true, firebaseToken });
+  } catch (e) {
+    console.log(e)
+    res.status(500).json({ success: false, message: 'Failed to create firebase token' });
   }
 };
 

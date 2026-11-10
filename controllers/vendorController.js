@@ -22,6 +22,14 @@ const {
 const Campaign = require("../models/Campaign");
 const Zone = require("../models/Zone");
 const { getFirestore } = require("firebase-admin/firestore");
+const { getAuth } = require("firebase-admin/auth");
+
+// ======================================================
+// FIREBASE TOKEN
+// ======================================================
+exports.createFirebaseToken = (userId, role = "vendor") => {
+  return getAuth(app).createCustomToken(userId, { role });
+};
 
 // ======================================================
 // CONFIGURATIONS & HELPERS
@@ -42,7 +50,7 @@ exports.generateToken = (vendor) => {
   });
 };
 
-const sendVendorResponse = (res, message, payload, statusCode = 200) => {
+const sendVendorResponse = (res, message, payload, statusCode = 200, firebaseToken) => {
   // Extract vendor object whether passed directly or nested inside payload
   const vendorObj = payload.vendor || payload;
   const branchObj = payload.branch || null;
@@ -55,6 +63,7 @@ const sendVendorResponse = (res, message, payload, statusCode = 200) => {
     success: true,
     message,
     token,
+    firebaseToken,
     vendor: {
       id: vendorObj._id || vendorObj.id,
       businessName: vendorObj.businessName || "",
@@ -623,7 +632,7 @@ exports.signup = async (req, res) => {
     } = req.body;
 
     const files = req.files || {};
-     const media = processLocalMediaFields(req.files, req.body, [
+    const media = processLocalMediaFields(req.files, req.body, [
       "profilePicture",
       "cnicFrontPicture",
       "cnicBackPicture",
@@ -632,7 +641,7 @@ exports.signup = async (req, res) => {
       "ntnCertificate",
       "logo",
       "coverImage",
-    ])
+    ]);
     const normalizedPhone = String(businessPhone).trim();
 
     // 1. Check existing vendor
@@ -792,6 +801,17 @@ exports.signup = async (req, res) => {
     const vendorResponse = vendor.toObject();
     delete vendorResponse.password;
 
+    let firebaseToken = null;
+    try {
+      firebaseToken = await exports.createFirebaseToken(
+        vendor._id.toString(),
+        "vendor",
+      );
+    } catch (e) {
+      console.error("Firebase custom token error:", e);
+      // login fail nahi karna, sirf chat ke liye token missing hoga
+    }
+
     return sendVendorResponse(
       res,
       "Vendor signup successful",
@@ -800,6 +820,7 @@ exports.signup = async (req, res) => {
         branches: createdBranches, // Array of created branches
         tempPassword: rawAutoPassword,
       },
+      firebaseToken,
       201,
     );
   } catch (err) {
@@ -1108,6 +1129,14 @@ exports.login = async (req, res) => {
     const vendorResponse = vendor.toObject();
     delete vendorResponse.password;
 
+    let firebaseToken = null;
+    try {
+      firebaseToken = await exports.createFirebaseToken(vendor._id.toString(), "vendor");
+    } catch (e) {
+      console.error('Firebase custom token error:', e);
+      // login fail nahi karna, sirf chat ke liye token missing hoga
+    }
+
     await sendNotificationToVendor(req.app, {
       vendorId: `${vendor._id}`, // Must be valid ObjectId string
       role: "Vendor",
@@ -1116,7 +1145,7 @@ exports.login = async (req, res) => {
       type: "system", // Explicitly handle string
       // data: { orderId: "12345" },
     });
-    return sendVendorResponse(res, "Vendor login successful", vendorResponse);
+    return sendVendorResponse(res, "Vendor login successful", vendorResponse, firebaseToken);
   } catch (err) {
     console.error("VENDOR LOGIN ERROR:", err);
     return res.status(500).json({ success: false, message: err.message });
@@ -1359,10 +1388,19 @@ exports.vendorSocialLogin = async (req, res) => {
     const vendorResponse = vendor.toObject();
     delete vendorResponse.password;
 
+    let firebaseToken = null;
+    try {
+      firebaseToken = await exports.createFirebaseToken(vendor._id.toString(), "vendor");
+    } catch (e) {
+      console.error('Firebase custom token error:', e);
+      // login fail nahi karna, sirf chat ke liye token missing hoga
+    }
+
     return res.status(200).json({
       success: true,
       message: `Vendor ${provider} social login successful`,
       token,
+      firebaseToken,
       data: vendorResponse,
     });
   } catch (err) {
@@ -1431,6 +1469,16 @@ exports.facebookLogin = async (req, res) => {
     return res
       .status(401)
       .json({ success: false, message: "Invalid Facebook Token" });
+  }
+};
+
+exports.firebaseToken = async (req, res) => {
+  try {
+    const firebaseToken = await exports.createFirebaseToken(req.user.id, "vendor");
+    res.json({ success: true, firebaseToken });
+  } catch (e) {
+    console.log(e)
+    res.status(500).json({ success: false, message: 'Failed to create firebase token' });
   }
 };
 
@@ -1717,7 +1765,7 @@ exports.updateVendorProfile = async (req, res) => {
       media.cnicBackPicture || vendor.cnicBackPicture || "";
 
     vendor.incorporationCertificate =
-     media.incorporationCertificate || vendor.incorporationCertificate || "";
+      media.incorporationCertificate || vendor.incorporationCertificate || "";
     vendor.foodSafetyLicense =
       media.foodSafetyLicense || vendor.foodSafetyLicense || "";
     vendor.ntnCertificate = media.ntnCertificate || vendor.ntnCertificate || "";
@@ -3076,7 +3124,7 @@ exports.vendorsMenu = async (req, res) => {
       });
     }
 
-   const now = new Date();
+    const now = new Date();
 
     const vendorObjectId = new mongoose.Types.ObjectId(vendorId);
 
@@ -3090,7 +3138,7 @@ exports.vendorsMenu = async (req, res) => {
     ] = await Promise.all([
       // Group Active Campaigns by campaignType for this Vendor
       Campaign.aggregate([
-        { $match: { vendorId: vendorObjectId, isActive: true} },
+        { $match: { vendorId: vendorObjectId, isActive: true } },
         { $sort: { createdAt: -1 } },
         {
           $group: {
@@ -3146,7 +3194,7 @@ exports.vendorsMenu = async (req, res) => {
         {
           $match: {
             vendorId: vendorObjectId,
-            type: { $in: ["special", "popular", "featured", "new"], },
+            type: { $in: ["special", "popular", "featured", "new"] },
             //  endDate : { $gte: now }
           },
         },
@@ -3348,7 +3396,13 @@ exports.vendorMenu = async (req, res) => {
     ] = await Promise.all([
       // Group Active Campaigns
       Campaign.aggregate([
-        { $match: { vendorId: vendorObjectId, isActive: true, endDate: { $gte: now } } },
+        {
+          $match: {
+            vendorId: vendorObjectId,
+            isActive: true,
+            endDate: { $gte: now },
+          },
+        },
         { $sort: { createdAt: -1 } },
         {
           $group: {
@@ -3374,7 +3428,13 @@ exports.vendorMenu = async (req, res) => {
 
       // Group Active Deals
       Deal.aggregate([
-        { $match: { vendorId: vendorObjectId, isActive: true, endDate: { $gte: now } } },
+        {
+          $match: {
+            vendorId: vendorObjectId,
+            isActive: true,
+            endDate: { $gte: now },
+          },
+        },
         { $sort: { isFeatured: -1, createdAt: -1 } },
         {
           $group: {
@@ -3622,7 +3682,6 @@ exports.vendorMenu = async (req, res) => {
         });
       }
     });
-    
 
     // Section D: Vendor Categories
     const storeCategories = vendorDoc?.categories || vendorDoc?.category || [];
@@ -4527,10 +4586,9 @@ exports.deleteAccount = async (req, res) => {
     //   sameSite: "strict",
     // });
 
-     // Keep the catalog consistent — a vendor's products can't exist without it
+    // Keep the catalog consistent — a vendor's products can't exist without it
     await Product.deleteMany({ vendorId: vendor._id });
 
-    
     return res.status(200).json({
       success: true,
       message: `${vendor ? vendor.businessName : "Vendor"} account deleted successfully`,
