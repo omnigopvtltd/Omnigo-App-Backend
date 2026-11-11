@@ -16,6 +16,7 @@ const userSchema = new mongoose.Schema(
 
     password: { type: String, default: null },
     fcmToken: { type: String, default: "" },
+    firebaseToken: { type: String, default: "" },
     phone: {
       type: String,
       sparse: true,
