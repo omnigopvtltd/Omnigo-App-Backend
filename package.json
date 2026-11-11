@@ -24,7 +24,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.7.2",
     "express-validator": "^7.3.2",
-    "firebase-admin": "^14.1.0",
+    "firebase-admin": "^11.11.1",
     "follow-redirects": "^1.16.1",
     "fuse.js": "^7.5.0",
     "git": "^0.1.5",
