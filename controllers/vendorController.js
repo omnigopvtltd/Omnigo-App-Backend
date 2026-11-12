@@ -50,7 +50,13 @@ exports.generateToken = (vendor) => {
   });
 };
 
-const sendVendorResponse = (res, message, payload, statusCode = 200, firebaseToken) => {
+const sendVendorResponse = (
+  res,
+  message,
+  payload,
+  statusCode = 200,
+  firebaseToken,
+) => {
   // Extract vendor object whether passed directly or nested inside payload
   const vendorObj = payload.vendor || payload;
   const branchObj = payload.branch || null;
@@ -807,6 +813,12 @@ exports.signup = async (req, res) => {
         vendor._id.toString(),
         "vendor",
       );
+
+        await Vendor.findOneAndUpdate(
+    { _id: vendor._id }, // Yahan user._id use karein
+    { firebaseToken },
+    { new: true } // Updated document wapas lene ke liye
+  );
     } catch (e) {
       console.error("Firebase custom token error:", e);
       // login fail nahi karna, sirf chat ke liye token missing hoga
@@ -1131,9 +1143,18 @@ exports.login = async (req, res) => {
 
     let firebaseToken = null;
     try {
-      firebaseToken = await exports.createFirebaseToken(vendor._id.toString(), "vendor");
+      firebaseToken = await exports.createFirebaseToken(
+        vendor._id.toString(),
+        "vendor",
+      );
+
+        await Vendor.findOneAndUpdate(
+    { _id: vendor._id }, // Yahan user._id use karein
+    { firebaseToken },
+    { new: true } // Updated document wapas lene ke liye
+  );
     } catch (e) {
-      console.error('Firebase custom token error:', e);
+      console.error("Firebase custom token error:", e);
       // login fail nahi karna, sirf chat ke liye token missing hoga
     }
 
@@ -1145,7 +1166,12 @@ exports.login = async (req, res) => {
       type: "system", // Explicitly handle string
       // data: { orderId: "12345" },
     });
-    return sendVendorResponse(res, "Vendor login successful", vendorResponse, firebaseToken);
+    return sendVendorResponse(
+      res,
+      "Vendor login successful",
+      vendorResponse,
+      firebaseToken,
+    );
   } catch (err) {
     console.error("VENDOR LOGIN ERROR:", err);
     return res.status(500).json({ success: false, message: err.message });
@@ -1390,9 +1416,19 @@ exports.vendorSocialLogin = async (req, res) => {
 
     let firebaseToken = null;
     try {
-      firebaseToken = await exports.createFirebaseToken(vendor._id.toString(), "vendor");
+      firebaseToken = await exports.createFirebaseToken(
+        vendor._id.toString(),
+        "vendor",
+      );
+
+      
+      await Vendor.findOneAndUpdate(
+        { _id: vendor._id }, // Yahan user._id use karein
+        { firebaseToken },
+        { new: true }, // Updated document wapas lene ke liye
+      );
     } catch (e) {
-      console.error('Firebase custom token error:', e);
+      console.error("Firebase custom token error:", e);
       // login fail nahi karna, sirf chat ke liye token missing hoga
     }
 
@@ -1474,11 +1510,22 @@ exports.facebookLogin = async (req, res) => {
 
 exports.firebaseToken = async (req, res) => {
   try {
-    const firebaseToken = await exports.createFirebaseToken(req.user.id, "vendor");
+    const firebaseToken = await exports.createFirebaseToken(
+      req.user.id,
+      "vendor",
+    );
+
+    await Vendor.findOneAndUpdate(
+      { _id: req.user.id }, // Yahan user._id use karein
+      { firebaseToken },
+      { new: true }, // Updated document wapas lene ke liye
+    );
     res.json({ success: true, firebaseToken });
   } catch (e) {
-    console.log(e)
-    res.status(500).json({ success: false, message: 'Failed to create firebase token' });
+    console.log(e);
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to create firebase token" });
   }
 };
 

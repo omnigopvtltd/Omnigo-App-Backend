@@ -62,7 +62,7 @@ exports.addReview = async (req, res) => {
       });
     }
 
-    const restaurant = await Vendor.findById(restaurantId);
+    const restaurant = await Vendor.findById({ _id: restaurantId});
     if (!restaurant) {
       return res.status(404).json({
         success: false,
@@ -130,7 +130,7 @@ exports.getRestaurantReviews = async (req, res) => {
     }
 
     const reviews = await RestaurantReview.find({ restaurantId })
-      .populate("user", "name avatar")
+      .populate("user", "name profilePicture")
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(Number(limit));

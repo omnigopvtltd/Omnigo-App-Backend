@@ -49,6 +49,8 @@ const vendorSchema = new mongoose.Schema(
       default: "",
     },
 
+    firebaseToken: { type: String, default: "" },
+
     // =====================================================
     // OWNER INFORMATION
     // =====================================================

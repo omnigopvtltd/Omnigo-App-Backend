@@ -24,10 +24,9 @@ const AccountDeleteRequest = require("../models/AccountDeleteRequest");
 // FIREBASE TOKEN
 // ======================================================
 
-
 exports.createFirebaseToken = (userId, role) => {
   return getAuth(app).createCustomToken(userId, { role });
-}
+};
 
 // module.exports = { createFirebaseToken };
 
@@ -55,7 +54,6 @@ exports.generateToken = (user) => {
     expiresIn: "7d",
   });
 };
-
 
 // ======================================================
 // SEND RESPONSE
@@ -631,16 +629,24 @@ exports.signup = async (req, res) => {
     //   type: "signup",
     // });
 
-
     let firebaseToken = null;
     try {
-      firebaseToken = await exports.createFirebaseToken(user._id.toString(), user?.role);
+      firebaseToken = await exports.createFirebaseToken(
+        user._id.toString(),
+        user?.role,
+      );
+
+      await User.findOneAndUpdate(
+    { _id: user._id }, // Yahan user._id use karein
+    { firebaseToken },
+    { new: true } // Updated document wapas lene ke liye
+  );
     } catch (e) {
-      console.error('Firebase custom token error:', e);
+      console.error("Firebase custom token error:", e);
       // login fail nahi karna, sirf chat ke liye token missing hoga
     }
 
-    return sendResponse(res, "Signup successful", userResponse);
+    return sendResponse(res, "Signup successful", userResponse, firebaseToken);
   } catch (err) {
     console.error("SIGNUP ERROR:", err);
     return res.status(500).json({
@@ -709,11 +715,20 @@ exports.login = async (req, res) => {
     const userResponse = user.toObject();
     delete userResponse.password;
 
-     let firebaseToken = null;
+    let firebaseToken = null;
     try {
-      firebaseToken = await exports.createFirebaseToken(user._id.toString(), user?.role);
+      firebaseToken = await exports.createFirebaseToken(
+        user._id.toString(),
+        user?.role,
+      );
+
+      await User.findOneAndUpdate(
+        { _id: user._id }, // Yahan user._id use karein
+        { firebaseToken },
+        { new: true }, // Updated document wapas lene ke liye
+      );
     } catch (e) {
-      console.error('Firebase custom token error:', e);
+      console.error("Firebase custom token error:", e);
       // login fail nahi karna, sirf chat ke liye token missing hoga
     }
 
@@ -827,21 +842,23 @@ exports.socialLogin = async (req, res) => {
     } = req.body;
 
     console.log(req.body);
-    
+
     if (!idToken) {
       return res.status(400).json({
         success: false,
         message: "ID token is required",
       });
     }
-    
+
     let sub, facebookId, email, name, picture;
-    
+
     console.log(req.body);
     if (provider === "facebook") {
       // 1) Verify Facebook App ID & Secret environment variables exist
       if (!process.env.FACEBOOK_APP_SECRET || !process.env.FACEBOOK_APP_ID) {
-        console.error("CRITICAL: FACEBOOK_APP_SECRET or FACEBOOK_APP_ID missing in backend .env");
+        console.error(
+          "CRITICAL: FACEBOOK_APP_SECRET or FACEBOOK_APP_ID missing in backend .env",
+        );
         return res.status(500).json({
           success: false,
           message: "Facebook login server configuration missing",
@@ -851,23 +868,33 @@ exports.socialLogin = async (req, res) => {
       // 2) Token Verification via Graph API
       let debugResponse;
       try {
-        debugResponse = await axios.get("https://graph.facebook.com/debug_token", {
-          params: {
-            input_token: idToken,
-            access_token: `${process.env.FACEBOOK_APP_ID}|${process.env.FACEBOOK_APP_SECRET}`,
+        debugResponse = await axios.get(
+          "https://graph.facebook.com/debug_token",
+          {
+            params: {
+              input_token: idToken,
+              access_token: `${process.env.FACEBOOK_APP_ID}|${process.env.FACEBOOK_APP_SECRET}`,
+            },
           },
-        });
+        );
       } catch (fbAxiosErr) {
-        console.error("FB DEBUG TOKEN ERROR:", fbAxiosErr.response?.data || fbAxiosErr.message);
+        console.error(
+          "FB DEBUG TOKEN ERROR:",
+          fbAxiosErr.response?.data || fbAxiosErr.message,
+        );
         return res.status(401).json({
           success: false,
           message: "Facebook token verification failed",
-          detail: fbAxiosErr.response?.data?.error?.message || fbAxiosErr.message,
+          detail:
+            fbAxiosErr.response?.data?.error?.message || fbAxiosErr.message,
         });
       }
 
       const d = debugResponse.data?.data;
-      if (!d?.is_valid || String(d.app_id) !== String(process.env.FACEBOOK_APP_ID)) {
+      if (
+        !d?.is_valid ||
+        String(d.app_id) !== String(process.env.FACEBOOK_APP_ID)
+      ) {
         return res.status(401).json({
           success: false,
           message: "Invalid Facebook token or App ID mismatch",
@@ -888,7 +915,6 @@ exports.socialLogin = async (req, res) => {
       // Fallback agar user ka Facebook email na ho
       email = data.email || `${facebookId}@facebook.omnigo.com`;
       picture = data.picture?.data?.url;
-
     } else {
       const ticket = await googleClient.verifyIdToken({
         idToken,
@@ -921,7 +947,8 @@ exports.socialLogin = async (req, res) => {
           vehiclePlate: riderProfile?.vehiclePlate || "",
           vehicleModel: riderProfile?.vehicleModel || "",
           verificationSelfie: riderProfile?.verificationSelfie || null,
-          verificationStatus: riderProfile?.verificationStatus || "not_submitted",
+          verificationStatus:
+            riderProfile?.verificationStatus || "not_submitted",
           isOnline: false,
         };
       }
@@ -942,11 +969,20 @@ exports.socialLogin = async (req, res) => {
     delete userResponse.password;
 
     // =======================================
-   let firebaseToken = null;
+    let firebaseToken = null;
     try {
-      firebaseToken = await exports.createFirebaseToken(user._id.toString(), user?.role);
+      firebaseToken = await exports.createFirebaseToken(
+        user._id.toString(),
+        user?.role,
+      );
+
+      await User.findOneAndUpdate(
+        { _id: user._id }, // Yahan user._id use karein
+        { firebaseToken },
+        { new: true }, // Updated document wapas lene ke liye
+      );
     } catch (e) {
-      console.error('Firebase custom token error:', e);
+      console.error("Firebase custom token error:", e);
       // login fail nahi karna, sirf chat ke liye token missing hoga
     }
 
@@ -985,11 +1021,23 @@ exports.updateFcmToken = async (req, res) => {
 exports.firebaseToken = async (req, res) => {
   // console.log(req.user)
   try {
-    const firebaseToken = await exports.createFirebaseToken(req.user.id, req.user?.role);
-    res.json({ success: true, firebaseToken });
+    const firebaseToken = await exports.createFirebaseToken(
+      req.user.id,
+      req.user?.role,
+    );
+
+   const user = await User.findOneAndUpdate(
+    { _id: req.user.id }, 
+    { firebaseToken },
+    { new: true } 
+  );
+
+    res.json({ success: true, firebaseToken, data: user });
   } catch (e) {
-    console.log(e)
-    res.status(500).json({ success: false, message: 'Failed to create firebase token' });
+    console.log(e);
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to create firebase token" });
   }
 };
 
@@ -1986,7 +2034,17 @@ exports.deleteUserLocation = async (req, res) => {
 
 exports.addAddress = async (req, res) => {
   try {
-    const { phone, address, zone, area, city, zipCode, country, isSave, coordinates } = req.body;
+    const {
+      phone,
+      address,
+      zone,
+      area,
+      city,
+      zipCode,
+      country,
+      isSave,
+      coordinates,
+    } = req.body;
 
     const user = await User.findById(req.user.id);
 
@@ -2006,7 +2064,7 @@ exports.addAddress = async (req, res) => {
       isSave: isSave || false,
       coordinates,
       zone,
-      area
+      area,
     });
 
     await user.save();
@@ -3081,5 +3139,3 @@ exports.deleteAccount = async (req, res) => {
     });
   }
 };
-
-
