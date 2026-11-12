@@ -1,5 +1,7 @@
 // // const { GoogleGenerativeAI, SchemaType } =  require('@google/generative-ai');
 
+const { searchProducts } = require("./productMatcher");
+
 // // const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // // const orderSlipSchema = {
@@ -485,17 +487,36 @@ function extractJson(text) {
 }
 
 // AI ka output kabhi trust nahi karte: validate + clamp
-function sanitize(raw) {
+async function sanitize(raw) {
   const arr = Array.isArray(raw?.items) ? raw.items : [];
-  const items = arr.slice(0, MAX_ITEMS).map((i) => ({
+  console.log("Raw items from AI:", arr);
+  console.log("Raw items from AI:", raw);
+  const results = await searchProducts(String(raw?.items?.[0]?.name || ""), 10);
+  console.log("Results:", results);
+  const items = results.map((i) => ({
     name: clean(i.name, 100),
     brand: clean(i.brand, 50),
     genericName: clean(i.genericName, 100),
     quantity: clampInt(i.quantity, 1, 50),
     dosage: clean(i.dosage, 30),
     size: clean(i.size, 30),
+    variations: Array.isArray(i.variations) ? i.variations.map((v) => clean(v, 50)).filter(Boolean) : [],
+    addOns: Array.isArray(i.addOns) ? i.addOns.map((a) => ({
+      name: clean(a.name, 50),
+      price: Math.max(0, Number(a.price) || 0),
+    })).filter((a) => a.name) : [],
+    category: clean(i.category, 50),
+    subcategory: clean(i.subcategory, 50),
+    weight: clean(i.weight, 30),
+    serving: clean(i.serving, 30),
+    isVeg: Boolean(i.isVeg),
+    tags: Array.isArray(i.tags) ? i.tags.map((t) => clean(t, 30)).filter(Boolean) : [],
+    vendorId: clean(i.vendorId, 50),
+    belongsTo: clean(i.belongsTo, 30),
   })).filter((i) => i.name);
-  return { items, customerNotes: clean(raw?.customerNotes, 300) };
+
+  console.log("Sanitized items:", items);
+  return { results, customerNotes: clean(raw?.customerNotes, 300) };
 }
 
 // AI down ho to bhi TEXT orders chalein ("2 milk, 1 surf excel")
@@ -543,7 +564,8 @@ async function parseOrder({ category, imageBuffer, mimeType = "image/jpeg", text
       },
     });
     const text = data.choices?.[0]?.message?.content || "";
-    return { ...sanitize(extractJson(text)), parsedBy: data.model || MODELS[0] };
+    
+    return { items: await sanitize(extractJson(text)), parsedBy: data.model || MODELS[0] };
   } catch (err) {
     // Sirf text order ho to AI ke baghair bhi chalao
     if (!imageBuffer && textPrompt?.trim()) {

@@ -596,11 +596,13 @@ exports.createQuickOrder = async (req, res) => {
       category,
       imageBuffer: file ? file.buffer : null,
       mimeType: file ? file.mimetype : undefined,
-      textPrompt: textMessage,
+      textPrompt: textMessage.toLowerCase().trim(),
     });
 
-    console.log(parsed);
-    if (!parsed.items.length) {
+    console.log("Parsed Result:", parsed);
+
+    // console.log(parsed);
+    if (!parsed.items.results || !parsed.items.results.length) {
       return res.status(422).json({
         success: false,
         message:
@@ -610,9 +612,9 @@ exports.createQuickOrder = async (req, res) => {
 
     // Hamara code: DB se match
     const matches = await Promise.all(
-      parsed.items.map((it) => matchItem(it, { isPharmacy })),
+      parsed.items.results.map((it) => matchItem(it, { isPharmacy })),
     );
-    const items = parsed.items.map((it, idx) =>
+    const items = parsed.items.results.map((it, idx) =>
       buildSlipItem(it, matches[idx], isPharmacy),
     );
     console.log("Matched Items", matches, items);
