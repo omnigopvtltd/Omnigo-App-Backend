@@ -507,6 +507,11 @@ exports.cancelOrder = async (req, res) => {
     // 3. Reset Order State so it can be picked up by another rider
     // order.riderId = null;
     // order.isAssigned = false;
+    order.stops.forEach((stop) => {
+      if (stop.status === "pending") {
+        stop.status = "cancelled";
+      }
+    });
     order.status = "cancelled";
 
     await order.save();
@@ -2795,6 +2800,7 @@ exports.getVendorOrders = async (req, res) => {
         paymentStatus: order.paymentStatus || "Paid",
         allergyAlert: order.allergyWarning || null,
         customerNote: order.instructions || "",
+        stops: order.stops || [],
 
         items: vendorOnlyItems.map((item) => ({
           itemId: item.productId || item.dealId || item._id,
