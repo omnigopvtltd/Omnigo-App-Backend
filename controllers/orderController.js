@@ -507,6 +507,11 @@ exports.cancelOrder = async (req, res) => {
     // 3. Reset Order State so it can be picked up by another rider
     // order.riderId = null;
     // order.isAssigned = false;
+    order.stops.forEach((stop) => {
+      if (stop.status === "pending") {
+        stop.status = "cancelled";
+      }
+    });
     order.status = "cancelled";
 
     await order.save();
@@ -900,21 +905,32 @@ exports.readyOrder = async (req, res) => {
       });
     }
 
-    sendNotification(req.app, {
-      userId: order?.riderId,
-      role: "rider",
-      title: "Order Ready For Pickup",
-      message: `Order #${order.orderNumber} is raedy. Please pickup order now.`,
-      type: "ready_order",
-      data: {
-        orderId: order._id,
-        orderNumber: order.orderNumber,
-        totalAmount: order.totalAmount || order.grandTotal,
-        itemCount: order.items?.length || 0,
-        screenToOpen: "RiderOrderDetails",
-      },
-      // link: `/rider/orders/ready/${order._id}`,
-    });
+   // 1. Database se saare active/registered riders ki list nikalein
+// (Apne User model ke mutabiq query adjust kar lein, misal ke tor par role: 'rider')
+const riders = await User.find({ role: 'rider', status: 'active' }); // ya sirf { role: 'rider' }
+
+// 2. Agar riders mojood hain toh sab ko notification bhej dein
+if (riders && riders.length > 0) {
+  // Sab riders ke liye parallel notifications bhejne ke liye Promise.all use karein
+  await Promise.all(
+    riders.map(async (rider) => {
+      await sendNotification(req.app, {
+        userId: rider._id, // Har rider ki apni ID
+        role: "rider",
+        title: "Order Ready For Pickup",
+        message: `Order #${order.orderNumber} is ready. Please pickup order now.`,
+        type: "ready_order",
+        data: {
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          totalAmount: order.totalAmount || order.grandTotal,
+          itemCount: order.items?.length || 0,
+          screenToOpen: "RiderOrderDetails",
+        },
+      });
+    })
+  );
+}
     // 5. Send FCM Push Notification to Customer
     // const customer = await User.findById(order.userId);
     // if (customer?.fcmToken) {
@@ -2784,6 +2800,7 @@ exports.getVendorOrders = async (req, res) => {
         paymentStatus: order.paymentStatus || "Paid",
         allergyAlert: order.allergyWarning || null,
         customerNote: order.instructions || "",
+        stops: order.stops || [],
 
         items: vendorOnlyItems.map((item) => ({
           itemId: item.productId || item.dealId || item._id,
