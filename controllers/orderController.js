@@ -24,12 +24,10 @@ exports.reverseGeocode = async (req, res) => {
     const { lat, lng } = req.query;
 
     if (!lat || !lng) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Latitude and Longitude are required",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Latitude and Longitude are required",
+      });
     }
 
     const result = await locationService.getAddressFromCoordinates(
@@ -918,23 +916,34 @@ exports.readyOrder = async (req, res) => {
       // Sab riders ke liye parallel notifications bhejne ke liye Promise.all use karein
       await Promise.all(
         riders.map(async (rider) => {
-          await sendNotification(req.app, {
-            userId: rider?._id, // Har rider ki apni ID
-            role: "rider",
-            title: "Order Ready For Pickup",
-            message: `Order #${order.orderNumber} is ready. Please pickup order now.`,
-            type: "ready_order",
-            data: {
-              orderId: order._id,
-              orderNumber: order.orderNumber,
-              totalAmount: order.totalAmount || order.grandTotal,
-              itemCount: order.items?.length || 0,
-              screenToOpen: "RiderOrderDetails",
-            },
-          });
+          try {
+            await sendNotification(req.app, {
+              userId: rider?._id,
+              role: "rider",
+              title: "Order Ready For Pickup",
+              message: `Order #${order.orderNumber} is ready. Please pickup order now.`,
+              type: "ready_order",
+              data: {
+                orderId: order._id,
+                orderNumber: order.orderNumber,
+                totalAmount: order.totalAmount || order.grandTotal,
+                itemCount: order.items?.length || 0,
+                screenToOpen: "RiderOrderDetails",
+              },
+            });
+
+            console.log("Notification Sent to" , rider?._id);
+          } catch (err) {
+            console.error(
+              `Failed to send notification to rider ${rider?._id}:`,
+              err.message,
+            );
+          }
         }),
       );
     }
+
+
     // 5. Send FCM Push Notification to Customer
     // const customer = await User.findById(order.userId);
     // if (customer?.fcmToken) {

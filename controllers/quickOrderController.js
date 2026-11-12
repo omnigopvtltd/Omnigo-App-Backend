@@ -416,653 +416,345 @@
 // };
 
 // ======================================================================
-
-// controllers/quickOrderController.js
+// controllers/quickOrderController.js  (v3)
+//
+// FLOW:  parse (products dikhao, slip NAHI)  ->  user chune  ->  [quote]  ->  slip  ->  edit (qty/variation/add/remove)  ->  add-to-cart
 const QuickOrder = require("../models/QuickOrder");
 const UnmatchedProduct = require("../models/UnmatchedProduct");
-const Order = require("../models/Order");
-const User = require("../models/User");
 const Product = require("../models/Product");
-const Vendor = require("../models/Vendor");
-const VendorBranch = require("../models/VendorBranch"); // <- path apne project ke mutabiq
-// const { sendNotificationToVendor } = require("../utils/notifications"); // <- jahan createOrder import karta ha wahi path
+const Cart = require("../models/Cart");                                   // <- path apne project ke mutabiq (createOrder wala Cart model)
+const { isValidObjectId } = require("mongoose");
 
-const { parseOrder, AIParseError } = require("../utils/geminiHelper");
-const {
-  matchItem,
-  searchProducts,
-  normalize,
-} = require("../utils/productMatcher");
+const { parseOrder, localTextParse } = require("../utils/geminiHelper");
+const { searchCandidates, searchProducts, explainMatch, catalogStats, waitlistKey, entryFromDoc, firstImage, ACTIVE_FILTER } = require("../utils/productMatcher");
+const { priceSelection, PricingError, lineTotal, sumTotals, clampQty, lineKey } = require("../utils/pricing");
 
-const DELIVERY_FEE = Number(process.env.DELIVERY_FEE || 200); // PKR (pehle yahan 2.0 tha - bug)
-const TAX_PERCENT = Number(process.env.USER_TAX_PERCENT || 5); // createOrder wala salesAndServiceTaxForUser
+const DELIVERY_FEE = Number(process.env.DELIVERY_FEE || 200);               // PKR
 const CATEGORIES = ["food", "mart", "pharmacy", "grocery"];
-const round2 = (n) => Number(Number(n).toFixed(2));
+const LOCAL_FIRST = process.env.AI_TEXT_LOCAL_FIRST === "true";             // saade text orders AI ke baghair (0 tokens). Default OFF
 
 class HttpError extends Error {
-  constructor(status, message, extra = {}) {
-    super(message);
-    this.status = status;
-    this.extra = extra;
-  }
+  constructor(status, message, extra = {}) { super(message); this.status = status; this.extra = extra; }
 }
-
+function sendError(res, error, fallback) {
+  if (error instanceof HttpError) return res.status(error.status).json({ success: false, message: error.message, ...error.extra });
+  if (error instanceof PricingError) return res.status(error.status).json({ success: false, code: error.code, message: error.message });
+  console.error(fallback + ":", error);
+  return res.status(500).json({ success: false, message: fallback });
+}
 const mapCategoryToEnum = (cat) => {
   const c = (cat || "").toLowerCase();
-  if (c.includes("food") || c.includes("restaurant")) return "fast-food";
+  if (c.includes("food") || c.includes("restaurant") || c.includes("home-chef")) return "fast-food";
   if (c.includes("pharmacy") || c.includes("medicine")) return "pharmacy";
   if (c.includes("grocery") || c.includes("mart")) return "grocery";
   if (c.includes("bakery")) return "bakery";
   return "other";
 };
+const normCategory = (c) => (CATEGORIES.includes(String(c).toLowerCase()) ? String(c).toLowerCase() : "food");
 
-// ------------------------------------------------------------------ helpers
-function buildSlipItem(parsed, m, isPharmacy) {
-  const base = {
-    requestedName: parsed.name,
-    name: parsed.name,
-    brand: parsed.brand || "",
-    quantity: parsed.quantity || 1,
-    dosage: parsed.dosage || "",
-    size: parsed.size || "",
-    variations: parsed.variations || [],
-  };
-  if (m.status === "MATCHED") {
-    const p = m.product;
-    console.log(m);
-    return {
-      ...base,
-      name: p.name,
-      productId: p.productId,
-      vendorId: p.vendorId,
-      image: p.image || p.images,
-      category: p.category,
-      subcategory: p.subcategory,
-      weight: p.weight,
-      belongsTo: p.belongsTo || "restaurant",
-      variations: p.variations || [],
-      addOns: p.addOns || [],
-      tags: p.tags || [],
-      type: p.type || "",
-      dosage: p.dosage || "",
-      isRxRequired: p.isRxRequired || false,
-      isVeg: p.isVeg || false,
-      rating: p.rating || {},
-      matchStatus: "MATCHED",
-      matchConfidence: m.confidence,
-      alternatives: m.alternatives,
-      estimatedUnitPrice: p.price, // price HAMESHA DB se, AI se kabhi nahi
-      totalItemPrice: round2(p.price * base.quantity),
-    };
-  }
+// ---------------------------------------------------------------- helpers
+// DB product + user ka intikhab -> slip item. Qeemat SIRF yahan (server) par banti ha.
+function buildItem(doc, { quantity, variations, addOns, requestedName }) {
+  const priced = priceSelection(doc, { variations, addOns });
+  const e = entryFromDoc(doc);
+  const qty = clampQty(quantity);
   return {
-    ...base,
-    productId: null,
-    matchStatus: m.status === "UNAVAILABLE" && isPharmacy ? "CUSTOM" : m.status, // pharmacy: prescription item custom reh sakta ha
-    matchConfidence: m.confidence,
-    alternatives: m.alternatives,
-    needsPriceConfirmation: true,
-    estimatedUnitPrice: 0,
-    totalItemPrice: 0,
+    requestedName: requestedName || e.name, name: e.name, brand: "", quantity: qty, dosage: e.dosage, size: "",
+    productId: doc._id, vendorId: doc.vendorId || null, image: e.image, category: e.category, subcategory: e.subcategory,
+    weight: e.weight, belongsTo: e.belongsTo, type: e.type, isRxRequired: e.isRxRequired, isVeg: e.isVeg, tags: e.tags, rating: e.rating,
+    variations: e.variations, addOns: e.addOns,
+    selectedVariations: priced.selectedVariations, selectedAddOns: priced.selectedAddOns, basePrice: priced.base, variationDefaulted: priced.defaulted,
+    matchStatus: "SELECTED", estimatedUnitPrice: priced.unit, totalItemPrice: lineTotal(priced.unit, qty),
   };
 }
+function recalc(qo) {
+  qo.subtotal = sumTotals(qo.items.map((i) => i.totalItemPrice));
+  qo.grandTotal = sumTotals([qo.subtotal, qo.deliveryFee || DELIVERY_FEE]);
+}
+const lineBreakdown = (i) => ({
+  itemId: i._id, productId: i.productId, name: i.name, quantity: i.quantity, unitPrice: i.estimatedUnitPrice, basePrice: i.basePrice,
+  selectedVariations: i.selectedVariations, selectedAddOns: i.selectedAddOns, variationDefaulted: i.variationDefaulted, lineTotal: i.totalItemPrice,
+});
 
-function recalc(quickOrder) {
-  const subtotal = quickOrder.items.reduce(
-    (s, i) => s + Number(i.totalItemPrice || 0),
-    0,
-  );
-  quickOrder.subtotal = round2(subtotal);
-  quickOrder.grandTotal = round2(
-    subtotal + (quickOrder.deliveryFee || DELIVERY_FEE),
-  );
+async function loadProducts(ids) {
+  const uniq = [...new Set(ids.map(String))];
+  const docs = await Product.find({ _id: { $in: uniq }, ...ACTIVE_FILTER }).lean();
+  return new Map(docs.map((d) => [String(d._id), d]));
+}
+function validateSelections(selections) {
+  if (!Array.isArray(selections) || !selections.length) throw new HttpError(400, "Select at least one product");
+  if (selections.length > 30) throw new HttpError(400, "Too many items (max 30)");
+  for (const s of selections) if (!s || !isValidObjectId(s.productId)) throw new HttpError(400, "Invalid productId");
+}
+// selections -> priced items (same product + same variations/add-ons merge ho jate han)
+async function buildItems(selections) {
+  validateSelections(selections);
+  const map = await loadProducts(selections.map((s) => s.productId));
+  const unavailable = selections.filter((s) => !map.has(String(s.productId))).map((s) => ({ productId: String(s.productId) }));
+  if (unavailable.length) throw new HttpError(409, "Some selected products are no longer available", { unavailable });
+  const items = [];
+  for (const s of selections) {
+    const item = buildItem(map.get(String(s.productId)), s);
+    const key = lineKey(item.productId, item.selectedVariations, item.selectedAddOns);
+    const same = items.find((x) => x._key === key);
+    if (same) { same.quantity = clampQty(same.quantity + item.quantity); same.totalItemPrice = lineTotal(same.estimatedUnitPrice, same.quantity); }
+    else items.push({ ...item, _key: key });
+  }
+  return items.map(({ _key, ...rest }) => rest);
 }
 
-// Demand tracking: kaunsa product kitni baar maanga gaya. Order ko block nahi karta.
-function logUnmatched(items, userId, category) {
-  const ops = items
-    .filter(
-      (i) =>
-        i.matchStatus === "UNAVAILABLE" ||
-        i.matchStatus === "SUGGESTED" ||
-        i.matchStatus === "CUSTOM",
-    )
-    .map((i) => ({
-      updateOne: {
-        filter: {
-          normalizedName: normalize(i.requestedName || i.name),
-          category,
-        },
-        update: {
-          $inc: { requestCount: 1 },
-          $set: {
-            lastRequestedAt: new Date(),
-            reason:
-              i.matchStatus === "SUGGESTED"
-                ? "BRAND_NOT_AVAILABLE"
-                : "NOT_FOUND",
-            suggestedInstead: i.alternatives?.[0]?.name || "",
-          },
-          $addToSet: { users: userId },
-          $setOnInsert: {
-            itemName: i.requestedName || i.name,
-            brand: i.brand || "",
-            status: "PENDING",
-          },
-        },
-        upsert: true,
-      },
-    }));
-  if (ops.length)
-    UnmatchedProduct.bulkWrite(ops, { ordered: false }).catch((e) =>
-      console.error("logUnmatched:", e.message),
-    );
+// "Nahi mila" => waitlist (subscribe=true: notification milegi) ya sirf demand count (brand alag mila)
+async function saveWaitlist(userId, category, it, { subscribe }) {
+  const key = waitlistKey([it.brand, it.name].filter(Boolean).join(" "));
+  if (!key) return;
+  const filter = { normalizedName: key, category };
+  try {
+    const set = { lastRequestedAt: new Date(), reason: subscribe ? "NOT_FOUND" : "BRAND_NOT_AVAILABLE" };
+    if (subscribe) set.status = "PENDING";
+    await UnmatchedProduct.updateOne(filter, {
+      $setOnInsert: { itemName: it.name, brand: it.brand || "", ...(subscribe ? {} : { status: "PENDING" }) },
+      $inc: { requestCount: 1 }, $set: set,
+    }, { upsert: true });
+    if (subscribe) {
+      await UnmatchedProduct.updateOne({ ...filter, "subscribers.user": { $ne: userId } }, { $push: { subscribers: { user: userId, requestedAt: new Date(), notifiedAt: null } } });
+      await UnmatchedProduct.updateOne({ ...filter, subscribers: { $elemMatch: { user: userId, notifiedAt: { $ne: null } } } }, { $set: { "subscribers.$.notifiedAt": null } });
+    }
+  } catch (e) { console.error("saveWaitlist:", e.message); }   // waitlist fail ho to parse fail nahi hona chahiye
 }
 
-async function findOwnedQuickOrder(
-  id,
-  userId,
-  allowedStatuses = ["PROPOSED", "PRICE_UPDATED"],
-) {
-  const qo = await QuickOrder.findOne({ _id: id, user: userId });
-  if (!qo) throw new HttpError(404, "Quick Order not found");
-  if (!allowedStatuses.includes(qo.status))
-    throw new HttpError(400, `Order ab ${qo.status} ha, edit nahi ho sakta`);
+async function findOwnedSlip(id, userId) {
+  const qo = isValidObjectId(id) ? await QuickOrder.findOne({ _id: id, user: userId }) : null;
+  if (!qo) throw new HttpError(404, "Slip not found");
+  if (!["PROPOSED", "PRICE_UPDATED"].includes(qo.status)) throw new HttpError(400, `This slip is already ${qo.status}, it can't be edited`);
   return qo;
 }
 
-// ------------------------------------------------------------------ 1) PARSE
+// ================================================================ 1) PARSE  (slip NAHI banta)
+// Response: har requested item ke liye products (variations ke sath) YA "available nahi" + wishlist mein save
 exports.createQuickOrder = async (req, res) => {
   try {
-    const userId = req.user.id; // body se userId kabhi nahi (koi aur ke naam par order ban sakta tha)
+    const userId = req.user.id;
     const { textMessage = "" } = req.body;
-    const category = CATEGORIES.includes(
-      String(req.body.category).toLowerCase(),
-    )
-      ? String(req.body.category).toLowerCase()
-      : "food";
+    const category = normCategory(req.body.category);
+    const file = req.file;
+    if (!String(textMessage).trim() && !file) return res.status(400).json({ success: false, message: "Send a text message or a photo" });
 
-    const file = req.file || req.files;
-    const isPharmacy = category === "pharmacy";
-
-    if (!textMessage.trim() && !file) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Text message ya image dein" });
+    let parsed = null, results = null;
+    if (LOCAL_FIRST && !file && String(textMessage).trim()) {
+      const local = localTextParse(textMessage);
+      if (local.items.length) {
+        const rs = await Promise.all(local.items.map((it) => searchCandidates(it, { category })));
+        if (rs.every((r) => r.cards.length)) { parsed = { ...local, parsedBy: "local-parser" }; results = rs; }
+      }
     }
+    if (!parsed) {
+      parsed = await parseOrder({ category, imageBuffer: file ? file.buffer : null, mimeType: file ? file.mimetype : undefined, textPrompt: String(textMessage).toLowerCase().trim() });
+    }
+    if (!parsed.items.length) {
+      return res.status(422).json({ success: false, message: "We couldn't understand the order. Please type it clearly or send a clearer photo." });
+    }
+    if (!results) results = await Promise.all(parsed.items.map((it) => searchCandidates(it, { category })));
 
-    // AI: sirf "kya maanga" nikalta ha
-    const parsed = await parseOrder({
-      category,
-      imageBuffer: file ? file.buffer : null,
-      mimeType: file ? file.mimetype : undefined,
-      textPrompt: textMessage.toLowerCase().trim(),
+    const requests = parsed.items.map((it, i) => {
+      const r = results[i];
+      const found = r.cards.length > 0;
+      return {
+        requestId: `r${i + 1}`, requestedName: it.name, quantity: it.quantity, size: it.size || "",
+        status: found ? "FOUND" : "NOT_AVAILABLE", exactMatch: r.hasExact, crossCategory: r.crossCategory,
+        message: found ? null : `Sorry, "${it.name}" is not available yet. We've saved your request and will notify you as soon as it's available, InshaAllah.`,
+        products: r.cards,
+      };
     });
 
-    console.log("Parsed Result:", parsed);
+    // wishlist: nahi mila => subscribe (notification), brand-alag mila => sirf demand
+    await Promise.all(parsed.items.map((it, i) => {
+      if (!results[i].cards.length) return saveWaitlist(userId, category, it, { subscribe: true });
+      if (!results[i].hasExact) return saveWaitlist(userId, category, it, { subscribe: false });
+      return null;
+    }));
 
-    // console.log(parsed);
-    if (!parsed.items.results || !parsed.items.results.length) {
-      return res.status(422).json({
-        success: false,
-        message:
-          "Koi item samajh nahi aya. Dobara wazeh likhein ya saaf photo bhejein.",
-      });
-    }
-
-    // Hamara code: DB se match
-    const matches = await Promise.all(
-      parsed.items.results.map((it) => matchItem(it, { isPharmacy })),
-    );
-    const items = parsed.items.results.map((it, idx) =>
-      buildSlipItem(it, matches[idx], isPharmacy),
-    );
-    console.log("Matched Items", matches, items);
-
-    const quickOrder = new QuickOrder({
-      user: userId,
-      category,
-      orderType: file ? "IMAGE" : "TEXT",
-      rawInputText: textMessage,
-      prescriptionImageUrl: "", // TODO: image S3/Cloudinary par upload karke URL yahan (memoryStorage mein file disk par nahi hoti)
-      parsedBy: parsed.parsedBy,
-      items,
-      deliveryFee: DELIVERY_FEE,
-      customerNotes: parsed.customerNotes || "",
-      status: "PROPOSED",
-    });
-    recalc(quickOrder);
-    await quickOrder.save();
-
-    logUnmatched(items, userId, category);
-
-    const summary = {
-      matched: items.filter((i) => i.matchStatus === "MATCHED").length,
-      needsChoice: items.filter((i) => i.matchStatus === "SUGGESTED").length,
-      unavailable: items.filter((i) => i.matchStatus === "UNAVAILABLE").length,
-      custom: items.filter((i) => i.matchStatus === "CUSTOM").length,
-    };
-    return res.status(201).json({
+    return res.json({
       success: true,
-      message: "Order slip ready",
-      summary,
-      data: quickOrder,
+      data: {
+        requests, customerNotes: parsed.customerNotes || "", parsedBy: parsed.parsedBy, category,
+        summary: { requested: requests.length, found: requests.filter((r) => r.status === "FOUND").length, notAvailable: requests.filter((r) => r.status === "NOT_AVAILABLE").length },
+      },
     });
   } catch (error) {
     console.error("Quick Order Parse Error:", error);
     const map = {
-      AI_NO_CREDITS: [
-        503,
-        "Service abhi available nahi. Baad mein koshish karein.",
-      ],
-      AI_RATE_LIMIT: [503, "Bohat rush ha, thori der baad koshish karein."],
-      AI_TIMEOUT: [504, "Request lambi ho gayi, dobara koshish karein."],
+      AI_NO_CREDITS: [503, "Service is not available right now. Please try again later."],
+      AI_RATE_LIMIT: [503, "We're a bit busy. Please try again in a moment."],
+      AI_TIMEOUT: [504, "That took too long. Please try again."],
       BAD_IMAGE: [400, error.message],
+      CATALOG_EMPTY: [503, "Products are not loaded right now. Please try again shortly."],
     };
-    const [status, message] = map[error.code] || [
-      500,
-      "Order parse nahi ho saka",
-    ];
-    return res.status(status).json({ success: false, message }); // internal error.message user ko nahi bhejte
+    const [status, message] = map[error.code] || [500, "We couldn't process your order"];
+    return res.status(status).json({ success: false, message });
   }
 };
 
-// ------------------------------------------------------------------ 2) ITEM ACTIONS (alternative chunna / hataana)
-exports.updateQuickOrderItem = async (req, res) => {
+// ================================================================ 2) QUOTE (preview, kuch save nahi)
+exports.quote = async (req, res) => {
   try {
-    const { quickOrderId, itemId, action, productId } = req.body;
-    const qo = await findOwnedQuickOrder(quickOrderId, req.user.id);
-    const item = qo.items.id(itemId);
-    if (!item) throw new HttpError(404, "Item nahi mila");
-
-    if (action === "select") {
-      const p = await Product.findOne({ _id: productId })
-        // .select("name price image vendorId")
-        .lean();
-      if (!p) throw new HttpError(404, "Product available nahi");
-      Object.assign(item, {
-        name: p.name,
-        productId: p._id,
-        vendorId: p.vendorId || null,
-        image: p.images || "",
-        category: p.category,
-        subcategory: p.subcategory,
-        weight: p.weight,
-        belongsTo: p.belongsTo || "restaurant",
-        variations: p.variations || [],
-        addOns: p.addOns || [],
-        tags: p.tags || [],
-        type: p.type || "",
-        dosage: p.dosage || "",
-        isRxRequired: p.isRxRequired || false,
-        isVeg: p.isVeg || false,
-        rating: p.rating || {},
-        matchStatus: "MATCHED",
-        matchConfidence: 1,
-        alternatives: [],
-        needsPriceConfirmation: false,
-        estimatedUnitPrice: p.price,
-        totalItemPrice: round2(p.price * item.quantity),
-      });
-    } else if (action === "remove") {
-      item.deleteOne();
-    } else if (action === "keepCustom" && qo.category === "pharmacy") {
-      Object.assign(item, { matchStatus: "CUSTOM", alternatives: [] }); // pharmacy: apni hi dawai chahiye
-    } else {
-      throw new HttpError(400, "Invalid action");
-    }
-    recalc(qo);
-    await qo.save();
-    return res.json({ success: true, data: qo });
-  } catch (e) {
-    return sendError(res, e, "Item update nahi ho saka");
-  }
+    const items = await buildItems(req.body.selections);
+    const subtotal = sumTotals(items.map((i) => i.totalItemPrice));
+    return res.json({ success: true, data: { lines: items.map(lineBreakdown), subtotal, deliveryFee: DELIVERY_FEE, grandTotal: sumTotals([subtotal, DELIVERY_FEE]) } });
+  } catch (e) { return sendError(res, e, "Could not calculate the price"); }
 };
 
-// ------------------------------------------------------------------ 3) EDIT (qty / notes / naye items / remove)
-exports.editQuickOrder = async (req, res) => {
-  try {
-    const {
-      quickOrderId,
-      items = [],
-      addItems = [],
-      removeItemIds = [],
-      customerNotes,
-    } = req.body;
-    const qo = await findOwnedQuickOrder(quickOrderId, req.user.id);
-    const isPharmacy = qo.category === "pharmacy";
-
-    if (customerNotes !== undefined)
-      qo.customerNotes = String(customerNotes).slice(0, 300);
-
-    for (const inc of items) {
-      // quantity badalna
-      const it = qo.items.id(inc._id || inc.id);
-      console.log(it, inc);
-      if (!it || inc.quantity === undefined) continue;
-      it.productId = inc._id;
-      it.name = inc.name;
-      it.requestedName = inc.name;
-      // it.price = inc.price;
-      it.dosage = inc.dosage;
-      it.image = inc.images || inc.image;
-
-      it.quantity = Math.min(
-        50,
-        Math.max(1, Math.round(Number(inc.quantity)) || 1),
-      );
-      it.totalItemPrice = round2(it.estimatedUnitPrice * it.quantity);
-    }
-    for (const id of removeItemIds) qo.items.id(id)?.deleteOne();
-    console.log("id", removeItemIds, qo.items);
-    // for (const id of removeItemIds) qo.items.productId(id)?.deleteOne();
-
-    for (const add of addItems.slice(0, 10)) {
-      // naye items bhi DB se match honge
-      const parsed = {
-        productId: add._id,
-        vendorId: add.vendorId,
-        name: String(add.name || "")
-        .trim()
-        .slice(0, 100),
-        brand: "",
-        quantity: Math.min(50, Math.max(1, Number(add.quantity) || 1)),
-        dosage: add.dosage || "",
-        size: "",
-      };
-      if (!parsed.name) continue;
-      console.log(parsed);
-      const m = await matchItem(parsed, { isPharmacy });
-      console.log("m", m);
-      const slipItem = buildSlipItem(parsed, m, isPharmacy);
-      console.log("splitItems", slipItem);
-      qo.items.push(slipItem);
-      logUnmatched([slipItem], req.user.id, qo.category);
-    }
-    recalc(qo);
-    await qo.save();
-    return res.json({
-      success: true,
-      message: "Quick Order updated",
-      data: qo,
-    });
-  } catch (e) {
-    return sendError(res, e, "Edit nahi ho saka");
-  }
-};
-
-// ------------------------------------------------------------------ 4) MANUAL SEARCH
-exports.searchCatalog = async (req, res) => {
-  try {
-    const results = await searchProducts(String(req.query.q || ""), 10);
-    return res.json({ success: true, data: results });
-  } catch (e) {
-    return sendError(res, e, "Search fail");
-  }
-};
-
-// ------------------------------------------------------------------ 5) CONFIRM -> real Order (createOrder jesa)
-exports.confirmQuickOrderToMainOrder = async (req, res) => {
-  let lockedId = null;
-  let previousStatus = null;
+// ================================================================ 3) GENERATE SLIP
+exports.createSlip = async (req, res) => {
   try {
     const userId = req.user.id;
-    const {
-      quickOrderId,
-      addressId,
-      paymentMethod = "cash_on_delivery",
-      instructions = "",
-      promoDiscount = 0,
-    } = req.body;
+    const items = await buildItems(req.body.selections);
+    const qo = new QuickOrder({
+      user: userId, category: normCategory(req.body.category), orderType: req.body.orderType === "IMAGE" ? "IMAGE" : "TEXT",
+      rawInputText: String(req.body.rawInputText || "").slice(0, 1000), customerNotes: String(req.body.customerNotes || "").slice(0, 300),
+      parsedBy: "selection", items, deliveryFee: DELIVERY_FEE, status: "PROPOSED",
+    });
+    recalc(qo);
+    await qo.save();
+    return res.status(201).json({ success: true, message: "Slip generated", data: qo });
+  } catch (e) { return sendError(res, e, "Could not generate the slip"); }
+};
 
-    // Double-tap / double request se 2 orders na banein: pehle atomic lock
-    const locked = await QuickOrder.findOneAndUpdate(
-      {
-        _id: quickOrderId,
-        user: userId,
-        status: { $in: ["PROPOSED", "PRICE_UPDATED"] },
-      },
-      { $set: { status: "CONFIRMING" } },
-      { new: false },
-    );
-    if (!locked)
-      throw new HttpError(
-        409,
-        "Order mojood nahi ya pehle hi confirm ho chuka ha",
-      );
-    lockedId = locked._id;
-    previousStatus = locked.status;
-    const quickOrder = await QuickOrder.findById(lockedId);
+// ================================================================ 4) EDIT (qty / variation / add-ons / naya item / remove / notes)
+// Client SIRF productId, quantity, variations, addOns bhejta ha. Naam/price/vendorId client se kabhi nahi liye jate.
+exports.editQuickOrder = async (req, res) => {
+  try {
+    const { quickOrderId, items = [], addItems = [], removeItemIds = [], customerNotes } = req.body;
+    const qo = await findOwnedSlip(quickOrderId, req.user.id);
+    if (customerNotes !== undefined) qo.customerNotes = String(customerNotes).slice(0, 300);
 
-    const isPharmacy = quickOrder.category === "pharmacy";
-    const defaultOrderFrom = mapCategoryToEnum(quickOrder.category);
-
-    // 1) Jab tak user ne alternative na chuna ho ya item hataya na ho, confirm nahi
-    const unresolved = quickOrder.items.filter(
-      (i) => i.matchStatus === "SUGGESTED" || i.matchStatus === "UNAVAILABLE",
-    );
-    if (unresolved.length) {
-      throw new HttpError(
-        409,
-        "Kuch items available nahi han. Alternative chunein ya item hata dein.",
-        {
-          unresolved: unresolved.map((i) => ({
-            itemId: i._id,
-            name: i.requestedName || i.name,
-            matchStatus: i.matchStatus,
-          })),
-        },
-      );
-    }
-    if (!quickOrder.items.length)
-      throw new HttpError(400, "Order mein koi item nahi");
-
-    // 2) Price/availability dobara DB se (slip banne ke baad price badal sakti ha)
-    const productIds = quickOrder.items
-      .filter((i) => i.productId)
-      .map((i) => i.productId);
-    const products = await Product.find({
-      _id: { $in: productIds },
-      // isAvailable: true,
-    }).lean();
-    const productMap = new Map(products.map((p) => [String(p._id), p]));
-
-    const formattedItems = [];
-    let subtotal = 0;
-    for (const it of quickOrder.items) {
-      let price,
-        p = null;
-      if (it.matchStatus === "MATCHED") {
-        p = productMap.get(String(it.productId));
-        if (!p)
-          throw new HttpError(
-            409,
-            `"${it.name}" ab available nahi. Slip edit karein.`,
-          );
-        price = Number(p.price) || 0;
-      } else {
-        price = Number(it.estimatedUnitPrice) || 0; // CUSTOM (pharmacy): price admin/rider confirm karega
+    // a) quantity / variation / add-on badalna
+    const changes = items.filter((c) => qo.items.id(c._id || c.id));
+    const repricing = changes.filter((c) => c.variations !== undefined || c.addOns !== undefined);
+    const map = repricing.length ? await loadProducts(repricing.map((c) => qo.items.id(c._id || c.id).productId)) : new Map();
+    for (const c of changes) {
+      const it = qo.items.id(c._id || c.id);
+      if (c.quantity !== undefined) it.quantity = clampQty(c.quantity);
+      if (c.variations !== undefined || c.addOns !== undefined) {
+        const doc = map.get(String(it.productId));
+        if (!doc) throw new HttpError(409, `"${it.name}" is no longer available`);
+        const priced = priceSelection(doc, {
+          variations: c.variations !== undefined ? c.variations : it.selectedVariations.map((v) => ({ title: v.title, option: v.option })),
+          addOns: c.addOns !== undefined ? c.addOns : it.selectedAddOns,
+        });
+        Object.assign(it, { selectedVariations: priced.selectedVariations, selectedAddOns: priced.selectedAddOns, basePrice: priced.base,
+          variationDefaulted: priced.defaulted, estimatedUnitPrice: priced.unit });
       }
-      const total = round2(price * it.quantity);
-      subtotal += total;
-      const mapped = p?.category ? mapCategoryToEnum(p.category) : "other";
-      formattedItems.push({
-        productId: p ? p._id : null,
-        name: it.dosage ? `${it.name} (${it.dosage})` : it.name,
-        orderFrom: mapped !== "other" ? mapped : defaultOrderFrom,
-        image: p?.images || "",
-        category: p?.category || quickOrder.category,
-        subcategory: p?.subcategory || "",
-        weight: p?.weight,
-        belongsTo: p.belongsTo || quickOrder.belongsTo || "",
-        variations: p.variations || quickOrder.variations || [],
-        addOns: p.addOns || quickOrder.addOns || [],
-        tags: p.tags || quickOrder.tags || [],
-        type: p.type || quickOrder.type || "",
-        dosage: p.dosage || quickOrder.dosage || "",
-        isRxRequired: p.isRxRequired || quickOrder.isRxRequired || false,
-        isVeg: p.isVeg || quickOrder.isVeg || false,
-        rating: p.rating || quickOrder.rating || {},
-        price,
-        quantity: it.quantity,
-        total,
-      });
+      it.totalItemPrice = lineTotal(it.estimatedUnitPrice, it.quantity);
     }
+    // b) hatana
+    for (const id of removeItemIds) qo.items.id(id)?.deleteOne();
 
-    // 3) Address (selected addressId ko priority)
-    const user = await User.findById(userId);
-    if (!user || !user.addresses?.length)
-      throw new HttpError(400, "User ka koi saved address nahi");
-    const addr =
-      (addressId && user.addresses.id(addressId)) ||
-      user.addresses.find((a) => a.isSave) ||
-      user.addresses[0];
-    const formattedAddress = {
-      phone: addr.phone || user.phone || "",
-      address: addr.address || addr.street || "",
-      city: addr.city || "Karachi",
-      zipCode: addr.zipCode || "",
-      country: addr.country || "Pakistan",
-      location: {
-        type: "Point",
-        coordinates: addr.location?.coordinates ||
-          user.location?.coordinates || [0, 0],
-      },
-    };
-
-    // 4) Stops (createOrder wali logic: Vendor + VendorBranch)
-    const hasOnlyGroceryItems = formattedItems.every(
-      (i) => i.orderFrom === "grocery",
-    );
-    const vendorIds = [
-      ...new Set(products.map((p) => p.vendorId?.toString()).filter(Boolean)),
-    ];
-    const stops = await buildStops(vendorIds, hasOnlyGroceryItems);
-
-    const hasCustom = quickOrder.items.some((i) => i.matchStatus === "CUSTOM");
-    if (hasCustom && stops.length === 0) {
-      const fb = await Vendor.findOne({
-        businessType: isPharmacy ? "pharmacy" : defaultOrderFrom,
-      }); // field name apne Vendor schema se check karein
-      stops.push({
-        stopNumber: 1,
-        vendorId: fb?._id || null,
-        branchId: null,
-        logo: fb?.logo || "",
-        businessName:
-          fb?.businessName ||
-          (isPharmacy ? "OmniGo Partner Pharmacy" : "OmniGo Mart"),
-        businessType: isPharmacy ? "pharmacy" : defaultOrderFrom,
-        address: fb?.address || "Assigned Regional Merchant",
-        city: fb?.city || "",
-        country: fb?.country || "",
-        location: {
-          type: "Point",
-          coordinates: fb?.location?.coordinates || [0, 0],
-        },
-        status: "pending",
-      });
+    // c) naye items: search se chuna hua product (productId zaroori). Same product+selection ho to quantity barhti ha
+    if (addItems.length) {
+      for (const a of addItems) if (!a || !isValidObjectId(a.productId)) throw new HttpError(400, "addItems: a valid productId is required (choose the product from search)");
+      const fresh = await buildItems(addItems.slice(0, 10));
+      for (const n of fresh) {
+        const key = lineKey(n.productId, n.selectedVariations, n.selectedAddOns);
+        const same = qo.items.find((x) => lineKey(x.productId, x.selectedVariations, x.selectedAddOns) === key);
+        if (same) { same.quantity = clampQty(same.quantity + n.quantity); same.totalItemPrice = lineTotal(same.estimatedUnitPrice, same.quantity); }
+        else qo.items.push(n);
+      }
     }
+    recalc(qo);
+    await qo.save();
+    return res.json({ success: true, message: "Slip updated", data: qo });
+  } catch (e) { return sendError(res, e, "Could not update the slip"); }
+};
 
-    // 5) Totals (createOrder jesa)
-    const discount = Number(promoDiscount) || 0;
-    const tax = (TAX_PERCENT / 100) * subtotal;
-    const deliveryFee = quickOrder.deliveryFee || DELIVERY_FEE;
-    const totalAmount = round2(subtotal + tax + deliveryFee - discount);
-
-    const note = hasCustom
-      ? " | NOTE: Kuch items ki price confirm honi baqi ha"
-      : "";
-    const order = await Order.create({
-      orderNumber: "ORD" + Date.now() + Math.floor(Math.random() * 1000),
-      userId,
-      address: formattedAddress,
-      stops,
-      items: formattedItems,
-      paymentMethod,
-      paymentStatus: "pending",
-      subtotal: round2(subtotal),
-      deliveryFee,
-      salesAndServiceTaxForUser: TAX_PERCENT,
-      instructions:
-        (instructions || quickOrder.customerNotes || "Quick Order") + note,
-      promoDiscount: discount,
-      totalAmount,
-      status: hasOnlyGroceryItems && !hasCustom ? "ready" : "pending",
-      riderId: null,
-      isAssigned: false,
-      source: "QUICK_ORDER", // Order schema mein field add karein (analytics ke liye)
-    });
-
-    quickOrder.status = "CONFIRMED";
-    quickOrder.orderId = order._id;
-    await quickOrder.save();
-
-    // 6) Notifications (fail ho to order cancel nahi hona chahiye)
-    try {
-      const io = req.app.get("io");
-      if (io) io.to("role:admin").emit("adminNewOrder", order);
-      /* await Promise.all(vendorIds.map((vId) => sendNotificationToVendor(req.app, {
-        vendorId: vId, role: "Vendor", title: "New Order Received!",
-        message: `You have received a new order #${order.orderNumber}.`, type: "new_order",
-        data: { orderId: order._id, orderNumber: order.orderNumber, totalAmount: order.totalAmount, itemCount: order.items.length, screenToOpen: "VendorOrderDetails" },
-        link: `/vendor/orders/${order._id}`,
-      }))); */
-    } catch (n) {
-      console.error("Notification error:", n.message);
-    }
-
-    return res.status(201).json({
-      success: true,
-      message: "Order placed successfully",
-      order,
-      orderId: order._id,
-    });
-  } catch (error) {
-    if (lockedId)
-      await QuickOrder.updateOne(
-        { _id: lockedId, status: "CONFIRMING" },
-        { $set: { status: previousStatus } },
-      ).catch(() => {});
-    return sendError(res, error, "Order confirm nahi ho saka");
+// ================================================================ 5) SEARCH (typing / "add more items")
+exports.searchCatalog = async (req, res) => {
+  try {
+    const q = String(req.query.q || "").slice(0, 100);
+    const limit = Math.min(30, Math.max(1, parseInt(req.query.limit, 10) || 20));
+    const category = req.query.category ? normCategory(req.query.category) : undefined;
+    return res.json({ success: true, data: await searchProducts(q, limit, { category }) });
+  } catch (e) {
+    if (e.code === "CATALOG_EMPTY") return res.status(503).json({ success: false, message: "Products are not loaded right now. Please try again shortly." });
+    return sendError(res, e, "Search failed");
   }
 };
 
-async function buildStops(vendorIds, hasOnlyGroceryItems) {
-  if (!vendorIds.length) return [];
-  const [vendors, branches] = await Promise.all([
-    Vendor.find({ _id: { $in: vendorIds } }),
-    VendorBranch.find({ vendorId: { $in: vendorIds }, isActive: true }),
-  ]);
-  return vendors.map((vendor, index) => {
-    const b =
-      branches.find((x) => x.vendorId.toString() === vendor._id.toString()) ||
-      {};
-    return {
-      stopNumber: index + 1,
-      vendorId: vendor._id,
-      branchId: b._id || null,
-      logo: vendor.logo || "",
-      businessName: vendor.businessName || b.branchName || "Branch Name",
-      businessType: vendor.businessType || "fast-food",
-      address: b.address || vendor.address || "Vendor Address",
-      city: b.city || vendor.city || "Vendor City",
-      country: b.country || vendor.country || "Vendor Country",
-      location: {
-        type: "Point",
-        coordinates: b.location?.coordinates ||
-          vendor.location?.coordinates || [0, 0],
-      },
-      status: hasOnlyGroceryItems ? "ready" : "pending",
-    };
-  });
+// ================================================================ 6) ADD TO CART  (confirm ki jagah)
+// !! Cart item ki shakal: createOrder jo cart items padhta ha (productId, name, orderFrom, image, category, weight, variations, addOns, price, quantity, vendorId).
+// !! Agar aap ke Cart schema mein variations/addOns ki shakal alag ho to SIRF toCartItem() badlein.
+function toCartItem(it, doc, priced) {
+  const mapped = mapCategoryToEnum(doc.belongsTo || doc.category);
+  return {
+    productId: doc._id, name: doc.name, orderFrom: mapped !== "other" ? mapped : "fast-food", image: firstImage(doc),
+    category: doc.category, subcategory: doc.subcategory || "", weight: doc.weight || "",
+    variations: priced.selectedVariations, addOns: priced.selectedAddOns,
+    price: priced.unit,                                              // ek piece ki qeemat (variation + add-ons shamil)
+    quantity: it.quantity, vendorId: doc.vendorId || null, source: "QUICK_ORDER",
+  };
 }
+exports.addToCart = async (req, res) => {
+  let lockedId = null, previousStatus = null;
+  try {
+    const userId = req.user.id;
+    const { quickOrderId } = req.body;
+    if (!isValidObjectId(quickOrderId)) throw new HttpError(400, "Invalid slip id");
 
-function sendError(res, error, fallbackMessage) {
-  if (error instanceof HttpError)
-    return res
-      .status(error.status)
-      .json({ success: false, message: error.message, ...error.extra });
-  console.error(fallbackMessage + ":", error);
-  return res.status(500).json({ success: false, message: fallbackMessage });
-}
+    // Double-tap se cart mein do dafa na jaye: atomic lock
+    const locked = await QuickOrder.findOneAndUpdate(
+      { _id: quickOrderId, user: userId, status: { $in: ["PROPOSED", "PRICE_UPDATED"] } },
+      { $set: { status: "ADDING_TO_CART" } }, { new: false });
+    if (!locked) throw new HttpError(409, "This slip was not found or has already been added to the cart");
+    lockedId = locked._id; previousStatus = locked.status;
+    const qo = await QuickOrder.findById(lockedId);
+    if (!qo.items.length) throw new HttpError(400, "The slip has no items");
+
+    // Har item dobara DB se: available? price badli? (slip aur cart ki qeemat hamesha taaza)
+    const map = await loadProducts(qo.items.map((i) => i.productId));
+    const unavailable = [], lines = [], priceChanges = [];
+    for (const it of qo.items) {
+      const doc = map.get(String(it.productId));
+      if (!doc) { unavailable.push({ itemId: it._id, name: it.name, reason: "Not available anymore" }); continue; }
+      let priced;
+      try { priced = priceSelection(doc, { variations: it.selectedVariations.map((v) => ({ title: v.title, option: v.option })), addOns: it.selectedAddOns }); }
+      catch (e) { unavailable.push({ itemId: it._id, name: it.name, reason: e.message }); continue; }
+      if (priced.unit !== it.estimatedUnitPrice) priceChanges.push({ itemId: it._id, name: it.name, oldUnitPrice: it.estimatedUnitPrice, newUnitPrice: priced.unit });
+      lines.push({ it, doc, priced });
+    }
+    if (unavailable.length) throw new HttpError(409, "Some items are no longer available. Please edit the slip.", { unavailable });
+
+    let cart = await Cart.findOne({ userId });
+    if (!cart) cart = new Cart({ userId, items: [] });
+    for (const { it, doc, priced } of lines) {
+      const item = toCartItem(it, doc, priced);
+      const key = lineKey(item.productId, item.variations, item.addOns);
+      const existing = cart.items.find((c) => lineKey(c.productId, c.variations || [], c.addOns || []) === key);
+      if (existing) { existing.quantity = (Number(existing.quantity) || 0) + item.quantity; existing.price = item.price; }
+      else cart.items.push(item);
+    }
+    await cart.save();
+
+    for (const { it, priced } of lines) {                           // slip ko bhi taaza qeemat par
+      Object.assign(it, { estimatedUnitPrice: priced.unit, basePrice: priced.base, totalItemPrice: lineTotal(priced.unit, it.quantity) });
+    }
+    qo.status = "ADDED_TO_CART";
+    recalc(qo);
+    await qo.save();
+
+    try { const io = req.app.get("io"); if (io) io.to(`user:${userId}`).emit("cart_updated", cart); } catch (n) { console.error("socket:", n.message); }
+
+    return res.json({ success: true, message: "Items added to cart", addedCount: lines.length, priceChanges, slipTotal: qo.subtotal, cart });
+  } catch (error) {
+    if (lockedId) await QuickOrder.updateOne({ _id: lockedId, status: "ADDING_TO_CART" }, { $set: { status: previousStatus } }).catch(() => {});
+    return sendError(res, error, "Could not add the items to the cart");
+  }
+};
+
+// ================================================================ DEBUG (QUICK_ORDER_DEBUG=true par; warna 404)
+exports.debugMatch = async (req, res) => {
+  if (process.env.QUICK_ORDER_DEBUG !== "true") return res.status(404).json({ success: false, message: "Not found" });
+  try {
+    const q = String(req.query.q || "");
+    const out = q ? await explainMatch({ name: q, brand: String(req.query.brand || ""), size: String(req.query.size || "") }, { category: req.query.category }) : { catalog: catalogStats() };
+    return res.json({ success: true, ...out });
+  } catch (e) { return res.status(500).json({ success: false, code: e.code, message: e.message }); }
+};
