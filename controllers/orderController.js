@@ -17,18 +17,26 @@ const { default: mongoose } = require("mongoose");
 const VendorBranch = require("../models/VendorBranch");
 const Deal = require("../models/Deal");
 const Campaign = require("../models/Campaign");
-const locationService = require('../services/locationService');
+const locationService = require("../services/locationService");
 
 exports.reverseGeocode = async (req, res) => {
   try {
     const { lat, lng } = req.query;
 
     if (!lat || !lng) {
-      return res.status(400).json({ success: false, message: "Latitude and Longitude are required" });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Latitude and Longitude are required",
+        });
     }
 
-    const result = await locationService.getAddressFromCoordinates(Number(lat), Number(lng));
-    
+    const result = await locationService.getAddressFromCoordinates(
+      Number(lat),
+      Number(lng),
+    );
+
     if (!result.success) {
       return res.status(400).json(result);
     }
@@ -120,7 +128,7 @@ exports.calculateDeliveryCharges = async (req, res) => {
           peakHour: isPeakHour || false,
           badWeather: isBadWeather || false,
           peakHourCharges: isPeakHour ? `${peakHourPercent}%` : 0,
-          badweatherCharges: isBadWeather ? `${badWeatherPercent}%`: 0,
+          badweatherCharges: isBadWeather ? `${badWeatherPercent}%` : 0,
         },
       },
     });
@@ -193,8 +201,7 @@ exports.createOrder = async (req, res) => {
         total,
       };
     });
-    console.log(formattedItems);
-    console.log(formattedItems.length);
+
     // // Step 1: Order items me se saare Product IDs collect karein
     // const productIds = cart.items.map((item) => item.productId).filter(Boolean);
     // console.log("Product IDs in this order:", productIds);
@@ -209,7 +216,6 @@ exports.createOrder = async (req, res) => {
     // STEP 1 & 2: COLLECT IDs AND FETCH FROM PRODUCTS, DEALS & CAMPAIGNS
     // ==========================================================
     const itemIds = cart.items.map((item) => item.productId).filter(Boolean);
-    console.log("Item IDs in this order:", itemIds);
 
     // Fetch vendorIds from all possible collections (Products, Deals, Campaigns)
     const [products, deals, campaigns] = await Promise.all([
@@ -227,7 +233,6 @@ exports.createOrder = async (req, res) => {
     ].filter(Boolean);
 
     const vendorIds = [...new Set(extractedVendorIds)];
-    console.log("Unique Vendor IDs extracted for this order:", vendorIds);
 
     const hasOnlyGroceryItems =
       formattedItems.length > 0 &&
@@ -241,7 +246,7 @@ exports.createOrder = async (req, res) => {
     // ];
     // console.log("Unique Vendor IDs for this order:", vendorIds);
 
-    // 🛑 STEP 4: AUTOMATICALLY GENERATE STOPS FROM VENDOR BRANCHES
+    // STEP 4: AUTOMATICALLY GENERATE STOPS FROM VENDOR BRANCHES
     let stops = [];
     if (
       req.body.stops &&
@@ -365,7 +370,6 @@ exports.createOrder = async (req, res) => {
           link: `/vendor/orders/${order._id}`,
         }),
       );
-      console.log(vendorNotifications, "vendorNotifications");
       // Parallel Execution: Tamam vendors ko ek sath save aur emit karega
       await Promise.all(vendorNotifications);
     }
@@ -529,7 +533,7 @@ exports.cancelOrder = async (req, res) => {
 
     // FCM Push Notification
     const customer = await User.findById(order.userId);
-    sendNotification(req.app, {
+    sendNotificationToVendor(req.app, {
       vendorId: order.stops[0]?.vendorId,
       role: "Vendor",
       title: "Order Cancelled",
@@ -657,7 +661,7 @@ exports.cancelRiderOrder = async (req, res) => {
     await order.save();
 
     sendNotification(req.app, {
-      userId: order.riderId,
+      userId: req.user?.id,
       role: "rider",
       title: "Order Cancelled",
       message: `You have cancelled Order#${order.orderNumber}.`,
@@ -905,32 +909,32 @@ exports.readyOrder = async (req, res) => {
       });
     }
 
-   // 1. Database se saare active/registered riders ki list nikalein
-// (Apne User model ke mutabiq query adjust kar lein, misal ke tor par role: 'rider')
-const riders = await User.find({ role: 'rider', status: 'active' }); // ya sirf { role: 'rider' }
+    // 1. Database se saare active/registered riders ki list nikalein
+    // (Apne User model ke mutabiq query adjust kar lein, misal ke tor par role: 'rider')
+    const riders = await User.find({ role: "rider", isBlocked: false }); // ya sirf { role: 'rider' }
 
-// 2. Agar riders mojood hain toh sab ko notification bhej dein
-if (riders && riders.length > 0) {
-  // Sab riders ke liye parallel notifications bhejne ke liye Promise.all use karein
-  await Promise.all(
-    riders.map(async (rider) => {
-      await sendNotification(req.app, {
-        userId: rider._id, // Har rider ki apni ID
-        role: "rider",
-        title: "Order Ready For Pickup",
-        message: `Order #${order.orderNumber} is ready. Please pickup order now.`,
-        type: "ready_order",
-        data: {
-          orderId: order._id,
-          orderNumber: order.orderNumber,
-          totalAmount: order.totalAmount || order.grandTotal,
-          itemCount: order.items?.length || 0,
-          screenToOpen: "RiderOrderDetails",
-        },
-      });
-    })
-  );
-}
+    // 2. Agar riders mojood hain toh sab ko notification bhej dein
+    if (riders && riders.length > 0) {
+      // Sab riders ke liye parallel notifications bhejne ke liye Promise.all use karein
+      await Promise.all(
+        riders.map(async (rider) => {
+          await sendNotification(req.app, {
+            userId: rider?._id, // Har rider ki apni ID
+            role: "rider",
+            title: "Order Ready For Pickup",
+            message: `Order #${order.orderNumber} is ready. Please pickup order now.`,
+            type: "ready_order",
+            data: {
+              orderId: order._id,
+              orderNumber: order.orderNumber,
+              totalAmount: order.totalAmount || order.grandTotal,
+              itemCount: order.items?.length || 0,
+              screenToOpen: "RiderOrderDetails",
+            },
+          });
+        }),
+      );
+    }
     // 5. Send FCM Push Notification to Customer
     // const customer = await User.findById(order.userId);
     // if (customer?.fcmToken) {
@@ -1104,6 +1108,7 @@ exports.cancelOrderByVendor = async (req, res) => {
     }
 
     // 1. Fetch Order
+    const vendor = await Vendor.findById(req.user.id);
     const order = await Order.findOne({ _id: req.params.id });
 
     if (!order) {
@@ -1261,6 +1266,15 @@ exports.cancelOrderByVendor = async (req, res) => {
 
     await order.save();
 
+    // Notification Trigger
+    await sendNotification({
+      userId: order.userId,
+      orderId: order._id,
+      title: "Order Cancelled by Vendor",
+      message: `Your order has been cancelled by ${vendor?.businessName} for reason: ${cancellationReason}`,
+      type: "order_cancelled_by_vendor",
+    });
+
     return res.status(200).json({
       success: true,
       message: isFullOrderCancelled
@@ -1408,7 +1422,7 @@ exports.getOngoingOrders = async (req, res) => {
 exports.getAvailableOrders = async (req, res) => {
   try {
     const rider = await User.findById(req.user.id).select(
-      "riderProfile.riderCancelledOrder"
+      "riderProfile.riderCancelledOrder",
     );
 
     if (!rider) {
@@ -1417,8 +1431,6 @@ exports.getAvailableOrders = async (req, res) => {
         message: "Rider not found",
       });
     }
-
-    
 
     // Get orders cancelled by this rider
     const cancelledOrderIds = (
@@ -1573,6 +1585,25 @@ exports.acceptOrder = async (req, res) => {
     //     },
     //   );
     // }
+
+    // Notification Trigger
+    await sendNotification({
+      userId: req.user.id,
+      orderId: order._id,
+      title: "Your Rider Is On It!",
+      message: `Rider ${rider.name} has accepted your order #${order.orderNumber}.`,
+      type: "rider_assigned",
+    });
+
+    for (const stop of order.stops) {
+      await sendNotificationToVendor({
+        vendor: stop.vendorId,
+        orderId: order._id,
+        title: "Rider Assigned",
+        message: `Rider ${rider.name} has accepted your order #${order.orderNumber}.`,
+        type: "rider_assigned",
+      });
+    }
 
     return res.status(200).json({
       success: true,
@@ -2236,9 +2267,11 @@ exports.reorder = async (req, res) => {
     });
 
     // Extract item IDs to fetch vendor IDs from Products, Deals, and Campaigns
-    const itemIds = formattedItems.map((item) => item.productId).filter(Boolean);
-    
-    if(!itemIds) {
+    const itemIds = formattedItems
+      .map((item) => item.productId)
+      .filter(Boolean);
+
+    if (!itemIds) {
       return res
         .status(400)
         .json({ success: false, message: "Items not available" });
@@ -2250,7 +2283,7 @@ exports.reorder = async (req, res) => {
       Campaign.find({ _id: { $in: itemIds } }).select("vendorId"),
     ]);
 
-    if(!products.length || !deals.length || !campaigns.length) {
+    if (!products.length || !deals.length || !campaigns.length) {
       return res
         .status(400)
         .json({ success: false, message: "Items not available" });
@@ -2267,7 +2300,7 @@ exports.reorder = async (req, res) => {
 
     const vendorIds = [...new Set(extractedVendorIds)];
 
-    if(!vendorIds) {
+    if (!vendorIds) {
       return res
         .status(400)
         .json({ success: false, message: "Vendor not available" });
@@ -2317,13 +2350,16 @@ exports.reorder = async (req, res) => {
     }
 
     const deliveryFee = Number(oldOrder.deliveryFee) || 200;
-    const salesAndServiceTaxForUser = Number(oldOrder.salesAndServiceTaxForUser) || 5;
+    const salesAndServiceTaxForUser =
+      Number(oldOrder.salesAndServiceTaxForUser) || 5;
     const promoDiscount = Number(oldOrder.promoDiscount) || 0;
     const instructions = oldOrder.instructions || "";
-    const routingMetrics = oldOrder.routingMetrics || { totalDistanceKm: 0, totalEtaMin: 0 };
+    const routingMetrics = oldOrder.routingMetrics || {
+      totalDistanceKm: 0,
+      totalEtaMin: 0,
+    };
 
-    const subtotalWithTax =
-      (salesAndServiceTaxForUser / 100) * subtotal;
+    const subtotalWithTax = (salesAndServiceTaxForUser / 100) * subtotal;
     const totalAmount =
       subtotal + subtotalWithTax + deliveryFee - promoDiscount;
 
@@ -2387,7 +2423,7 @@ exports.reorder = async (req, res) => {
 };
 
 // =====================================
-// TRACK ORDER 
+// TRACK ORDER
 // =====================================
 exports.trackOrder = async (req, res) => {
   try {
@@ -2514,15 +2550,12 @@ exports.getVendorOrders = async (req, res) => {
       });
     }
 
-      const formattedDate = (date) => {
-      const getFormattedDate = new Date(date).toLocaleString(
-        "en-PK",
-        {
-          timeZone: "Asia/Karachi",
-          dateStyle: "medium",
-          timeStyle: "short",
-        },
-      );
+    const formattedDate = (date) => {
+      const getFormattedDate = new Date(date).toLocaleString("en-PK", {
+        timeZone: "Asia/Karachi",
+        dateStyle: "medium",
+        timeStyle: "short",
+      });
 
       return getFormattedDate;
     };
