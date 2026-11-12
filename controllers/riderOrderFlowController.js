@@ -2,7 +2,7 @@ const Order = require("../models/Order");
 const User = require("../models/User");
 const WalletTransaction = require("../models/WalletTransaction");
 const RiderSessionParticipation = require("../models/RiderSessionParticipation");
-const { sendNotification } = require("../utils/sendNotification");
+const { sendNotification, sendNotificationToVendor } = require("../utils/sendNotification");
 
 function isFullyVerified(rider) {
   return (
@@ -298,18 +298,28 @@ exports.completeOrderDelivery = async (req, res) => {
     // 7. Send FCM Push Notification to Customer
     const customer = await User.findById(order.userId);
     if (customer?.fcmToken) {
-      await sendNotification(
-        customer.fcmToken,
-        "Order Delivered",
-        `Your order #${order.orderNumber} has been delivered successfully.`,
-        {
-          riderId: rider._id.toString(),
-          riderName: rider.name || "",
-          riderEmail: rider.email || "",
-          riderPhone: rider.phone || "",
-        },
-      );
+    
+ // Notification Trigger
+    await sendNotification({
+      userId: order.userId,
+      orderId: order._id,
+      title: "Order Delivered! Enjoy Your Order!",
+      message: `Your order is delivered successfully. We hope you enjoy it!`,
+      type: "order_delivered",
+    });
+      
     }
+
+   for (const stop of order.stops) {
+  await sendNotificationToVendor({
+    vendor: stop.vendorId,
+    orderId: order._id,
+    title: "Order Delivered!",
+    message: `Order delivered successfully. Thank you for serving our customers!`,
+    type: "order_delivered",
+  });
+}
+    
 
     await User.findOneAndUpdate(
       {

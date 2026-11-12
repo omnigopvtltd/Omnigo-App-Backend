@@ -61,6 +61,12 @@ const notificationMessages = {
       "Your order has been cancelled. If you have any questions, our support team is here to help.",
   },
 
+  order_cancelled_by_vendor: {
+    title: "😔 Order Cancelled By Vendor",
+    message:
+      "Your order has been cancelled by the vendor. If you have any questions, our support team is here to help.",
+  },
+
   new_order: {
     title: "🔥 New Order Available!",
     message:
