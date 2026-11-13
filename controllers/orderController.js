@@ -372,6 +372,35 @@ exports.createOrder = async (req, res) => {
       await Promise.all(vendorNotifications);
     }
 
+    // Agar sirf Grocery items hain toh order direct 'ready' hai — online riders ko notify karein
+    if (hasOnlyGroceryItems) {
+      const onlineRiders = await User.find({
+        role: "rider",
+        "riderProfile.isOnline": true,
+        isBlocked: false,
+        "riderProfile.isBusy": false,
+      }).select("_id");
+
+      await Promise.all(
+        onlineRiders.map((r) =>
+          sendNotification({
+            userId: r._id,
+            orderId: order._id,
+            role: "rider",
+            title: "New Grocery Order Ready!",
+            message: `Order #${order.orderNumber} is ready for pickup. Tap to accept.`,
+            type: "ready",
+            extraData: {
+              orderId: order._id,
+              orderNumber: order.orderNumber,
+              status: "ready",
+              screenToOpen: "AvailableOrdersScreen",
+            },
+          }),
+        ),
+      );
+    }
+
     return res.status(201).json({
       success: true,
       message: "Order placed successfully",
@@ -530,35 +559,24 @@ exports.cancelOrder = async (req, res) => {
     });
 
     // FCM Push Notification
-    const customer = await User.findById(order.userId);
-    sendNotificationToVendor(req.app, {
-      vendorId: order.stops[0]?.vendorId,
-      role: "Vendor",
-      title: "Order Cancelled",
-      message: `Order#${order.orderNumber} has been cancelled.`,
-      type: "cancelled_order",
-      data: {
-        orderId: order._id,
-        orderNumber: order.orderNumber,
-        totalAmount: order.totalAmount || order.grandTotal,
-        itemCount: order.items?.length || 0,
-        screenToOpen: "VendorOrderDetails",
-      },
-      link: `/vendor/orders/cancel/${order._id}`,
-    });
-    // if (customer?.fcmToken) {
-    //   await sendNotification(
-    //     customer.fcmToken,
-    //     "Order Cancelled",
-    //     `Your order has cancelled #${order.orderNumber}`,
-    //     {
-    //       riderId: rider._id.toString(),
-    //       riderName: rider.name || "",
-    //       riderEmail: rider.email || "",
-    //       riderPhone: rider.phone || "",
-    //     },
-    //   );
-    // }
+    for (const stop of order.stops) {
+      if (stop.vendorId) {
+        await sendNotificationToVendor({
+          vendorId: stop.vendorId,
+          role: "vendor",
+          orderId: order._id,
+          type: "cancelled_order",
+          title: "Order Cancelled",
+          message: `Order #${order.orderNumber} has been cancelled by the customer.`,
+          extraData: {
+            orderId: order._id,
+            orderNumber: order.orderNumber,
+            status: "cancelled",
+            screenToOpen: "VendorOrderDetails",
+          },
+        });
+      }
+    }
 
     return res.status(200).json({
       success: true,
@@ -771,39 +789,19 @@ exports.confirmOrder = async (req, res) => {
       });
     }
 
-    // sendNotification(req.app, {
-    //       recipientId: order.userId,
-    //      role: "User",
-    //       title: "Order Confirmed!",
-    //       message: `Your order #${order.orderNumber} has been confirmed.`,
-    //       type: "confirmed_order",
-    //       data: {
-    //         orderId: order._id,
-    //         orderNumber: order.orderNumber,
-    //         totalAmount: order.totalAmount || order.grandTotal,
-    //         itemCount: order.items?.length || 0,
-    //         screenToOpen: "UserOrderDetails",
-    //       },
-    //       link: `/user/orders/confirmed/${order._id}`,
-    //     })
-
-    // 5. Send FCM Push Notification to Customer
-    // const customer = await User.findById(order.userId);
-    // if (customer?.fcmToken) {
-    //   await sendNotification(
-    //     customer.fcmToken,
-    //     "Order Confirmed",
-    //     `Your order #${order.orderNumber} has been confirmed by the vendor.`,
-    //   );
-    // }
-
-    // Notification Trigger
     await sendNotification({
       userId: order.userId,
       orderId: order._id,
-      title: "Order Accepted",
-      message: `Your order is accepted by ${vendor.businessName}`,
+      role: "user",
+      title: "Order Confirmed & Accepted!",
+      message: `Your order #${order.orderNumber} is accepted by ${vendor.businessName}.`,
       type: "order_confirmed",
+      extraData: {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        status: "confirmed",
+        screenToOpen: "UserOrderDetails",
+      },
     });
 
     return res.status(200).json({
@@ -907,52 +905,66 @@ exports.readyOrder = async (req, res) => {
       });
     }
 
-    // 1. Database se saare active/registered riders ki list nikalein
-    // (Apne User model ke mutabiq query adjust kar lein, misal ke tor par role: 'rider')
-    const riders = await User.find({ role: "rider", isBlocked: false }); // ya sirf { role: 'rider' }
+    // 1. User ko "Order Ready" notification
+    await sendNotification({
+      userId: order.userId,
+      orderId: order._id,
+      role: "user",
+      title: "Order Ready!",
+      message: `Your order #${order.orderNumber} is prepared and ready!`,
+      type: "order_ready",
+      extraData: {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        status: "ready",
+        screenToOpen: "UserOrderDetails",
+      },
+    });
 
-    // 2. Agar riders mojood hain toh sab ko notification bhej dein
-    if (riders && riders.length > 0) {
-      // Sab riders ke liye parallel notifications bhejne ke liye Promise.all use karein
+    // 2. Rider ko notification (Sirf ready par)
+    if (order.riderId) {
+      await sendNotification({
+        userId: order.riderId,
+        orderId: order._id,
+        role: "rider",
+        title: "Order Ready For Pickup",
+        message: `Order #${order.orderNumber} is ready. Please pick up order now.`,
+        type: "ready_order",
+        extraData: {
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          status: "ready",
+          screenToOpen: "RiderOrderDetails",
+        },
+      });
+    } else {
+      const onlineRiders = await User.find({
+        role: "rider",
+        // "riderProfile.isOnline": true,
+        isBlocked: false,
+        "riderProfile.isBusy": false,
+        "riderProfile.riderCancelledOrder": { $ne: order._id },
+      }).select("_id");
+
       await Promise.all(
-        riders.map(async (rider) => {
-          try {
-            await sendNotification(req.app, {
-              userId: rider?._id,
-              role: "rider",
-              title: "Order Ready For Pickup",
-              message: `Order #${order.orderNumber} is ready. Please pickup order now.`,
-              type: "ready_order",
-              data: {
-                orderId: order._id,
-                orderNumber: order.orderNumber,
-                totalAmount: order.totalAmount || order.grandTotal,
-                itemCount: order.items?.length || 0,
-                screenToOpen: "RiderOrderDetails",
-              },
-            });
-
-            console.log("Notification Sent to" , rider?._id);
-          } catch (err) {
-            console.error(
-              `Failed to send notification to rider ${rider?._id}:`,
-              err.message,
-            );
-          }
-        }),
+        onlineRiders.map((r) =>
+          sendNotification({
+            userId: r._id,
+            orderId: order._id,
+            role: "rider",
+            title: "New Order Ready For Pickup!",
+            message: `Order #${order.orderNumber} is ready at the vendor. Tap to accept.`,
+            type: "ready_order",
+            extraData: {
+              orderId: order._id,
+              orderNumber: order.orderNumber,
+              status: "ready",
+              screenToOpen: "AvailableOrdersScreen",
+            },
+          }),
+        ),
       );
     }
-
-
-    // 5. Send FCM Push Notification to Customer
-    // const customer = await User.findById(order.userId);
-    // if (customer?.fcmToken) {
-    //   await sendNotification(
-    //     customer.fcmToken,
-    //     "Order Ready",
-    //     `Your order #${order.orderNumber} is prepared and ready!`,
-    //   );
-    // }
 
     return res.status(200).json({
       success: true,
@@ -1279,9 +1291,18 @@ exports.cancelOrderByVendor = async (req, res) => {
     await sendNotification({
       userId: order.userId,
       orderId: order._id,
-      title: "Order Cancelled by Vendor",
-      message: `Your order has been cancelled by ${vendor?.businessName} for reason: ${cancellationReason}`,
-      type: "order_cancelled_by_vendor",
+      role: "user",
+      title: "Order Cancelled",
+      message: isFullOrderCancelled
+        ? `Your order #${order.orderNumber} was cancelled by the vendor: ${cancellationReason}`
+        : `An item in your order #${order.orderNumber} was cancelled by the vendor.`,
+      type: "order_cancelled",
+      extraData: {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        status: "cancelled",
+        screenToOpen: "UserOrderDetails",
+      },
     });
 
     return res.status(200).json({
@@ -1563,6 +1584,22 @@ exports.acceptOrder = async (req, res) => {
 
     await order.save();
 
+    await sendNotification({
+      userId: order.userId,
+      orderId: order._id,
+      role: "user",
+      title: "Rider Assigned!",
+      message: `Rider ${rider.name || "Partner"} has accepted your order #${order.orderNumber}.`,
+      type: "rider_assigned",
+      extraData: {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        status: "assigned",
+        riderId: rider._id,
+        screenToOpen: "UserOrderDetails",
+      },
+    });
+
     // WebSockets Notifications
     const io = req.app.get("io");
     if (io) {
@@ -1596,23 +1633,23 @@ exports.acceptOrder = async (req, res) => {
     // }
 
     // Notification Trigger
-    await sendNotification({
-      userId: order.userId,
-      orderId: order._id,
-      title: "Your Rider Is On It!",
-      message: `Rider ${rider.name} has accepted your order #${order.orderNumber}.`,
-      type: "rider_assigned",
-    });
+    // await sendNotification({
+    //   userId: order.userId,
+    //   orderId: order._id,
+    //   title: "Your Rider Is On It!",
+    //   message: `Rider ${rider.name} has accepted your order #${order.orderNumber}.`,
+    //   type: "rider_assigned",
+    // });
 
-    for (const stop of order.stops) {
-      await sendNotificationToVendor({
-        vendor: stop.vendorId,
-        orderId: order._id,
-        title: "Rider Assigned",
-        message: `Rider ${rider.name} has accepted your order #${order.orderNumber}.`,
-        type: "rider_assigned",
-      });
-    }
+    // for (const stop of order.stops) {
+    //   await sendNotificationToVendor({
+    //     vendor: stop.vendorId,
+    //     orderId: order._id,
+    //     title: "Rider Assigned",
+    //     message: `Rider ${rider.name} has accepted your order #${order.orderNumber}.`,
+    //     type: "rider_assigned",
+    //   });
+    // }
 
     return res.status(200).json({
       success: true,
@@ -1995,20 +2032,23 @@ exports.updateOrderStatus = async (req, res) => {
       io.to("role:admin").emit("adminOrderUpdated", payload);
     }
 
-
     // ================= PUSH NOTIFICATIONS =================
-    if(status === "picked_up" || status === "pickedup") {
-       await sendNotification(req.app, {
-          userId: order.userId,
+    if (status === "picked_up") {
+      await sendNotification({
+        userId: order.userId,
+        orderId: order._id,
+        role: "user",
+        title: "Order Picked Up!",
+        message: `Your order #${order.orderNumber} has been picked up and is on the way!`,
+        type: "picked_up",
+        extraData: {
           orderId: order._id,
-          title: "Order Picked Up!",
-          message: `Your order #${order.orderNumber} has been picked up by a rider.`,
-          type: "order_picked_up",
-        });
-        console.log(`Push notification sent for status: ${status}`);
-      } else{
-        console.log(`No push notification sent for status: ${status}`);
-      }
+          orderNumber: order.orderNumber,
+          status: "picked_up",
+          screenToOpen: "UserOrderDetails",
+        },
+      });
+    }
 
     return res
       .status(200)
@@ -2040,8 +2080,8 @@ exports.handleOrderAssignment = async (req, res) => {
     // 2. Find nearest online rider who HAS enabled autoAcceptOrders AND is NOT busy
     const candidateRider = await User.findOne({
       role: "rider",
-      isOnline: true,
       isBlocked: false,
+      "riderProfile.isOnline": true,
       "riderProfile.autoAcceptOrders": true,
       "riderProfile.isBusy": false, // Checks if rider is currently ongoing/active on another order
       "location.coordinates": {
