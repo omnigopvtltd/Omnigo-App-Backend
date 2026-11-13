@@ -1597,7 +1597,7 @@ exports.acceptOrder = async (req, res) => {
 
     // Notification Trigger
     await sendNotification({
-      userId: req.user.id,
+      userId: order.userId,
       orderId: order._id,
       title: "Your Rider Is On It!",
       message: `Rider ${rider.name} has accepted your order #${order.orderNumber}.`,
