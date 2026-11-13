@@ -1508,6 +1508,21 @@ exports.facebookLogin = async (req, res) => {
   }
 };
 
+exports.updateFcmToken = async (req, res) => {
+  try {
+    const { vendorId, fcmToken } = req.body;
+
+    await Vendor.findByIdAndUpdate(vendorId, { fcmToken });
+
+    return res.status(200).json({
+      success: true,
+      message: "FCM Token updated successfully",
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 exports.firebaseToken = async (req, res) => {
   try {
     const firebaseToken = await exports.createFirebaseToken(
