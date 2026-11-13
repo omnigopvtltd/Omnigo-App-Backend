@@ -2,11 +2,12 @@
 // Qeemat ka SIRF EK jagah hisab (server par). Client se price kabhi nahi lete: sirf "kaunsa product, kaunsi variation/add-on, kitni quantity".
 // Sara hisab paisa (integer) mein hota ha taake 0.1 + 0.2 jese float masle na hon.
 //
-// !! VARIATION_PRICE_MODE (.env) !! Product.variations[].options[].price ka matlab:
-//    "add"     (default): option.price EXTRA ha  -> unit = base + option.price         (Large +300)
-//    "replace" : option.price POORI qeemat ha     -> unit = option.price (base ignore)   (Large = 1100)
-// Apne existing add-to-cart/Flutter code se confirm karein ke aap ke app mein kaun sa chalta ha, aur wohi set karein.
-const MODE = () => (process.env.VARIATION_PRICE_MODE === "replace" ? "replace" : "add");
+// VARIATION_PRICE_MODE (.env) - Product.variations[].options[].price ka matlab:
+//    "replace" (DEFAULT): option.price POORI qeemat ha  -> unit = option.price + add-ons  (product.price ignore)
+//         misaal: Pizza price 1200, "Regular 9-inch" option 1000, Extra Cheese 90  => 1000 + 90 = 1090
+//    "add"    : option.price EXTRA ha                  -> unit = base + option.price + add-ons
+// Agar kisi variation ki price 0 ho to base price (discountPrice ho to wo) hi lagti ha.
+const MODE = () => (process.env.VARIATION_PRICE_MODE === "add" ? "add" : "replace");   // DEFAULT: replace
 
 class PricingError extends Error {
   constructor(message, status = 400, code = "PRICING") { super(message); this.status = status; this.code = code; }

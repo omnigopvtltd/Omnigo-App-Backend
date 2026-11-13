@@ -23,6 +23,7 @@ const Campaign = require("../models/Campaign");
 const Zone = require("../models/Zone");
 const { getFirestore } = require("firebase-admin/firestore");
 const { getAuth } = require("firebase-admin/auth");
+const app = require("../config/firebase");
 
 // ======================================================
 // FIREBASE TOKEN

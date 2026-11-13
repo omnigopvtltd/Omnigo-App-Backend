@@ -300,13 +300,20 @@ exports.completeOrderDelivery = async (req, res) => {
     if (customer?.fcmToken) {
     
  // Notification Trigger
-    await sendNotification({
-      userId: order.userId,
-      orderId: order._id,
-      title: "Order Delivered! Enjoy Your Order!",
-      message: `Your order is delivered successfully. We hope you enjoy it!`,
-      type: "order_delivered",
-    });
+   await sendNotification({
+  userId: order.userId,
+  orderId: order._id,
+  role: "user",
+  title: "Order Delivered!",
+  message: `Your order #${order.orderNumber} has been delivered successfully.`,
+  type: "delivered",
+  extraData: {
+    orderId: order._id,
+    orderNumber: order.orderNumber,
+    status: "delivered",
+    screenToOpen: "UserOrderDetails",
+  },
+});
       
     }
 
