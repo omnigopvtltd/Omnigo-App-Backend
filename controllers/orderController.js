@@ -1995,6 +1995,21 @@ exports.updateOrderStatus = async (req, res) => {
       io.to("role:admin").emit("adminOrderUpdated", payload);
     }
 
+
+    // ================= PUSH NOTIFICATIONS =================
+    if(status === "picked_up" || status === "pickedup") {
+       await sendNotification(req.app, {
+          userId: order.userId,
+          orderId: order._id,
+          title: "Order Picked Up!",
+          message: `Your order #${order.orderNumber} has been picked up by a rider.`,
+          type: "order_picked_up",
+        });
+        console.log(`Push notification sent for status: ${status}`);
+      } else{
+        console.log(`No push notification sent for status: ${status}`);
+      }
+
     return res
       .status(200)
       .json({ success: true, message: "Status updated successfully", order });
