@@ -24,12 +24,10 @@ exports.reverseGeocode = async (req, res) => {
     const { lat, lng } = req.query;
 
     if (!lat || !lng) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Latitude and Longitude are required",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Latitude and Longitude are required",
+      });
     }
 
     const result = await locationService.getAddressFromCoordinates(
@@ -918,23 +916,34 @@ exports.readyOrder = async (req, res) => {
       // Sab riders ke liye parallel notifications bhejne ke liye Promise.all use karein
       await Promise.all(
         riders.map(async (rider) => {
-          await sendNotification(req.app, {
-            userId: rider?._id, // Har rider ki apni ID
-            role: "rider",
-            title: "Order Ready For Pickup",
-            message: `Order #${order.orderNumber} is ready. Please pickup order now.`,
-            type: "ready_order",
-            data: {
-              orderId: order._id,
-              orderNumber: order.orderNumber,
-              totalAmount: order.totalAmount || order.grandTotal,
-              itemCount: order.items?.length || 0,
-              screenToOpen: "RiderOrderDetails",
-            },
-          });
+          try {
+            await sendNotification(req.app, {
+              userId: rider?._id,
+              role: "rider",
+              title: "Order Ready For Pickup",
+              message: `Order #${order.orderNumber} is ready. Please pickup order now.`,
+              type: "ready_order",
+              data: {
+                orderId: order._id,
+                orderNumber: order.orderNumber,
+                totalAmount: order.totalAmount || order.grandTotal,
+                itemCount: order.items?.length || 0,
+                screenToOpen: "RiderOrderDetails",
+              },
+            });
+
+            console.log("Notification Sent to" , rider?._id);
+          } catch (err) {
+            console.error(
+              `Failed to send notification to rider ${rider?._id}:`,
+              err.message,
+            );
+          }
         }),
       );
     }
+
+
     // 5. Send FCM Push Notification to Customer
     // const customer = await User.findById(order.userId);
     // if (customer?.fcmToken) {
@@ -1588,7 +1597,7 @@ exports.acceptOrder = async (req, res) => {
 
     // Notification Trigger
     await sendNotification({
-      userId: req.user.id,
+      userId: order.userId,
       orderId: order._id,
       title: "Your Rider Is On It!",
       message: `Rider ${rider.name} has accepted your order #${order.orderNumber}.`,
@@ -1985,6 +1994,21 @@ exports.updateOrderStatus = async (req, res) => {
       // 3. Broadcast to Admin Panel dashboard live tracker
       io.to("role:admin").emit("adminOrderUpdated", payload);
     }
+
+
+    // ================= PUSH NOTIFICATIONS =================
+    if(status === "picked_up" || status === "pickedup") {
+       await sendNotification(req.app, {
+          userId: order.userId,
+          orderId: order._id,
+          title: "Order Picked Up!",
+          message: `Your order #${order.orderNumber} has been picked up by a rider.`,
+          type: "order_picked_up",
+        });
+        console.log(`Push notification sent for status: ${status}`);
+      } else{
+        console.log(`No push notification sent for status: ${status}`);
+      }
 
     return res
       .status(200)
