@@ -38,6 +38,7 @@ const {
   deleteAccount,
   toggleAvailability,
   firebaseToken,
+  updateFcmToken,
 } = require("../controllers/vendorController");
 const { saveFcmToken } = require("../controllers/vendorController");
 const upload = require("../middleware/upload");
@@ -108,6 +109,7 @@ router.post("/forgot-password", forgotPassword);
  router.delete("/delete-account", auth, deleteAccount);
 
 router.post("/save-fcm-token", auth, saveFcmToken);
+router.post("/update-fcm-token", auth, updateFcmToken);
 router.put(
   "/complete-profile",
   upload.diskUpload.fields([

@@ -25,39 +25,35 @@
 
 
 // ==============================================
-
 // routes/quickOrderRoutes.js
 const express = require("express");
 const router = express.Router();
-const auth = require("../middleware/authMiddleware");            // <- jo auth middleware createOrder route par ha wahi lagayen
+const auth = require("../middleware/authMiddleware");
 const upload = require("../middleware/upload");
-const rateLimit = require("express-rate-limit");              // npm i express-rate-limit
+const rl = require("express-rate-limit");                             // npm i express-rate-limit
+// const rateLimit = rl.rateLimit || rl;
+// const ipKeyGenerator = rl.ipKeyGenerator;                             // v8+ mein hota ha, purane version mein undefined (theek ha)
 const c = require("../controllers/quickOrderController");
 
-// AI endpoint par per-user limit: koi script aap ke credits na jala de
+// AI endpoint par per-user limit: koi script aap ke AI credits na jala de
 // const parseLimiter = rateLimit({
 //   windowMs: 60 * 1000,
-//   max: 5,
-//   keyGenerator: (req) => req.user?.id || req.ip,
-//   message: { success: false, message: "Bohat zyada requests, 1 minute baad try karein" },
+//   limit: 10,
+//   max: 10,                                                                // purane version ka naam
+//   standardHeaders: true,
+//   legacyHeaders: false,
+//   keyGenerator: (req) => (req.user?.id ? String(req.user.id) : ipKeyGenerator ? ipKeyGenerator(req.ip) : req.ip),
+//   message: { success: false, message: "Too many requests. Please try again in a minute." },
 // });
 
 router.use(auth);
 
-router.post("/parse", upload.memoryUpload.single("image"), c.createQuickOrder);
-router.get("/search", c.searchCatalog);                        // user khud product dhoond sake
-router.patch("/item", c.updateQuickOrderItem);                 // action: select | remove | keepCustom
-router.put("/edit", c.editQuickOrder);
-router.post("/confirm", c.confirmQuickOrderToMainOrder);
+router.post("/parse",  upload.memoryUpload.single("image"), c.createQuickOrder);  // text/photo -> products (slip nahi)
+router.get("/search", c.searchCatalog);                    // typing / "Add more items" search
+router.post("/quote", c.quote);                            // selections ka price preview (kuch save nahi)
+router.post("/slip", c.createSlip);                        // "Generate slip"
+router.put("/edit", c.editQuickOrder);                     // qty / variation / add-ons / addItems / removeItemIds
+router.post("/add-to-cart", c.addToCart);                  // "Add Items into cart"
+router.get("/debug-match", c.debugMatch);                  // sirf QUICK_ORDER_DEBUG=true par
 
 module.exports = router;
-
-/* ---- middleware/upload.js mein memoryUpload ye hona chahiye ----
-const multer = require("multer");
-exports.memoryUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024, files: 1 },            // 5MB, 1 image
-  fileFilter: (req, file, cb) =>
-    ["image/jpeg", "image/png", "image/webp"].includes(file.mimetype) ? cb(null, true) : cb(new Error("Only JPG/PNG/WEBP")),
-});
-*/
