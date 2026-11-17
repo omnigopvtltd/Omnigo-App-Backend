@@ -66,76 +66,103 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
 // ==========================================
 // Calculate Delivery Charges API
 // ==========================================
-exports.calculateDeliveryCharges = async (req, res) => {
+const axios = require('axios');
+
+const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_BACKEND_KEY;
+
+// Chakwal City Approximate Bounding Box (Taake bahar ke orders/API calls block hon)
+const CHAKWAL_BOUNDS = {
+  minLat: 32.50,
+  maxLat: 33.20,
+  minLng: 72.20,
+  maxLng: 73.10
+};
+
+function isInsideChakwal(lat, lng) {
+  return (
+    lat >= CHAKWAL_BOUNDS.minLat &&
+    lat <= CHAKWAL_BOUNDS.maxLat &&
+    lng >= CHAKWAL_BOUNDS.minLng &&
+    lng <= CHAKWAL_BOUNDS.maxLng
+  );
+}
+
+async function calculateChakwalDeliveryFee(vendorLat, vendorLng, userLat, userLng) {
+  // 1. Free Validation: Check agar user Chakwal ki limits ke andar hai
+  if (!isInsideChakwal(Number(userLat), Number(userLng))) {
+    throw new Error('Sorry! Delivery abhi sirf Chakwal city mein available hai.');
+  }
+
+  // 2. Google Routes API Call (Basic Tier - Cheapest)
+  const url = 'https://routes.googleapis.com/directions/v2:computeRoutes';
+
+  const requestBody = {
+    origin: {
+      location: {
+        latLng: { latitude: Number(vendorLat), longitude: Number(vendorLng) }
+      }
+    },
+    destination: {
+      location: {
+        latLng: { latitude: Number(userLat), longitude: Number(userLng) }
+      }
+    },
+    travelMode: 'DRIVE',
+    routingPreference: 'TRAFFIC_UNAWARE' // $5 per 1000 requests (40,000 free/month)
+  };
+
+  const headers = {
+    'Content-Type': 'application/json',
+    'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+    'X-Goog-FieldMask': 'routes.distanceMeters,routes.duration'
+  };
+
+  const response = await axios.post(url, requestBody, { headers });
+  const route = response.data.routes?.[0];
+
+  if (!route || route.distanceMeters === undefined) {
+    throw new Error('Route not found');
+  }
+
+  const distanceKm = route.distanceMeters / 1000;
+  const durationSeconds = parseInt(route.duration.replace('s', ''), 10);
+  const estimatedMins = Math.ceil(durationSeconds / 60);
+
+  // 3. Pricing Formula: Rs. 75 for first 1 km, Rs. 25 per extra km
+  const baseRate = 75;
+  const perKmRate = 25;
+  let deliveryFee = baseRate;
+
+  if (distanceKm > 1) {
+    const extraKm = distanceKm - 1;
+    deliveryFee = baseRate + Math.ceil(extraKm) * perKmRate;
+  }
+
+  return {
+    distanceKm: Number(distanceKm.toFixed(2)),
+    estimatedTime: `${estimatedMins} mins`,
+    deliveryFee: Math.round(deliveryFee)
+  };
+}
+
+// module.exports = { calculateChakwalDeliveryFee, isInsideChakwal };
+
+exports.calculateDeliveryFee = async (req, res) => {
   try {
-    const { vendorLat, vendorLng, userLat, userLng, isPeakHour, isBadWeather } =
-      req.body;
+    const { vendorId, userLat, userLng } = req.body;
+    const vendor = await Vendor.findById(vendorId);
+    const vendorBranch = await VendorBranch.findOne({ vendorId: vendorId});
+    if (!vendor) return res.status(404).json({ message: 'Vendor not found' });
+    if (!vendorBranch) return res.status(404).json({ message: 'Vendor branch not found' });
+    if(!vendor.isActive || !vendorBranch.isActive) return res.status(400).json({ message: 'Vendor or branch is not available' });
 
-    console.log(req.body);
-    // 1. Validate coordinates
-    if (!vendorLat || !vendorLng || !userLat || !userLng) {
-      return res.status(400).json({
-        success: false,
-        message: "Vendor and User latitude & longitude are required",
-      });
-    }
+    // GeoJSON mein coordinates [lng, lat] hote hain
+    const [vendorLng, vendorLat] = vendorBranch.location.coordinates;
 
-    // 2. Calculate distance in kilometers
-    const distanceKm = calculateDistance(
-      Number(vendorLat),
-      Number(vendorLng),
-      Number(userLat),
-      Number(userLng),
-    );
-
-    console.log(distanceKm);
-
-    // 3. Base Delivery Charges Logic
-    const baseDistance = 1; // 1 km
-    const baseCharge = 100;
-    const ratePerExtraKm = 25;
-
-    let deliveryFee = baseCharge;
-
-    if (distanceKm > baseDistance) {
-      const extraKm = distanceKm - baseDistance;
-      deliveryFee += extraKm * ratePerExtraKm;
-    }
-    let peakHourPercent = 8;
-    // 4. Apply Peak Hours Multiplier (e.g., 8% extra during rush hours)
-    if (isPeakHour) {
-      deliveryFee += (peakHourPercent / 100) * deliveryFee;
-    }
-
-    let badWeatherPercent = 8;
-    // 5. Apply Weather Multiplier (e.g., 30% extra during rain/bad weather)
-    if (isBadWeather) {
-      deliveryFee += (badWeatherPercent / 100) * deliveryFee;
-    }
-
-    // Round to nearest integer
-    const finalDeliveryCharge = Math.round(deliveryFee);
-
-    return res.status(200).json({
-      success: true,
-      data: {
-        distanceKm: Number(distanceKm.toFixed(2)),
-        baseCharge,
-        deliveryFee: finalDeliveryCharge,
-        appliedMultipliers: {
-          peakHour: isPeakHour || false,
-          badWeather: isBadWeather || false,
-          peakHourCharges: isPeakHour ? `${peakHourPercent}%` : 0,
-          badweatherCharges: isBadWeather ? `${badWeatherPercent}%` : 0,
-        },
-      },
-    });
-  } catch (err) {
-    console.error("DELIVERY CALCULATION ERROR:", err);
-    return res.status(500).json({
-      success: false,
-      message: err.message,
-    });
+    const result = await calculateChakwalDeliveryFee(vendorLat, vendorLng, userLat, userLng);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
   }
 };
 

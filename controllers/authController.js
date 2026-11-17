@@ -2762,6 +2762,7 @@ exports.completeRiderProfile = async (req, res) => {
     rider.vehiclePicture = vehiclePicture;
 
     rider.isProfileCompleted = true;
+    rider.riderProfile.verificationStatus = "pending";
 
     await rider.save();
 
@@ -2801,7 +2802,7 @@ exports.uploadVerificationSelfie = async (req, res) => {
     }
 
     rider.riderProfile.verificationSelfie = selfieUrl;
-    rider.riderProfile.verificationStatus = "pending";
+    // rider.riderProfile.verificationStatus = "pending";
 
     await rider.save();
 

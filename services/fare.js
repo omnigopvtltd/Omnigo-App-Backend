@@ -20,19 +20,34 @@ const pricing = () => ({
 
 async function osrmRoute(from, to) {
   // sirf APNA OSRM server (public demo commercial use ke liye allowed nahi)
-  const base = process.env.OSRM_URL;
+  const base = process.env.GOOGLE_ROUTES_URL || process.env.OSRM_URL;
   if (!base) return null;
   const url = `${base.replace(/\/$/, "")}/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=false`;
   const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
   if (!res.ok) throw new Error(`OSRM HTTP ${res.status}`);
   const data = await res.json();
+  console.log("[Fare] osrmRoute", { from, to, url, data });
   const r = data.code === "Ok" ? data.routes?.[0] : null;
-  console.log(r);
+  console.log("[Fare] osrmRoute", { from, to, url, data, route: r });
+  return r ? { distanceM: r.distance, durationS: r.duration } : null;
+}
+
+async function googleRoute(from, to) {
+  // sirf APNA OSRM server (public demo commercial use ke liye allowed nahi)
+  const base = process.env.GOOGLE_ROUTES_URL || process.env.OSRM_URL;
+  if (!base) return null;
+  const url = `${base.replace(/\/$/, "")}/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=false`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+  if (!res.ok) throw new Error(`Google Routes HTTP ${res.status}`);
+  const data = await res.json();
+  console.log("[Fare] googleRoute", { from, to, url, data });
+  const r = data.code === "Ok" ? data.routes?.[0] : null;
+  console.log("[Fare] googleRoute", { from, to, url, data, route: r });
   return r ? { distanceM: r.distance, durationS: r.duration } : null;
 }
 
 async function getDistance(from, to) {
-  const providers = (process.env.ROUTING_PROVIDERS || "locationiq")
+  const providers = (process.env.ROUTING_PROVIDERS || "googleapis" || "locationiq")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
@@ -40,8 +55,8 @@ async function getDistance(from, to) {
     try {
         console.log(p)
       const r =
-        p === "osrm"
-          ? await osrmRoute(from, to)
+        p === "googleapis"
+          ? await googleRoute(from, to)
           : p === "locationiq"
             ? await locationiq.drivingRoute(from, to)
             : null;
