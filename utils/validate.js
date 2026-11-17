@@ -18,8 +18,8 @@ exports.parseLat = (val, fieldName = "lat") => {
     throwValidationError(`${fieldName} required hai`);
   }
   const num = Number(val);
-  if (!Number.isFinite(num) || num < -90 || num > 90) {
-    throwValidationError(`Invalid ${fieldName}: latitude -90 aur 90 ke darmiyan honi chahiye`);
+  if (!Number.isFinite(num) || num < 32.50 || num > 33.20) {
+    throwValidationError(`Invalid ${fieldName}: latitude 32.50 aur 33.20 ke darmiyan honi chahiye`);
   }
   return num;
 };
@@ -32,8 +32,8 @@ exports.parseLon = (val, fieldName = "lon") => {
     throwValidationError(`${fieldName} required hai`);
   }
   const num = Number(val);
-  if (!Number.isFinite(num) || num < -180 || num > 180) {
-    throwValidationError(`Invalid ${fieldName}: longitude -180 aur 180 ke darmiyan honi chahiye`);
+  if (!Number.isFinite(num) || num < 72.20 || num > 73.10) {
+    throwValidationError(`Invalid ${fieldName}: longitude 72.20 aur 73.10 ke darmiyan honi chahiye`);
   }
   return num;
 };
@@ -45,13 +45,13 @@ exports.parseLon = (val, fieldName = "lon") => {
  * Longitude: ~60.8 to ~77.8
  */
 exports.assertInPakistan = (lat, lon) => {
-  const minLat = 23.5;
-  const maxLat = 37.2;
-  const minLon = 60.5;
-  const maxLon = 78.0;
+  const minLat = 32.50;
+  const maxLat = 33.20;
+  const minLon = 72.20;
+  const maxLon = 73.10;
 
   if (lat < minLat || lat > maxLat || lon < minLon || lon > maxLon) {
-    const err = new Error("Service sirf Pakistan ke andar available hai");
+    const err = new Error("Service sirf Chakwal ke andar available hai");
     err.statusCode = 400;
     err.code = "OUT_OF_BOUNDS";
     throw err;

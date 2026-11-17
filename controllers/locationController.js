@@ -10,6 +10,7 @@ const MAX_QUERY_LEN = 120;
 const handle = (fn) => async (req, res) => {
   try {
     await fn(req, res);
+    console.log("[Location] request handled successfully", req.url);
   } catch (err) {
     // if (err instanceof AppError) {
     //   return res.status(err.status).json({ success: false, code: err.code, message: err.message });
@@ -34,9 +35,10 @@ exports.autocomplete = handle(async (req, res) => {
   // Chhoti query: error nahi, bas khali list (UI ko tootna nahi chahiye)
   if (query.length < MIN_QUERY_LEN) return res.json({ success: true, data: [] });
 
-// const regionViewbox = "71.50,32.40,73.40,33.30";
+const regionViewbox = "72.20,32.50,73.10,33.20";
+console.log(`[Location] autocomplete query="${query}" limit=${limit} viewbox="${regionViewbox}"`);
 
-  const data = await locationiq.autocomplete(query, limit);
+  const data = await locationiq.autocomplete(query, limit, regionViewbox);
   return res.json({ success: true, data });
 });
 

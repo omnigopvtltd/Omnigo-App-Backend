@@ -129,6 +129,10 @@ const userSchema = new mongoose.Schema(
 
       vehiclePlate: { type: String, default: "" },
       vehicleModel: { type: String, default: "" },
+      drivingLicenseNumber: { type: String, default: "" },
+      drivingLicensePicture: { type: String, default: null },
+      vehicleEngineSize: { type: String, default: "" },
+      vehiclePicture: { type: String, default: null },
 
       // Verification
       verificationSelfie: {

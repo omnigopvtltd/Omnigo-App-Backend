@@ -28,18 +28,20 @@ const {
   cancelOrderByVendor,
   raiseOrderIssueByUser,
   calculateDeliveryCharges,
+  calculateChakwalDeliveryFee,
+  calculateDeliveryFee,
 } = require("../controllers/orderController");
 
 const {completeOrderDelivery} = require("../controllers/riderOrderFlowController");
 const { calculateFare } = require("../controllers/locationController");
 
 
-router.get("/all-orders", auth, role("admin", "superadmin"), getAllOrders);
+router.get("/all-orders", auth, role("admin"), getAllOrders);
 
 router.get("/available", auth, getAvailableOrders);
 router.get("/ongoing", auth, getOngoingOrders);
 
-router.post("/calculate-delivery", auth, calculateDeliveryCharges);
+router.post("/calculate-delivery", auth, calculateDeliveryFee);
 router.post("/calculate-fare", auth, calculateFare);
 
 // CREATE ORDER
