@@ -68,7 +68,7 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
 // ==========================================
 const axios = require('axios');
 
-const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_BACKEND_KEY;
+const GOOGLE_MAPS_BACKEND_KEY = process.env.GOOGLE_MAPS_BACKEND_KEY;
 
 // Chakwal City Approximate Bounding Box (Taake bahar ke orders/API calls block hon)
 const CHAKWAL_BOUNDS = {
@@ -92,7 +92,7 @@ async function calculateChakwalDeliveryFee(vendorLat, vendorLng, userLat, userLn
   if (!isInsideChakwal(Number(userLat), Number(userLng))) {
     throw new Error('Sorry! Delivery abhi sirf Chakwal city mein available hai.');
   }
-
+console.log(`Calculating delivery fee from Vendor(${vendorLat}, ${vendorLng}) to User(${userLat}, ${userLng})`);
   // 2. Google Routes API Call (Basic Tier - Cheapest)
   const url = 'https://routes.googleapis.com/directions/v2:computeRoutes';
 
@@ -110,15 +110,17 @@ async function calculateChakwalDeliveryFee(vendorLat, vendorLng, userLat, userLn
     travelMode: 'DRIVE',
     routingPreference: 'TRAFFIC_UNAWARE' // $5 per 1000 requests (40,000 free/month)
   };
-
+console.log("Google Routes API Request Body:", requestBody);
   const headers = {
     'Content-Type': 'application/json',
-    'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+    'X-Goog-Api-Key': GOOGLE_MAPS_BACKEND_KEY,
     'X-Goog-FieldMask': 'routes.distanceMeters,routes.duration'
   };
 
   const response = await axios.post(url, requestBody, { headers });
+  console.log("Google Routes API Response:", response, response.data);
   const route = response.data.routes?.[0];
+  console.log("Google Routes:", route);
 
   if (!route || route.distanceMeters === undefined) {
     throw new Error('Route not found');
@@ -127,17 +129,19 @@ async function calculateChakwalDeliveryFee(vendorLat, vendorLng, userLat, userLn
   const distanceKm = route.distanceMeters / 1000;
   const durationSeconds = parseInt(route.duration.replace('s', ''), 10);
   const estimatedMins = Math.ceil(durationSeconds / 60);
+console.log(`Distance: ${distanceKm} km, ${durationSeconds} Estimated Time: ${estimatedMins} mins`);
 
-  // 3. Pricing Formula: Rs. 75 for first 1 km, Rs. 25 per extra km
-  const baseRate = 75;
+  // 3. Pricing Formula: Rs. 100 for first 1 km, Rs. 25 per extra km
+  const baseRate = 100; // Rs. 100 for first 1 km
   const perKmRate = 25;
   let deliveryFee = baseRate;
 
   if (distanceKm > 1) {
     const extraKm = distanceKm - 1;
-    deliveryFee = baseRate + Math.ceil(extraKm) * perKmRate;
+    deliveryFee = baseRate + (extraKm * perKmRate);
+    console.log(`Extra KM: ${extraKm}, Extra Fee: Rs. ${Math.ceil(extraKm) * perKmRate}`);
   }
-
+console.log(`Calculated Delivery Fee: Rs. ${deliveryFee} for distance ${distanceKm} km`);
   return {
     distanceKm: Number(distanceKm.toFixed(2)),
     estimatedTime: `${estimatedMins} mins`,
@@ -156,10 +160,13 @@ exports.calculateDeliveryFee = async (req, res) => {
     if (!vendorBranch) return res.status(404).json({ message: 'Vendor branch not found' });
     if(!vendor.isActive || !vendorBranch.isActive) return res.status(400).json({ message: 'Vendor or branch is not available' });
 
+
+    console.log("Vendor Branch Location:", vendorBranch.location, vendorBranch.location.coordinates);
     // GeoJSON mein coordinates [lng, lat] hote hain
     const [vendorLng, vendorLat] = vendorBranch.location.coordinates;
 
     const result = await calculateChakwalDeliveryFee(vendorLat, vendorLng, userLat, userLng);
+    console.log(result);
     res.json({ success: true, ...result });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
