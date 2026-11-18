@@ -1094,8 +1094,8 @@ exports.logout = async (req, res) => {
 // ======================================================
 exports.enableCurrentLocation = async (req, res) => {
   try {
-    const { lat, lng, zone, area, address } = req.body;
-
+    const { lat, lng, zone, area, address, zipCode, country, city } = req.body;
+// console.log(req.body);
     const user = await User.findById(req.user.id);
 
     user.location = {
@@ -1105,6 +1105,8 @@ exports.enableCurrentLocation = async (req, res) => {
       zone,
       area,
       address,
+      zipCode,
+      country, city,
       isEnabled: true,
     };
 
@@ -1124,7 +1126,7 @@ exports.enableCurrentLocation = async (req, res) => {
 // ======================================================
 exports.selectManualLocation = async (req, res) => {
   try {
-    const { zone, area, address, lat, lng, } = req.body;
+    const { zone, area, address, lat, lng, zipCode, country, city } = req.body;
 
     const user = await User.findById(req.user.id);
 
@@ -1134,7 +1136,10 @@ exports.selectManualLocation = async (req, res) => {
       zone,
       area,
       address,
-      coordinates: { lat: Number(lat) || 0, lng: Number(lng) || 0 },
+      zipCode,
+      country,
+      city,
+      coordinates: { lat: Number(lat), lng: Number(lng) },
       isEnabled: true,
     };
 
@@ -2044,6 +2049,10 @@ exports.addAddress = async (req, res) => {
       country,
       isSave,
       coordinates,
+      latitude,
+      longitude,
+      lat,
+      lng,
     } = req.body;
 
     const user = await User.findById(req.user.id);
@@ -2062,7 +2071,10 @@ exports.addAddress = async (req, res) => {
       zipCode,
       country,
       isSave: isSave || false,
-      coordinates,
+      coordinates: {
+        lat: latitude ? Number(latitude) : Number(lat),
+        lng: longitude ? Number(longitude) : Number(lng),
+      },
       zone,
       area,
     });
@@ -2151,12 +2163,24 @@ exports.updateAddress = async (req, res) => {
       });
     }
 
+    req.body.latitude = req.body.latitude || req.body.lat || address.coordinates.lat;
+    req.body.longitude = req.body.longitude || req.body.lng || address.coordinates.lng;
+
+    let updatedCoordinates = req.body.coordinates || address.coordinates;
+    if(req.body.latitude && req.body.longitude) {
+
+     updatedCoordinates = {
+        lat: req.body.latitude,
+        lng: req.body.longitude,
+      }
+    }
+
     address.phone = req.body.phone || address.phone;
     address.address = req.body.address || address.address;
     address.city = req.body.city || address.city;
     address.zipCode = req.body.zipCode || address.zipCode;
     address.country = req.body.country || address.country;
-    address.coordinates = req.body.coordinates || address.coordinates;
+    address.coordinates = updatedCoordinates;
     address.zone = req.body.zone || address.zone;
     address.area = req.body.area || address.area;
     address.isSave = req.body.isSave || address.isSave;
