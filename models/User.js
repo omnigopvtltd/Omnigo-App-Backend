@@ -93,6 +93,7 @@ const userSchema = new mongoose.Schema(
     appFeedbackCount: { type: Number, default: 0 }, // Kitne orders se count track ho raha hai
     appFeedbackSkipCount: { type: Number, default: 0 }, // Skip tracking (Max 3)
     hasSubmittedAppFeedback: { type: Boolean, default: false }, // Final feedback de chuka hai ya nahi
+    hasAddress: { type: Boolean, default: false }, // Final feedback de chuka hai ya nahi
 
     // RIDER PROFILE & LIVE TRACKING
     riderProfile: {

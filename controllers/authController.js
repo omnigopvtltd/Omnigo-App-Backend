@@ -76,6 +76,7 @@ const sendResponse = (res, message, user, firebaseToken) => {
       isPhoneVerified: user.isPhoneVerified || false,
       isEmailVerified: user.isEmailVerified || false,
       lastLogin: user.lastLogin || null,
+      hasAddress: user.hasAddress || false,
 
       location: {
         id: user.location?._id || null,
@@ -937,6 +938,7 @@ exports.socialLogin = async (req, res) => {
         googleId: provider === "google" ? sub : null,
         profilePicture: picture || "",
         isEmailVerified: true,
+        hasAddress: false,
         phone: phone ? String(phone).trim() : "",
       };
 
