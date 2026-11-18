@@ -66,16 +66,16 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
 // ==========================================
 // Calculate Delivery Charges API
 // ==========================================
-const axios = require('axios');
+const axios = require("axios");
 
 const GOOGLE_MAPS_BACKEND_KEY = process.env.GOOGLE_MAPS_BACKEND_KEY;
 
 // Chakwal City Approximate Bounding Box (Taake bahar ke orders/API calls block hon)
 const CHAKWAL_BOUNDS = {
-  minLat: 32.50,
-  maxLat: 33.20,
-  minLng: 72.20,
-  maxLng: 73.10
+  minLat: 32.5,
+  maxLat: 33.2,
+  minLng: 72.2,
+  maxLng: 73.1,
 };
 
 function isInsideChakwal(lat, lng) {
@@ -87,34 +87,43 @@ function isInsideChakwal(lat, lng) {
   );
 }
 
-async function calculateChakwalDeliveryFee(vendorLat, vendorLng, userLat, userLng) {
+async function calculateChakwalDeliveryFee(
+  vendorLat,
+  vendorLng,
+  userLat,
+  userLng,
+) {
   // 1. Free Validation: Check agar user Chakwal ki limits ke andar hai
   if (!isInsideChakwal(Number(userLat), Number(userLng))) {
-    throw new Error('Sorry! Delivery abhi sirf Chakwal city mein available hai.');
+    throw new Error(
+      "Sorry! Delivery abhi sirf Chakwal city mein available hai.",
+    );
   }
-console.log(`Calculating delivery fee from Vendor(${vendorLat}, ${vendorLng}) to User(${userLat}, ${userLng})`);
+  console.log(
+    `Calculating delivery fee from Vendor(${vendorLat}, ${vendorLng}) to User(${userLat}, ${userLng})`,
+  );
   // 2. Google Routes API Call (Basic Tier - Cheapest)
-  const url = 'https://routes.googleapis.com/directions/v2:computeRoutes';
+  const url = "https://routes.googleapis.com/directions/v2:computeRoutes";
 
   const requestBody = {
     origin: {
       location: {
-        latLng: { latitude: Number(vendorLat), longitude: Number(vendorLng) }
-      }
+        latLng: { latitude: Number(vendorLat), longitude: Number(vendorLng) },
+      },
     },
     destination: {
       location: {
-        latLng: { latitude: Number(userLat), longitude: Number(userLng) }
-      }
+        latLng: { latitude: Number(userLat), longitude: Number(userLng) },
+      },
     },
-    travelMode: 'DRIVE',
-    routingPreference: 'TRAFFIC_UNAWARE' // $5 per 1000 requests (40,000 free/month)
+    travelMode: "DRIVE",
+    routingPreference: "TRAFFIC_UNAWARE", // $5 per 1000 requests (40,000 free/month)
   };
-console.log("Google Routes API Request Body:", requestBody);
+  console.log("Google Routes API Request Body:", requestBody);
   const headers = {
-    'Content-Type': 'application/json',
-    'X-Goog-Api-Key': GOOGLE_MAPS_BACKEND_KEY,
-    'X-Goog-FieldMask': 'routes.distanceMeters,routes.duration'
+    "Content-Type": "application/json",
+    "X-Goog-Api-Key": GOOGLE_MAPS_BACKEND_KEY,
+    "X-Goog-FieldMask": "routes.distanceMeters,routes.duration",
   };
 
   const response = await axios.post(url, requestBody, { headers });
@@ -123,13 +132,15 @@ console.log("Google Routes API Request Body:", requestBody);
   console.log("Google Routes:", route);
 
   if (!route || route.distanceMeters === undefined) {
-    throw new Error('Route not found');
+    throw new Error("Route not found");
   }
 
   const distanceKm = route.distanceMeters / 1000;
-  const durationSeconds = parseInt(route.duration.replace('s', ''), 10);
+  const durationSeconds = parseInt(route.duration.replace("s", ""), 10);
   const estimatedMins = Math.ceil(durationSeconds / 60);
-console.log(`Distance: ${distanceKm} km, ${durationSeconds} Estimated Time: ${estimatedMins} mins`);
+  console.log(
+    `Distance: ${distanceKm} km, ${durationSeconds} Estimated Time: ${estimatedMins} mins`,
+  );
 
   // 3. Pricing Formula: Rs. 100 for first 1 km, Rs. 25 per extra km
   const baseRate = 100; // Rs. 100 for first 1 km
@@ -138,37 +149,244 @@ console.log(`Distance: ${distanceKm} km, ${durationSeconds} Estimated Time: ${es
 
   if (distanceKm > 1) {
     const extraKm = distanceKm - 1;
-    deliveryFee = baseRate + (extraKm * perKmRate);
-    console.log(`Extra KM: ${extraKm}, Extra Fee: Rs. ${Math.ceil(extraKm) * perKmRate}`);
+    deliveryFee = baseRate + extraKm * perKmRate;
+    console.log(
+      `Extra KM: ${extraKm}, Extra Fee: Rs. ${Math.ceil(extraKm) * perKmRate}`,
+    );
   }
-console.log(`Calculated Delivery Fee: Rs. ${deliveryFee} for distance ${distanceKm} km`);
+  console.log(
+    `Calculated Delivery Fee: Rs. ${deliveryFee} for distance ${distanceKm} km`,
+  );
   return {
     distanceKm: Number(distanceKm.toFixed(2)),
     estimatedTime: `${estimatedMins} mins`,
-    deliveryFee: Math.round(deliveryFee)
+    deliveryFee: Math.round(deliveryFee),
   };
 }
 
 // module.exports = { calculateChakwalDeliveryFee, isInsideChakwal };
 
+// exports.calculateDeliveryFee = async (req, res) => {
+//   try {
+//     const { vendorId, items, userLat, userLng } = req.body;
+
+//     // ========================================
+//       const itemIds = cart.items.map((item) => item.productId).filter(Boolean);
+
+//     // Fetch vendorIds from all possible collections (Products, Deals, Campaigns)
+//     const [products, deals, campaigns] = await Promise.all([
+//       Product.find({ _id: { $in: itemIds } }).select("vendorId"),
+//       Deal.find({ _id: { $in: itemIds } }).select("vendorId"),
+//       Campaign.find({ _id: { $in: itemIds } }).select("vendorId"), // Agar campaign ka model 'Campaign' hai
+//     ]);
+
+//     // Extract and combine all vendor IDs uniquely
+//     const extractedVendorIds = [
+//       ...products.map((p) => p.vendorId?.toString()),
+//       ...deals.map((d) => d.vendorId?.toString()),
+//       ...campaigns.map((c) => c.vendorId?.toString()),
+//       ...cart.items.map((item) => item.vendorId?.toString()), // Direct fallback
+//     ].filter(Boolean);
+
+//     const vendorIds = [...new Set(extractedVendorIds)];
+
+//     let stops = [];
+//     if (
+//       req.body.stops &&
+//       Array.isArray(req.body.stops) &&
+//       req.body.stops.length > 0
+//     ) {
+//       stops = req.body.stops; // Agar frontend se aa jayein toh override na karein
+//     } else if (vendorIds.length > 0) {
+//       // Step A: Fetch Vendors basic info
+//       const vendors = await Vendor.find({ _id: { $in: vendorIds } });
+
+//       // Step B: Fetch corresponding Vendor Branches (e.g. Primary branch or branch matching vendorId)
+//       // Agar aapke paas request mein branchId hai toh wo use karein, warna vendor ki default/first active branch fetch karein
+//       const branches = await VendorBranch.find({
+//         vendorId: { $in: vendorIds },
+//         isActive: true,
+//       });
+
+//       stops = vendors.map((vendor, index) => {
+//         // Is vendor ki relevant branch dhoondhein (agar branchId req mein ho ya pehli branch utha lein)
+//         const matchedBranch =
+//           branches.find(
+//             (b) => b.vendorId.toString() === vendor._id.toString(),
+//           ) || {};
+
+//         return {
+//           stopNumber: index + 1,
+//           vendorId: vendor._id,
+//           branchId: matchedBranch._id || null, // Branch ID link kar dein
+//           logo: vendor.logo || "",
+//           businessName:
+//             vendor?.businessName || matchedBranch.branchName || "Branch Name",
+//           businessType: vendor.businessType || "fast-food",
+//           // Branch address aur location prioritized honge
+//           address: matchedBranch.address || vendor.address || "Vendor Address",
+//           city: matchedBranch.city || vendor.city || "Vendor City",
+//           country: matchedBranch.country || vendor.country || "Vendor Country",
+//           location: {
+//             type: "Point",
+//             coordinates: matchedBranch.location?.coordinates ||
+//               vendor.location?.coordinates || [0, 0],
+//           },
+//           status: hasOnlyGroceryItems ? "ready" : "pending",
+//         };
+//       });
+//     }
+
+//     // ===========================================
+//     const vendor = await Vendor.findById(vendorId);
+//     const vendorBranch = await VendorBranch.findOne({ vendorId: vendorId});
+//     if (!vendor) return res.status(404).json({ message: 'Vendor not found' });
+//     if (!vendorBranch) return res.status(404).json({ message: 'Vendor branch not found' });
+//     if(!vendor.isActive || !vendorBranch.isActive) return res.status(400).json({ message: 'Vendor or branch is not available' });
+
+//     console.log("Vendor Branch Location:", vendorBranch.location, vendorBranch.location.coordinates);
+//     // GeoJSON mein coordinates [lng, lat] hote hain
+//     const [vendorLng, vendorLat] = vendorBranch.location.coordinates;
+
+//     const result = await calculateChakwalDeliveryFee(vendorLat, vendorLng, userLat, userLng);
+//     console.log(result);
+//     res.json({ success: true, ...result });
+//   } catch (error) {
+//     res.status(400).json({ success: false, message: error.message });
+//   }
+// };
+
+// ==========================================
+// Calculate Delivery Charges API (Multi-Vendor Stops Supported)
+// ==========================================
 exports.calculateDeliveryFee = async (req, res) => {
   try {
-    const { vendorId, userLat, userLng } = req.body;
-    const vendor = await Vendor.findById(vendorId);
-    const vendorBranch = await VendorBranch.findOne({ vendorId: vendorId});
-    if (!vendor) return res.status(404).json({ message: 'Vendor not found' });
-    if (!vendorBranch) return res.status(404).json({ message: 'Vendor branch not found' });
-    if(!vendor.isActive || !vendorBranch.isActive) return res.status(400).json({ message: 'Vendor or branch is not available' });
+    const { cart, userLat, userLng } = req.body;
 
+    if (!cart) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Carts required hain" });
+    }
 
-    console.log("Vendor Branch Location:", vendorBranch.location, vendorBranch.location.coordinates);
-    // GeoJSON mein coordinates [lng, lat] hote hain
-    const [vendorLng, vendorLat] = vendorBranch.location.coordinates;
+    const cartItems = await Cart.findById(cart);
 
-    const result = await calculateChakwalDeliveryFee(vendorLat, vendorLng, userLat, userLng);
-    console.log(result);
-    res.json({ success: true, ...result });
+    // 1. Extract item IDs from cart items
+    const itemIds = cartItems?.items
+      ?.map((item) => item.productId || item._id)
+      .filter(Boolean);
+
+    // 2. Fetch vendorIds from Product, Deal, and Campaign collections
+    const [products, deals, campaigns] = await Promise.all([
+      Product.find({ _id: { $in: itemIds } }).select("vendorId"),
+      Deal.find({ _id: { $in: itemIds } }).select("vendorId"),
+      Campaign.find({ _id: { $in: itemIds } }).select("vendorId"),
+    ]);
+
+    // Extract and combine all unique vendor IDs
+    const extractedVendorIds = [
+      ...products.map((p) => p.vendorId?.toString()),
+      ...deals.map((d) => d.vendorId?.toString()),
+      ...campaigns.map((c) => c.vendorId?.toString()),
+      ...cartItems?.items.map((item) => item.vendorId?.toString()), // Direct fallback
+    ].filter(Boolean);
+
+    const vendorIds = [...new Set(extractedVendorIds)];
+
+    if (vendorIds.length === 0) {
+      return res
+        .status(404)
+        .json({
+          success: false,
+          message: "Koi active vendor nahi mila in items ke liye",
+        });
+    }
+
+    // 3. Fetch Vendors and their Branches
+    const vendors = await Vendor.find({ _id: { $in: vendorIds } });
+    const branches = await VendorBranch.find({
+      vendorId: { $in: vendorIds },
+      isActive: true,
+    });
+
+    let stops = [];
+    let totalDeliveryFee = 0;
+    let maxEstimatedMins = 0;
+    let maxDistanceKm = 0;
+    const breakdownDetails = [];
+
+    // 4. Har vendor (stop) ke liye loop chala kar distance aur fee calculate karein
+    for (let index = 0; index < vendors.length; index++) {
+      const vendor = vendors[index];
+      const matchedBranch = branches.find(
+        (b) => b.vendorId.toString() === vendor._id.toString(),
+      );
+
+      if (!matchedBranch || !matchedBranch.location?.coordinates) {
+        continue; // Skip agar branch ya coordinates available nahi hain
+      }
+      console.log(
+        `Calculating delivery fee for Vendor(${vendor._id}) at Branch(${matchedBranch})`,
+      );
+      // GeoJSON [lng, lat] format
+      const [vendorLat, vendorLng] = matchedBranch.location.coordinates;
+
+      // Google Routes API ke zariye is vendor se user tak ka fare nikalen
+      const stopResult = await calculateChakwalDeliveryFee(
+        vendorLat,
+        vendorLng,
+        userLat,
+        userLng,
+      );
+
+      stops.push({
+        stopNumber: index + 1,
+        vendorId: vendor._id,
+        branchId: matchedBranch._id,
+        businessName:
+          vendor?.businessName || matchedBranch.branchName || "Vendor",
+        address: matchedBranch.address || vendor.address || "",
+        location: matchedBranch.location,
+        distanceKm: stopResult.distanceKm,
+        deliveryFee: stopResult.deliveryFee,
+      });
+
+      // Total fee combining logic (Aap yahan sum ya max use kar sakti hain)
+      totalDeliveryFee += stopResult.deliveryFee;
+
+      // Max time aur distance track karne ke liye
+      const timeVal = parseInt(stopResult.estimatedTime, 10);
+      if (timeVal > maxEstimatedMins) maxEstimatedMins = timeVal;
+      if (stopResult.distanceKm > maxDistanceKm)
+        maxDistanceKm = stopResult.distanceKm;
+
+      breakdownDetails.push({
+        vendorId: vendor._id,
+        businessName: vendor?.businessName,
+        ...stopResult,
+      });
+    }
+
+    if (stops.length === 0) {
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Valid vendor branches nahi mil sake",
+        });
+    }
+
+    // Response send karein
+    res.json({
+      success: true,
+      distanceKm: Number(maxDistanceKm.toFixed(2)),
+      estimatedTime: `${maxEstimatedMins} mins`,
+      deliveryFee: totalDeliveryFee,
+      stops: stops,
+      breakdown: breakdownDetails,
+    });
   } catch (error) {
+    console.error("Delivery Fee Error:", error);
     res.status(400).json({ success: false, message: error.message });
   }
 };
@@ -1481,8 +1699,11 @@ exports.getOngoingOrders = async (req, res) => {
 };
 
 // =====================================
+
 // GET AVAILABLE ORDERS (Unassigned)
+
 // =====================================
+
 exports.getAvailableOrders = async (req, res) => {
   try {
     const rider = await User.findById(req.user.id).select(
@@ -1492,34 +1713,45 @@ exports.getAvailableOrders = async (req, res) => {
     if (!rider) {
       return res.status(404).json({
         success: false,
+
         message: "Rider not found",
       });
     }
 
     // Get orders cancelled by this rider
+
     const cancelledOrderIds = (
       rider.riderProfile?.riderCancelledOrder || []
     ).map((id) => new mongoose.Types.ObjectId(id.toString()));
 
     // FIXED: Moved _id out of status object to query root level
+
     const allOrders = await Order.find({
       status: {
         $in: ["ready"],
       },
+
       _id: { $nin: cancelledOrderIds },
+
       isAssigned: false,
     })
+
       .populate("userId", "name email phone")
+
       .populate("stops.vendorId", "businessName logo address contact location")
+
       .sort({ createdAt: -1 });
 
     return res.status(200).json({
       success: true,
+
       count: allOrders.length,
+
       orders: allOrders,
     });
   } catch (err) {
     console.error("GET AVAILABLE ORDERS ERROR:", err);
+
     return res.status(500).json({ success: false, message: err.message });
   }
 };
