@@ -1124,7 +1124,7 @@ exports.enableCurrentLocation = async (req, res) => {
 // ======================================================
 exports.selectManualLocation = async (req, res) => {
   try {
-    const { zone, area, address } = req.body;
+    const { zone, area, address, lat, lng, } = req.body;
 
     const user = await User.findById(req.user.id);
 
@@ -1134,7 +1134,7 @@ exports.selectManualLocation = async (req, res) => {
       zone,
       area,
       address,
-      coordinates: { lat: null, lng: null },
+      coordinates: { lat: Number(lat) || 0, lng: Number(lng) || 0 },
       isEnabled: true,
     };
 
