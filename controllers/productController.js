@@ -2082,6 +2082,7 @@ exports.getPreviouslyOrderedItems = async (req, res) => {
   try {
     const userId = req.user._id || req.user.id;
 
+    const now = new Date();
     // 1. Find completed/delivered orders for the logged-in user
     const orders = await Order.find({
       userId,
@@ -2098,6 +2099,7 @@ exports.getPreviouslyOrderedItems = async (req, res) => {
       });
     }
 
+    console.log("User Orders Found:", orders);
     // 2. Extract unique Product IDs ordered by the user
     const productIdsSet = new Set();
     orders.forEach((order) => {
@@ -2110,10 +2112,10 @@ exports.getPreviouslyOrderedItems = async (req, res) => {
 
     const uniqueProductIds = Array.from(productIdsSet);
 
-    const items = await Promise.all([
+    const [products, deals, campaigns] = await Promise.all([
           Product.find({ _id: { $in: uniqueProductIds }, isAvailable: true }).populate("vendorId", "businessName logo rating offer").select("name image images price rating isFavourite vendorId"),
-          Deal.find({ _id: { $in: uniqueProductIds }, startDate: { $lte: new Date() }, endDate: { $gte: new Date() } }).populate("vendorId", "businessName logo rating offer"),
-          Campaign.find({ _id: { $in: uniqueProductIds, startDate: { $lte: new Date() }, endDate: { $gte: new Date() } } }).populate("vendorId", "businessName logo rating offer"), // Agar campaign ka model 'Campaign' hai
+          Deal.find({ _id: { $in: uniqueProductIds }, endDate: { $gte: now } }).populate("vendorId", "businessName logo rating offer"),
+          Campaign.find({ _id: { $in: uniqueProductIds }, endDate: { $gte: now } }).populate("vendorId", "businessName logo rating offer"), // Agar campaign ka model 'Campaign' hai
         ]);
 
     // 3. Fetch product details with strict vendorId existence check
@@ -2125,6 +2127,8 @@ exports.getPreviouslyOrderedItems = async (req, res) => {
     //   .populate("vendorId", "businessName logo rating offer")
     //   .select("name image images price rating isFavourite vendorId"); // 💡 Included 'images' and 'isFavourite'
 
+
+    const items = [...products, ...deals, ...campaigns];
     // 4. Format and filter items to ensure valid vendor object
     const formattedItems = items
       .map((product) => {
@@ -2135,9 +2139,12 @@ exports.getPreviouslyOrderedItems = async (req, res) => {
 
         return {
           _id: product._id,
-          productName: product.name,
-          productImage: product.images?.[0] || product.image || "",
-          price: product.price,
+          productName: product.name || product.dealName || product.campaignName || "Unnamed Product",
+          type: product.type || product.dealType || product.campaignType || null,
+          productImage: product.images?.[0] || product.image || product.dealBanner || product.campaignBanner || "",
+          price:  product.price || product.offerDetails?.dealPrice  || 0,
+          discountPrice: product.discountPrice || product.offerDetails?.dealPrice || null,
+          originalPrice: product.offerDetails?.originalPrice || null,
           isFavourite: Boolean(product.isFavourite),
           rating: product.rating?.average || product.rating || 0,
           vendor: {
