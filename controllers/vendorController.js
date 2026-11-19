@@ -833,8 +833,8 @@ exports.signup = async (req, res) => {
         branches: createdBranches, // Array of created branches
         tempPassword: rawAutoPassword,
       },
-      firebaseToken,
       201,
+      firebaseToken,
     );
   } catch (err) {
     console.error("VENDOR SIGNUP ERROR:", err);
@@ -1171,6 +1171,7 @@ exports.login = async (req, res) => {
       res,
       "Vendor login successful",
       vendorResponse,
+      201,
       firebaseToken,
     );
   } catch (err) {
