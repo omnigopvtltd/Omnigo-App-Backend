@@ -45,24 +45,17 @@ exports.reverseGeocode = async (req, res) => {
   }
 };
 
-// Helper function to calculate distance in KM using Haversine Formula
-const calculateDistance = (lat1, lon1, lat2, lon2) => {
-  const toRad = (value) => (value * Math.PI) / 180;
-  const R = 6371; // Earth radius in KM
-
+// Free Haversine helper (sirf sorting ke liye, zero API cost)
+function getStraightDistanceKm(lat1, lng1, lat2, lng2) {
+  const toRad = (v) => (v * Math.PI) / 180;
+  const R = 6371;
   const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
+  const dLng = toRad(lng2 - lng1);
   const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRad(lat1)) *
-      Math.cos(toRad(lat2)) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c; // Distance in KM
-};
-
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 // ==========================================
 // Calculate Delivery Charges API
 // ==========================================
@@ -70,7 +63,7 @@ const axios = require("axios");
 
 const GOOGLE_MAPS_BACKEND_KEY = process.env.GOOGLE_MAPS_BACKEND_KEY;
 
-// Chakwal City Approximate Bounding Box (Taake bahar ke orders/API calls block hon)
+// Chakwal City Approximate Bounding Box
 const CHAKWAL_BOUNDS = {
   minLat: 32.5,
   maxLat: 33.2,
@@ -87,193 +80,207 @@ function isInsideChakwal(lat, lng) {
   );
 }
 
-async function calculateChakwalDeliveryFee(
-  vendorLat,
-  vendorLng,
-  userLat,
-  userLng,
-) {
-  // 1. Free Validation: Check agar user Chakwal ki limits ke andar hai
+// Pricing Formula: Rs. 100 for first 1 km, Rs. 25 per extra km
+function calculateFeeFromKm(distanceKm) {
+  const baseRate = 100;
+  const perKmRate = 25;
+  if (distanceKm <= 1) return baseRate;
+  const extraKm = distanceKm - 1;
+  return Math.round(baseRate + extraKm * perKmRate);
+}
+
+/**
+ * Single Google Routes API Call for Single OR Multi-Stop Route
+ * Exact Google Maps Web jaisa distance aur live traffic time deta hai
+ */
+async function calculateMultiStopChakwalRoute(vendorStops, userLat, userLng) {
   if (!isInsideChakwal(Number(userLat), Number(userLng))) {
     throw new Error(
       "Sorry! Delivery abhi sirf Chakwal city mein available hai.",
     );
   }
-  console.log(
-    `Calculating delivery fee from Vendor(${vendorLat}, ${vendorLng}) to User(${userLat}, ${userLng})`,
-  );
-  // 2. Google Routes API Call (Basic Tier - Cheapest)
+
+  // FIX: User se sab se door wale store ko Stop 1 (origin) banayein taake rider seedha user ki taraf aaye
+  const sortedVendorStops = [...vendorStops].sort((a, b) => {
+    const distA = getStraightDistanceKm(
+      a.lat,
+      a.lng,
+      Number(userLat),
+      Number(userLng),
+    );
+    const distB = getStraightDistanceKm(
+      b.lat,
+      b.lng,
+      Number(userLat),
+      Number(userLng),
+    );
+    return distB - distA; // Farthest first
+  });
+
   const url = "https://routes.googleapis.com/directions/v2:computeRoutes";
+
+  const firstStop = sortedVendorStops[0];
+  const intermediateStops = sortedVendorStops.slice(1);
 
   const requestBody = {
     origin: {
       location: {
-        latLng: { latitude: Number(vendorLat), longitude: Number(vendorLng) },
+        latLng: {
+          latitude: Number(firstStop.lat),
+          longitude: Number(firstStop.lng),
+        },
       },
     },
+    ...(intermediateStops.length > 0 && {
+      intermediates: intermediateStops.map((stop) => ({
+        location: {
+          latLng: {
+            latitude: Number(stop.lat),
+            longitude: Number(stop.lng),
+          },
+        },
+      })),
+      optimizeWaypointOrder: true, // Sab se chota multi-stop sequence auto-select karega
+    }),
     destination: {
       location: {
-        latLng: { latitude: Number(userLat), longitude: Number(userLng) },
+        latLng: {
+          latitude: Number(userLat),
+          longitude: Number(userLng),
+        },
       },
     },
     travelMode: "DRIVE",
-    routingPreference: "TRAFFIC_UNAWARE", // $5 per 1000 requests (40,000 free/month)
+    routingPreference: "TRAFFIC_AWARE", // Google Maps web ke exact minutes ke liye
   };
-  console.log("Google Routes API Request Body:", requestBody);
+
   const headers = {
     "Content-Type": "application/json",
     "X-Goog-Api-Key": GOOGLE_MAPS_BACKEND_KEY,
-    "X-Goog-FieldMask": "routes.distanceMeters,routes.duration",
+    "X-Goog-FieldMask":
+      "routes.distanceMeters,routes.duration,routes.legs.distanceMeters,routes.legs.duration,routes.optimizedIntermediateWaypointIndex",
   };
 
   const response = await axios.post(url, requestBody, { headers });
-  console.log("Google Routes API Response:", response, response.data);
   const route = response.data.routes?.[0];
-  console.log("Google Routes:", route);
 
   if (!route || route.distanceMeters === undefined) {
     throw new Error("Route not found");
   }
 
-  const distanceKm = route.distanceMeters / 1000;
-  const durationSeconds = parseInt(route.duration.replace("s", ""), 10);
-  const estimatedMins = Math.ceil(durationSeconds / 60);
-  console.log(
-    `Distance: ${distanceKm} km, ${durationSeconds} Estimated Time: ${estimatedMins} mins`,
+  // Total Combined Route Distance & Time (Exact Google Maps Match)
+  const totalDistanceKm = Number((route.distanceMeters / 1000).toFixed(2));
+  const totalDurationSec = parseInt(
+    (route.duration || "0s").replace("s", ""),
+    10,
   );
+  const totalEstimatedMins = Math.ceil(totalDurationSec / 60);
 
-  // 3. Pricing Formula: Rs. 100 for first 1 km, Rs. 25 per extra km
-  const baseRate = 100; // Rs. 100 for first 1 km
-  const perKmRate = 25;
-  let deliveryFee = baseRate;
-
-  if (distanceKm > 1) {
-    const extraKm = distanceKm - 1;
-    deliveryFee = baseRate + extraKm * perKmRate;
-    console.log(
-      `Extra KM: ${extraKm}, Extra Fee: Rs. ${Math.ceil(extraKm) * perKmRate}`,
-    );
+  // Reorder intermediate stops agar Google ne optimize kiya ho
+  let orderedStops = [firstStop];
+  if (
+    intermediateStops.length > 0 &&
+    Array.isArray(route.optimizedIntermediateWaypointIndex)
+  ) {
+    for (const idx of route.optimizedIntermediateWaypointIndex) {
+      if (intermediateStops[idx]) {
+        orderedStops.push(intermediateStops[idx]);
+      }
+    }
+  } else {
+    orderedStops = [...vendorStops];
   }
-  console.log(
-    `Calculated Delivery Fee: Rs. ${deliveryFee} for distance ${distanceKm} km`,
-  );
+
+  let totalDeliveryFee = calculateFeeFromKm(totalDistanceKm);
+
+  const legs = route.legs || [];
+  let allocatedFee = 0;
+
+  const enrichedStops = orderedStops.map((stop, idx) => {
+    const leg = legs[idx] || {};
+    const legDistanceKm = Number(((leg.distanceMeters || 0) / 1000).toFixed(2));
+    const legDurationSec = parseInt(
+      (leg.duration || "0s").replace("s", ""),
+      10,
+    );
+    const legMins = Math.ceil(legDurationSec / 60);
+
+    // Proportional fee distribution taake sum exact totalDeliveryFee ke barabar rahe
+    let stopFee;
+    if (idx === orderedStops.length - 1) {
+      stopFee = totalDeliveryFee - allocatedFee;
+    } else {
+      stopFee =
+        totalDistanceKm > 0
+          ? Math.round((legDistanceKm / totalDistanceKm) * totalDeliveryFee)
+          : totalDeliveryFee;
+      allocatedFee += stopFee;
+    }
+
+    return {
+      ...stop,
+      stopNumber: idx + 1,
+      distanceKm: legDistanceKm,
+      estimatedTime: `${legMins} mins`,
+      deliveryFee: stopFee,
+    };
+  });
+
+  // 1. Total Route Distance ke mutabiq exact Delivery Fee
+  //  totalDeliveryFee = calculateFeeFromKm(totalDistanceKm);
+  // 3.68 km ke liye: 100 + (2.68 * 25) = Rs. 167
+
+  // (Optional) Agar 1 se zyada vendors hon aur har extra pickup stop par koi extra fee lagani ho (abhi 0 rakhi hai):
+  const extraStopFee = 0; // Aap isay 0, 20, ya 30 rakh sakte hain
+  const finalDeliveryFee =
+    totalDeliveryFee + (orderedStops.length - 1) * extraStopFee;
+
   return {
-    distanceKm: Number(distanceKm.toFixed(2)),
-    estimatedTime: `${estimatedMins} mins`,
-    deliveryFee: Math.round(deliveryFee),
+    distanceKm: totalDistanceKm,
+    estimatedTime: `${totalEstimatedMins} mins`,
+    deliveryFee: finalDeliveryFee,
+    stops: enrichedStops,
   };
 }
-
-// module.exports = { calculateChakwalDeliveryFee, isInsideChakwal };
-
-// exports.calculateDeliveryFee = async (req, res) => {
-//   try {
-//     const { vendorId, items, userLat, userLng } = req.body;
-
-//     // ========================================
-//       const itemIds = cart.items.map((item) => item.productId).filter(Boolean);
-
-//     // Fetch vendorIds from all possible collections (Products, Deals, Campaigns)
-//     const [products, deals, campaigns] = await Promise.all([
-//       Product.find({ _id: { $in: itemIds } }).select("vendorId"),
-//       Deal.find({ _id: { $in: itemIds } }).select("vendorId"),
-//       Campaign.find({ _id: { $in: itemIds } }).select("vendorId"), // Agar campaign ka model 'Campaign' hai
-//     ]);
-
-//     // Extract and combine all vendor IDs uniquely
-//     const extractedVendorIds = [
-//       ...products.map((p) => p.vendorId?.toString()),
-//       ...deals.map((d) => d.vendorId?.toString()),
-//       ...campaigns.map((c) => c.vendorId?.toString()),
-//       ...cart.items.map((item) => item.vendorId?.toString()), // Direct fallback
-//     ].filter(Boolean);
-
-//     const vendorIds = [...new Set(extractedVendorIds)];
-
-//     let stops = [];
-//     if (
-//       req.body.stops &&
-//       Array.isArray(req.body.stops) &&
-//       req.body.stops.length > 0
-//     ) {
-//       stops = req.body.stops; // Agar frontend se aa jayein toh override na karein
-//     } else if (vendorIds.length > 0) {
-//       // Step A: Fetch Vendors basic info
-//       const vendors = await Vendor.find({ _id: { $in: vendorIds } });
-
-//       // Step B: Fetch corresponding Vendor Branches (e.g. Primary branch or branch matching vendorId)
-//       // Agar aapke paas request mein branchId hai toh wo use karein, warna vendor ki default/first active branch fetch karein
-//       const branches = await VendorBranch.find({
-//         vendorId: { $in: vendorIds },
-//         isActive: true,
-//       });
-
-//       stops = vendors.map((vendor, index) => {
-//         // Is vendor ki relevant branch dhoondhein (agar branchId req mein ho ya pehli branch utha lein)
-//         const matchedBranch =
-//           branches.find(
-//             (b) => b.vendorId.toString() === vendor._id.toString(),
-//           ) || {};
-
-//         return {
-//           stopNumber: index + 1,
-//           vendorId: vendor._id,
-//           branchId: matchedBranch._id || null, // Branch ID link kar dein
-//           logo: vendor.logo || "",
-//           businessName:
-//             vendor?.businessName || matchedBranch.branchName || "Branch Name",
-//           businessType: vendor.businessType || "fast-food",
-//           // Branch address aur location prioritized honge
-//           address: matchedBranch.address || vendor.address || "Vendor Address",
-//           city: matchedBranch.city || vendor.city || "Vendor City",
-//           country: matchedBranch.country || vendor.country || "Vendor Country",
-//           location: {
-//             type: "Point",
-//             coordinates: matchedBranch.location?.coordinates ||
-//               vendor.location?.coordinates || [0, 0],
-//           },
-//           status: hasOnlyGroceryItems ? "ready" : "pending",
-//         };
-//       });
-//     }
-
-//     // ===========================================
-//     const vendor = await Vendor.findById(vendorId);
-//     const vendorBranch = await VendorBranch.findOne({ vendorId: vendorId});
-//     if (!vendor) return res.status(404).json({ message: 'Vendor not found' });
-//     if (!vendorBranch) return res.status(404).json({ message: 'Vendor branch not found' });
-//     if(!vendor.isActive || !vendorBranch.isActive) return res.status(400).json({ message: 'Vendor or branch is not available' });
-
-//     console.log("Vendor Branch Location:", vendorBranch.location, vendorBranch.location.coordinates);
-//     // GeoJSON mein coordinates [lng, lat] hote hain
-//     const [vendorLng, vendorLat] = vendorBranch.location.coordinates;
-
-//     const result = await calculateChakwalDeliveryFee(vendorLat, vendorLng, userLat, userLng);
-//     console.log(result);
-//     res.json({ success: true, ...result });
-//   } catch (error) {
-//     res.status(400).json({ success: false, message: error.message });
-//   }
-// };
 
 // ==========================================
 // Calculate Delivery Charges API (Multi-Vendor Stops Supported)
 // ==========================================
 exports.calculateDeliveryFee = async (req, res) => {
   try {
-    const { cart, userLat, userLng } = req.body;
+    const { cart, userLat, userLng, promoDiscount, instructions } = req.body;
 
-    if (!cart) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Carts required hain" });
+      let paymentMethod = "cash_on_delivery";
+     let salesAndServiceTaxForUser = 5;
+     let salesAndServiceTaxForRider = 25;
+    
+    if (!cart || userLat === undefined || userLng === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: "Cart, userLat aur userLng required hain",
+      });
     }
 
     const cartItems = await Cart.findById(cart);
+    if (!cartItems) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Cart nahi mila" });
+    }
+    console.log(cartItems);
+
+    let subtotal = 0;
 
     // 1. Extract item IDs from cart items
-    const itemIds = cartItems?.items
-      ?.map((item) => item.productId || item._id)
+    const itemIds = cartItems.items
+      ?.map((item) => {
+        item.productId || item._id;
+        const price = Number(item.price) || 0;
+        const quantity = Number(item.quantity) || 1;
+        const total = price * quantity;
+        subtotal += total;
+        return item.productId || item._id;
+      })
       .filter(Boolean);
 
     // 2. Fetch vendorIds from Product, Deal, and Campaign collections
@@ -283,111 +290,108 @@ exports.calculateDeliveryFee = async (req, res) => {
       Campaign.find({ _id: { $in: itemIds } }).select("vendorId"),
     ]);
 
-    // Extract and combine all unique vendor IDs
     const extractedVendorIds = [
       ...products.map((p) => p.vendorId?.toString()),
       ...deals.map((d) => d.vendorId?.toString()),
       ...campaigns.map((c) => c.vendorId?.toString()),
-      ...cartItems?.items.map((item) => item.vendorId?.toString()), // Direct fallback
+      ...cartItems.items.map((item) => item.vendorId?.toString()),
     ].filter(Boolean);
 
     const vendorIds = [...new Set(extractedVendorIds)];
 
     if (vendorIds.length === 0) {
-      return res
-        .status(404)
-        .json({
-          success: false,
-          message: "Koi active vendor nahi mila in items ke liye",
-        });
+      return res.status(404).json({
+        success: false,
+        message: "Koi active vendor nahi mila in items ke liye",
+      });
     }
 
     // 3. Fetch Vendors and their Branches
-    const vendors = await Vendor.find({ _id: { $in: vendorIds } });
-    const branches = await VendorBranch.find({
-      vendorId: { $in: vendorIds },
-      isActive: true,
-    });
+    const [vendors, branches] = await Promise.all([
+      Vendor.find({ _id: { $in: vendorIds } }),
+      VendorBranch.find({ vendorId: { $in: vendorIds }, isActive: true }),
+    ]);
 
-    let stops = [];
-    let totalDeliveryFee = 0;
-    let maxEstimatedMins = 0;
-    let maxDistanceKm = 0;
-    const breakdownDetails = [];
-
-    // 4. Har vendor (stop) ke liye loop chala kar distance aur fee calculate karein
-    for (let index = 0; index < vendors.length; index++) {
-      const vendor = vendors[index];
+    // 4. Collect valid vendor coordinates
+    const validVendorStops = [];
+    for (const vendor of vendors) {
       const matchedBranch = branches.find(
         (b) => b.vendorId.toString() === vendor._id.toString(),
       );
 
-      if (!matchedBranch || !matchedBranch.location?.coordinates) {
-        continue; // Skip agar branch ya coordinates available nahi hain
-      }
-      console.log(
-        `Calculating delivery fee for Vendor(${vendor._id}) at Branch(${matchedBranch})`,
-      );
-      // GeoJSON [lng, lat] format
+      if (!matchedBranch || !matchedBranch.location?.coordinates) continue;
+
       const [vendorLat, vendorLng] = matchedBranch.location.coordinates;
-
-      // Google Routes API ke zariye is vendor se user tak ka fare nikalen
-      const stopResult = await calculateChakwalDeliveryFee(
-        vendorLat,
-        vendorLng,
-        userLat,
-        userLng,
-      );
-
-      stops.push({
-        stopNumber: index + 1,
+      validVendorStops.push({
         vendorId: vendor._id,
         branchId: matchedBranch._id,
         businessName:
           vendor?.businessName || matchedBranch.branchName || "Vendor",
         address: matchedBranch.address || vendor.address || "",
         location: matchedBranch.location,
-        distanceKm: stopResult.distanceKm,
-        deliveryFee: stopResult.deliveryFee,
-      });
-
-      // Total fee combining logic (Aap yahan sum ya max use kar sakti hain)
-      totalDeliveryFee += stopResult.deliveryFee;
-
-      // Max time aur distance track karne ke liye
-      const timeVal = parseInt(stopResult.estimatedTime, 10);
-      if (timeVal > maxEstimatedMins) maxEstimatedMins = timeVal;
-      if (stopResult.distanceKm > maxDistanceKm)
-        maxDistanceKm = stopResult.distanceKm;
-
-      breakdownDetails.push({
-        vendorId: vendor._id,
-        businessName: vendor?.businessName,
-        ...stopResult,
+        lat: vendorLat,
+        lng: vendorLng,
       });
     }
 
-    if (stops.length === 0) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Valid vendor branches nahi mil sake",
-        });
+    if (validVendorStops.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid vendor branches nahi mil sake",
+      });
     }
+    
+    // 5. Calculate Combined Route (1 Single Google API Call)
+    const routeSummary = await calculateMultiStopChakwalRoute(
+      validVendorStops,
+      userLat,
+      userLng,
+    );
 
-    // Response send karein
-    res.json({
+    const stops = routeSummary.stops.map(
+      ({ lat, lng, estimatedTime, ...rest }) => rest,
+    );
+    const breakdownDetails = routeSummary.stops.map((s) => ({
+      vendorId: s.vendorId,
+      businessName: s.businessName,
+      distanceKm: s.distanceKm,
+      estimatedTime: s.estimatedTime,
+      deliveryFee: s.deliveryFee,
+    }));
+    
+        const discount = Number(promoDiscount) || 0;
+    
+        const subtotalWithTax =
+          (Number(salesAndServiceTaxForUser) / 100) * subtotal;
+        const totalAmount =
+          subtotal + subtotalWithTax + Number(routeSummary.deliveryFee) - discount;
+
+          const riderAmountTax = (Number(salesAndServiceTaxForRider) / 100) * routeSummary.deliveryFee;
+          const riderAmount = routeSummary.deliveryFee - riderAmountTax;
+          console.log("Rider Amount:", salesAndServiceTaxForRider, riderAmountTax, riderAmount);
+
+    return res.json({
       success: true,
-      distanceKm: Number(maxDistanceKm.toFixed(2)),
-      estimatedTime: `${maxEstimatedMins} mins`,
-      deliveryFee: totalDeliveryFee,
-      stops: stops,
+      distanceKm: routeSummary.distanceKm,
+      estimatedTime: routeSummary.estimatedTime,
+      deliveryFee: routeSummary.deliveryFee,
+      subtotal,
+      salesAndServiceTaxForUser,
+      taxAmountOfUser: subtotalWithTax,
+      deliveryFeeWithTax: routeSummary.deliveryFee + subtotalWithTax,
+      salesAndServiceTaxForRider,
+      taxAmountOfRider: riderAmountTax,
+      riderAmount,
+      promoDiscount: discount,
+      totalAmount,
+      paymentMethod,
+      instructions: instructions || "",
+      stops,
       breakdown: breakdownDetails,
     });
   } catch (error) {
     console.error("Delivery Fee Error:", error);
-    res.status(400).json({ success: false, message: error.message });
+    return res.status(400).json({ success: false, message: error.message });
   }
 };
 
@@ -397,11 +401,18 @@ exports.createOrder = async (req, res) => {
       address,
       addressId,
       // stops = [],
-      paymentMethod = "cash_on_delivery",
-      promoDiscount = 0,
-      instructions = "",
-      deliveryFee = 200,
-      salesAndServiceTaxForUser = 5,
+      paymentMethod,
+      promoDiscount,
+      instructions,
+      deliveryFee,
+      distanceKm,
+      estimatedTime,
+      taxAmountOfUser,
+      salesAndServiceTaxForUser,
+      salesAndServiceTaxForRider,
+      deliveryFeeWithTax,
+      taxAmountOfRider,
+      riderAmount,
       routingMetrics,
     } = req.body;
 
@@ -562,12 +573,12 @@ exports.createOrder = async (req, res) => {
       },
     };
 
-    const discount = Number(promoDiscount) || 0;
+    // const discount = Number(promoDiscount) || 0;
 
-    const subtotalWithTax =
-      (Number(salesAndServiceTaxForUser) / 100) * subtotal;
-    const totalAmount =
-      subtotal + subtotalWithTax + Number(deliveryFee) - discount;
+    // const subtotalWithTax =
+    //   (Number(salesAndServiceTaxForUser) / 100) * subtotal;
+    // const totalAmount =
+    //   subtotal + subtotalWithTax + Number(deliveryFee) - discount;
 
     // const status = hasOnlyGroceryItems ? "confirmed" : "pending";
 
@@ -581,10 +592,18 @@ exports.createOrder = async (req, res) => {
       paymentStatus: "pending",
       subtotal,
       deliveryFee: Number(deliveryFee),
+      distanceKm,
+      estimatedTime,
+      taxAmountOfUser : Number(taxAmountOfUser),
       salesAndServiceTaxForUser: Number(salesAndServiceTaxForUser),
+      salesAndServiceTaxForRider: Number(salesAndServiceTaxForRider),
+      deliveryFeeWithTax: Number(deliveryFeeWithTax),
+      taxAmountOfRider: Number(taxAmountOfRider),
+      riderAmount: Number(riderAmount),
       instructions,
-      promoDiscount: discount,
+      promoDiscount: Number(promoDiscount),
       totalAmount,
+      currency: "PKR",
       routingMetrics,
       status: hasOnlyGroceryItems ? "ready" : "pending",
       riderId: null,

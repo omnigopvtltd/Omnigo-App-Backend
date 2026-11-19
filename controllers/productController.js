@@ -2110,14 +2110,20 @@ exports.getPreviouslyOrderedItems = async (req, res) => {
 
     const uniqueProductIds = Array.from(productIdsSet);
 
+    const items = await Promise.all([
+          Product.find({ _id: { $in: uniqueProductIds }, isAvailable: true }).populate("vendorId", "businessName logo rating offer").select("name image images price rating isFavourite vendorId"),
+          Deal.find({ _id: { $in: uniqueProductIds }, startDate: { $lte: new Date() }, endDate: { $gte: new Date() } }).populate("vendorId", "businessName logo rating offer"),
+          Campaign.find({ _id: { $in: uniqueProductIds, startDate: { $lte: new Date() }, endDate: { $gte: new Date() } } }).populate("vendorId", "businessName logo rating offer"), // Agar campaign ka model 'Campaign' hai
+        ]);
+
     // 3. Fetch product details with strict vendorId existence check
-    const items = await Product.find({
-      _id: { $in: uniqueProductIds },
-      isAvailable: true,
-      vendorId: { $exists: true, $ne: null }, // 💡 Only fetch items with valid vendorId
-    })
-      .populate("vendorId", "businessName logo rating offer")
-      .select("name image images price rating isFavourite vendorId"); // 💡 Included 'images' and 'isFavourite'
+    // const items = await Product.find({
+    //   _id: { $in: uniqueProductIds },
+    //   isAvailable: true,
+    //   vendorId: { $exists: true, $ne: null }, // 💡 Only fetch items with valid vendorId
+    // })
+    //   .populate("vendorId", "businessName logo rating offer")
+    //   .select("name image images price rating isFavourite vendorId"); // 💡 Included 'images' and 'isFavourite'
 
     // 4. Format and filter items to ensure valid vendor object
     const formattedItems = items
