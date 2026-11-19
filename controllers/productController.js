@@ -2081,13 +2081,14 @@ exports.deleteProduct = async (req, res) => {
 exports.getPreviouslyOrderedItems = async (req, res) => {
   try {
     const userId = req.user._id || req.user.id;
+    const now = new Date();
 
-    // 1. Find completed/delivered orders for the logged-in user
+    // 1. Find completed/delivered orders for the logged-in user (latest first)
     const orders = await Order.find({
       userId,
       status: { $in: ["completed", "delivered"] },
     })
-      .select("items")
+      .select("_id items createdAt")
       .sort({ createdAt: -1 });
 
     if (!orders || orders.length === 0) {
@@ -2098,46 +2099,67 @@ exports.getPreviouslyOrderedItems = async (req, res) => {
       });
     }
 
-    // 2. Extract unique Product IDs ordered by the user
-    const productIdsSet = new Set();
+    // 2. Map each unique productId to its most recent orderId
+    const productToOrderMap = new Map();
     orders.forEach((order) => {
       order.items?.forEach((item) => {
         if (item.productId) {
-          productIdsSet.add(item.productId.toString());
+          const key = item.productId.toString();
+          if (!productToOrderMap.has(key)) {
+            productToOrderMap.set(key, order._id);
+          }
         }
       });
     });
 
-    const uniqueProductIds = Array.from(productIdsSet);
+    const uniqueProductIds = Array.from(productToOrderMap.keys());
 
-    const items = await Promise.all([
-          Product.find({ _id: { $in: uniqueProductIds }, isAvailable: true }).populate("vendorId", "businessName logo rating offer").select("name image images price rating isFavourite vendorId"),
-          Deal.find({ _id: { $in: uniqueProductIds }, startDate: { $lte: new Date() }, endDate: { $gte: new Date() } }).populate("vendorId", "businessName logo rating offer"),
-          Campaign.find({ _id: { $in: uniqueProductIds, startDate: { $lte: new Date() }, endDate: { $gte: new Date() } } }).populate("vendorId", "businessName logo rating offer"), // Agar campaign ka model 'Campaign' hai
-        ]);
+    // 3. Fetch matching Products, Deals, and Campaigns
+    const [products, deals, campaigns] = await Promise.all([
+      Product.find({ _id: { $in: uniqueProductIds }, isAvailable: true })
+        .populate("vendorId", "businessName logo rating offer")
+        .select("name image images price rating isFavourite vendorId"),
+      Deal.find({ _id: { $in: uniqueProductIds }, endDate: { $gte: now } })
+        .populate("vendorId", "businessName logo rating offer"),
+      Campaign.find({ _id: { $in: uniqueProductIds }, endDate: { $gte: now } })
+        .populate("vendorId", "businessName logo rating offer"),
+    ]);
 
-    // 3. Fetch product details with strict vendorId existence check
-    // const items = await Product.find({
-    //   _id: { $in: uniqueProductIds },
-    //   isAvailable: true,
-    //   vendorId: { $exists: true, $ne: null }, // 💡 Only fetch items with valid vendorId
-    // })
-    //   .populate("vendorId", "businessName logo rating offer")
-    //   .select("name image images price rating isFavourite vendorId"); // 💡 Included 'images' and 'isFavourite'
+    const items = [...products, ...deals, ...campaigns];
 
-    // 4. Format and filter items to ensure valid vendor object
+    // 4. Format items with orderId included
     const formattedItems = items
       .map((product) => {
         const vendor = product.vendorId;
-
-        // Skip product if vendor was deleted or unpopulated
         if (!vendor || !vendor._id) return null;
 
+        const productKey = product._id.toString();
+        const latestOrderId = productToOrderMap.get(productKey) || null;
+
         return {
-          _id: product._id,
-          productName: product.name,
-          productImage: product.images?.[0] || product.image || "",
-          price: product.price,
+          _id: latestOrderId,
+          // orderId: latestOrderId,
+          productId: product._id.toString(),
+          productName:
+            product.name ||
+            product.dealName ||
+            product.campaignName ||
+            "Unnamed Product",
+          type:
+            product.type ||
+            product.dealType ||
+            product.campaignType ||
+            null,
+          productImage:
+            product.images?.[0] ||
+            product.image ||
+            product.dealBanner ||
+            product.campaignBanner ||
+            "",
+          price: product.price || product.offerDetails?.dealPrice || 0,
+          discountPrice:
+            product.discountPrice || product.offerDetails?.dealPrice || null,
+          originalPrice: product.offerDetails?.originalPrice || null,
           isFavourite: Boolean(product.isFavourite),
           rating: product.rating?.average || product.rating || 0,
           vendor: {
@@ -2149,7 +2171,7 @@ exports.getPreviouslyOrderedItems = async (req, res) => {
           },
         };
       })
-      .filter(Boolean); // Drop null entries
+      .filter(Boolean);
 
     return res.status(200).json({
       success: true,

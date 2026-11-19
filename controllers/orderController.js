@@ -413,6 +413,7 @@ exports.createOrder = async (req, res) => {
       deliveryFeeWithTax,
       taxAmountOfRider,
       riderAmount,
+      // totalAmount,
       routingMetrics,
     } = req.body;
 
@@ -573,12 +574,12 @@ exports.createOrder = async (req, res) => {
       },
     };
 
-    // const discount = Number(promoDiscount) || 0;
+    const discount = Number(promoDiscount) || 0;
 
-    // const subtotalWithTax =
-    //   (Number(salesAndServiceTaxForUser) / 100) * subtotal;
-    // const totalAmount =
-    //   subtotal + subtotalWithTax + Number(deliveryFee) - discount;
+    const subtotalWithTax =
+      (Number(salesAndServiceTaxForUser) / 100) * subtotal;
+    const totalAmount =
+      subtotal + subtotalWithTax + Number(deliveryFee) - discount;
 
     // const status = hasOnlyGroceryItems ? "confirmed" : "pending";
 
@@ -2574,6 +2575,7 @@ exports.getOrderDetails = async (req, res) => {
 // REORDER
 // =====================================
 exports.reorder = async (req, res) => {
+  console.log("REORDER REQUEST RECEIVED:", req.params.id, "by user:", req.user.id);
   try {
     const oldOrder = await Order.findOne({
       _id: req.params.id,
@@ -2601,8 +2603,9 @@ exports.reorder = async (req, res) => {
       subtotal += total;
 
       return {
-        productId: item.productId,
+        productId: item.productId.toString(),
         name: item.name,
+        type: item.type,
         orderFrom: item.orderFrom || "fast-food",
         image: item.image,
         category: item.category,
@@ -2610,6 +2613,8 @@ exports.reorder = async (req, res) => {
         variations: item.variations || [],
         addOns: item.addOns || [],
         price,
+        discountPrice: item.discountPrice || 0,
+        originalPrice: item.originalPrice || 0,
         quantity,
         total,
       };
@@ -2620,7 +2625,7 @@ exports.reorder = async (req, res) => {
       .map((item) => item.productId)
       .filter(Boolean);
 
-    if (!itemIds) {
+    if (itemIds.length === 0) {
       return res
         .status(400)
         .json({ success: false, message: "Items not available" });
@@ -2632,7 +2637,8 @@ exports.reorder = async (req, res) => {
       Campaign.find({ _id: { $in: itemIds } }).select("vendorId"),
     ]);
 
-    if (!products.length || !deals.length || !campaigns.length) {
+    const foundItemsCount = products.length + deals.length + campaigns.length;
+    if (foundItemsCount === 0) {
       return res
         .status(400)
         .json({ success: false, message: "Items not available" });
@@ -2643,13 +2649,13 @@ exports.reorder = async (req, res) => {
       ...products.map((p) => p.vendorId?.toString()),
       ...deals.map((d) => d.vendorId?.toString()),
       ...campaigns.map((c) => c.vendorId?.toString()),
-      ...formattedItems.map((item) => item.vendorId?.toString()), // Direct fallback if present
-      ...oldOrder.stops.map((stop) => stop.vendorId?.toString()), // Fallback to old order stops
+      ...formattedItems.map((item) => item.vendorId?.toString()),
+      ...(oldOrder.stops || []).map((stop) => stop.vendorId?.toString()),
     ].filter(Boolean);
 
     const vendorIds = [...new Set(extractedVendorIds)];
 
-    if (!vendorIds) {
+    if (vendorIds.length === 0) {
       return res
         .status(400)
         .json({ success: false, message: "Vendor not available" });
@@ -2694,7 +2700,6 @@ exports.reorder = async (req, res) => {
         };
       });
     } else {
-      // Fallback to old order stops if no vendors found
       stops = oldOrder.stops || [];
     }
 

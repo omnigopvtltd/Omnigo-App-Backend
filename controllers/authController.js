@@ -1893,8 +1893,8 @@ exports.checkServiceability = async (req, res) => {
 // ==========================================
 exports.saveManualLocation = async (req, res) => {
   try {
-    const { userId, zone, area, address, zipCode, phone } = req.body;
-
+    const { userId, zone, area, lat, lang, lng, address, zipCode, phone } = req.body;
+console.log(req.body);
     const user = await User.findById(userId);
     if (!user) {
       return res
@@ -1910,6 +1910,11 @@ exports.saveManualLocation = async (req, res) => {
       });
     }
 
+     // Longitude key check (lang ya lng dono handle kiye hain)
+    const longitude = Number(lng || lang) || 0;
+    const latitude = Number(lat) || 0;
+
+
     const newAddress = {
       phone: phone || "",
       mode: "manual",
@@ -1919,11 +1924,13 @@ exports.saveManualLocation = async (req, res) => {
       area,
       zipCode: zipCode || "48800", // Fallback value taaki required check fail na ho
       country: "Pakistan",
-      coordinates: [0, 0], // Schema expects Array of Numbers [lng, lat]
+      coordinates: { lat: latitude, lng: longitude }, // Schema expects Array of Numbers [lng, lat]
       isDefault: user.addresses.length === 0, // Pehla address ho toh automatically default
       isSave: true,
       isEnabled: false,
     };
+
+    console.log(newAddress);
 
     user.addresses.push(newAddress);
     await user.save();
@@ -1975,7 +1982,7 @@ exports.saveAutoLocation = async (req, res) => {
       area,
       zipCode: zipCode || "48800", // Required field fallback
       country: "Pakistan",
-      coordinates: [longitude, latitude], // Array format: [lng, lat]
+      coordinates: { lat: latitude, lng: longitude }, // Array format: [lng, lat]
       isDefault: user.addresses.length === 0,
       isSave: true,
       isEnabled: true,
