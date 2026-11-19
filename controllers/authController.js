@@ -959,9 +959,13 @@ exports.socialLogin = async (req, res) => {
     } else {
       if (provider === "google" && !user.googleId) {
         user.googleId = sub;
+
       } else if (provider === "facebook" && !user.facebookId) {
         user.facebookId = facebookId;
       }
+
+      // Har existing user login par addresses check karein
+      user.hasAddress = Boolean(user.addresses && user.addresses.length > 0);
       user.lastLogin = new Date();
       await user.save();
     }
@@ -993,7 +997,7 @@ exports.socialLogin = async (req, res) => {
       message: "Social login successful",
       token,
       data: userResponse,
-      firebaseToken,
+      // firebaseToken,
     });
   } catch (err) {
     console.error("SOCIAL LOGIN CRITICAL ERROR:", err);
