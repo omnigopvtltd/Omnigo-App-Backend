@@ -219,39 +219,98 @@ exports.createProduct = async (req, res) => {
     // }
 
     const productImages = await handleImageUploads(req, "images", "products");
+    const safeImages = Array.isArray(productImages) ? productImages : [];
 
-    // 4. Dynamic Subcategory Auto-Creation Logic
-    if (subcategory && subcategory.trim() !== "") {
-      const trimmedSubCategory = subcategory.trim();
+   // Helper for matching & slug generation
+    const normalizeKey = (val = "") =>
+      String(val)
+        .toLowerCase()
+        .trim()
+        .replace(/[-_\s]+/g, " ");
 
-      const foodCategoryDoc = await FoodCategories.findOne({
-        $or: [
-          { categoryName: { $regex: new RegExp(`^${category.trim()}$`, "i") } },
-          { categorySlug: category.toLowerCase().trim() },
-        ],
+    const toSlug = (val = "") =>
+      String(val)
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9\s-]/g, "")
+        .replace(/[\s_-]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+
+    let finalCategory = category.trim();
+    let finalSubCategory = subcategory ? subcategory.trim() : "";
+
+    const defaultCategoryImage =
+      safeImages.length > 0
+        ? safeImages[0]
+        : "https://example.com/default-category.jpg";
+
+    // 4. Dynamic Parent Category & Subcategory Auto-Creation Logic
+    const targetCategoryKey = normalizeKey(finalCategory);
+    const targetCategorySlug = toSlug(finalCategory);
+    const escapedCategory = finalCategory.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    // Step 4A: Find existing Parent Category (by name, slug, or normalized key)
+    let foodCategoryDoc = await FoodCategories.findOne({
+      $or: [
+        { categoryName: { $regex: new RegExp(`^${escapedCategory}$`, "i") } },
+        { categorySlug: targetCategorySlug },
+      ],
+    });
+
+    // Step 4B: Agar Parent Category maujood nahi hai, toh nayi create karein
+    if (!foodCategoryDoc) {
+      const initialSubCategories = [];
+
+      if (finalSubCategory !== "") {
+        initialSubCategories.push({
+          name: finalSubCategory,
+          slug: toSlug(finalSubCategory),
+          image: defaultCategoryImage,
+          status: "active",
+        });
+      }
+
+      foodCategoryDoc = await FoodCategories.create({
+        categoryName: finalCategory,
+        categorySlug: targetCategorySlug,
+        description: `${finalCategory} items`,
+        image: defaultCategoryImage,
+        icon: "🍽️",
+        subCategories: initialSubCategories,
+        status: "active",
+        isFeatured: false,
       });
+    } else {
+      // Existing category ka canonical naam use karein taake casing consistent rahe
+      finalCategory = foodCategoryDoc.categoryName;
 
-      if (foodCategoryDoc) {
-        // Check if subcategory already exists under this parent category
-        const subExists = foodCategoryDoc.subCategories.some(
-          (sub) => sub.name.toLowerCase() === trimmedSubCategory.toLowerCase(),
-        );
+      // Step 4C: Parent category mil gayi, ab Subcategory check/add karein
+      if (finalSubCategory !== "") {
+        const targetSubKey = normalizeKey(finalSubCategory);
+        const targetSubSlug = toSlug(finalSubCategory);
 
-        // If subcategory does NOT exist, create it with product image
-        if (!subExists) {
-          // Select 1st uploaded image file or URL for subcategory image
-          const subCategoryImage =
-            productImages.length > 0
-              ? productImages[0]
-              : "https://example.com/default-subcategory.jpg";
+        foodCategoryDoc.subCategories = foodCategoryDoc.subCategories || [];
 
+        const matchedSub = foodCategoryDoc.subCategories.find((sub) => {
+          const subNameKey = normalizeKey(sub.name || "");
+          const subSlugKey = normalizeKey(sub.slug || "");
+          return (
+            subNameKey === targetSubKey ||
+            subSlugKey === targetSubKey ||
+            (sub.slug && sub.slug.toLowerCase() === targetSubSlug)
+          );
+        });
+
+        if (matchedSub) {
+          finalSubCategory = matchedSub.name;
+        } else {
           foodCategoryDoc.subCategories.push({
-            name: trimmedSubCategory,
-            image: subCategoryImage,
+            name: finalSubCategory,
+            slug: targetSubSlug,
+            image: defaultCategoryImage,
             status: "active",
           });
 
-          // Triggers pre-save hook for slug auto-generation
           await foodCategoryDoc.save();
         }
       }
@@ -261,13 +320,13 @@ exports.createProduct = async (req, res) => {
     const product = await Product.create({
       name,
       description,
-      images: productImages,
+      images: safeImages || productImages,
       weight,
       quantity,
       belongsTo,
       vendorId,
-      category,
-      subcategory,
+      category: finalCategory,
+      subcategory: finalSubCategory,
       price,
       discountPrice: discountPrice || null,
       variations:
