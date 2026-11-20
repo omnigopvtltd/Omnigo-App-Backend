@@ -401,6 +401,7 @@ exports.createOrder = async (req, res) => {
       address,
       addressId,
       // stops = [],
+      subTotal,
       paymentMethod,
       promoDiscount,
       instructions,
@@ -413,7 +414,7 @@ exports.createOrder = async (req, res) => {
       deliveryFeeWithTax,
       taxAmountOfRider,
       riderAmount,
-      // totalAmount,
+      totalAmount,
       routingMetrics,
     } = req.body;
 
@@ -576,10 +577,10 @@ exports.createOrder = async (req, res) => {
 
     const discount = Number(promoDiscount) || 0;
 
-    const subtotalWithTax =
-      (Number(salesAndServiceTaxForUser) / 100) * subtotal;
-    const totalAmount =
-      subtotal + subtotalWithTax + Number(deliveryFee) - discount;
+    // const subtotalWithTax =
+    //   (Number(salesAndServiceTaxForUser) / 100) * subtotal;
+    // const totalAmount =
+    //   subtotal + subtotalWithTax + Number(deliveryFee) - discount;
 
     // const status = hasOnlyGroceryItems ? "confirmed" : "pending";
 
@@ -591,7 +592,7 @@ exports.createOrder = async (req, res) => {
       items: formattedItems,
       paymentMethod,
       paymentStatus: "pending",
-      subtotal,
+      subtotal: subTotal,
       deliveryFee: Number(deliveryFee),
       distanceKm,
       estimatedTime,
@@ -603,7 +604,7 @@ exports.createOrder = async (req, res) => {
       riderAmount: Number(riderAmount),
       instructions,
       promoDiscount: Number(promoDiscount),
-      totalAmount,
+      totalAmount: Number(totalAmount),
       currency: "PKR",
       routingMetrics,
       status: hasOnlyGroceryItems ? "ready" : "pending",
