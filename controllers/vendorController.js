@@ -4667,6 +4667,8 @@ exports.deleteAccount = async (req, res) => {
 
     // Keep the catalog consistent — a vendor's products can't exist without it
     await Product.deleteMany({ vendorId: vendor._id });
+    await Deal.deleteMany({ vendorId: vendor._id });
+    await Campaign.deleteMany({ vendorId: vendor._id });
 
     return res.status(200).json({
       success: true,
