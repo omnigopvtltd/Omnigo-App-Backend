@@ -300,16 +300,43 @@ const orderSchema = new mongoose.Schema(
       default: "pending",
     },
 
-    subtotal: Number,
+    subtotal: {
+      type: Number,
+    },
 
     deliveryFee: {
       type: Number,
       default: 100,
     },
 
-    tax: {
+    distanceKm: {
       type: Number,
-      default: 0,
+    },
+
+    estimatedTime: {
+      type: String,
+    },
+
+    taxAmountOfUser: {
+      type: Number
+    },
+
+    taxAmountOfRider: {
+      type: Number
+    },
+
+    salesAndServiceTaxForUser: {
+      type: Number,
+      default: 5,
+    },
+
+    salesAndServiceTaxForRider: {
+      type: Number,
+      default: 25,
+    },
+
+    riderAmount: {
+      type: Number,
     },
 
     promoDiscount: {
@@ -319,10 +346,15 @@ const orderSchema = new mongoose.Schema(
 
     totalAmount: Number,
 
+    currency: {
+      type: String,
+      default: "PKR",
+    },
+
     // Live Navigation & Route Geometry (For OSRM / Mapbox Flutter Polylines)
     routingMetrics: {
       totalDistanceKm: { type: Number, default: 0 },
-      totalEtaMin: { type: Number, default: 0 },
+      totalEtaMin: { type: String, default: "" },
       routeGeometry: { type: Object, default: {} }, // GeoJSON line string
     },
 
@@ -349,24 +381,11 @@ const orderSchema = new mongoose.Schema(
       default: "",
     },
 
-    salesAndServiceTaxForUser: {
-      type: Number,
-      default: 5,
-    },
-
-    salesAndServiceTaxForRider: {
-      type: Number,
-      default: 20,
-    },
 
     // Float & Session Tracking
     riderFloatAmount: {
       type: Number,
       default: 0,
-    },
-    riderFloatSettled: {
-      type: Boolean,
-      default: false,
     },
     riderFloatSettled: {
       type: Boolean,
