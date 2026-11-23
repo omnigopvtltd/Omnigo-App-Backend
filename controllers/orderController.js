@@ -321,7 +321,7 @@ exports.calculateDeliveryFee = async (req, res) => {
 
       if (!matchedBranch || !matchedBranch.location?.coordinates) continue;
 
-      const [vendorLng, vendorLat] = matchedBranch.location.coordinates;
+      const [vendorLat, vendorLng] = matchedBranch.location.coordinates;
       validVendorStops.push({
         vendorId: vendor._id,
         branchId: matchedBranch._id,
