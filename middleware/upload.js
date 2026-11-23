@@ -92,6 +92,10 @@
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+const os = require("os");
+
+const BACKEND_URL = process.env.BACKEND_URL || "https://api.omnigoapp.com";
+const isVercel = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 
 // File Filter (Common for both)
 function fileFilter(req, file, cb) {
@@ -110,16 +114,34 @@ function fileFilter(req, file, cb) {
   }
 }
 
+const uploadDir = isVercel
+  ? path.join(os.tmpdir(), "uploads")
+  : path.join(__dirname, "../uploads");
+
+const ensureUploadDir = () => {
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+  return uploadDir;
+};
+
 // -------------------------------------------------------------
 // 1. DISK STORAGE (Local Server Uploads - e.g., /uploads folder)
 // -------------------------------------------------------------
-const uploadDir = path.join(__dirname, "../uploads");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+// const uploadDir = path.join(__dirname, "../uploads");
+// if (!fs.existsSync(uploadDir)) {
+//   fs.mkdirSync(uploadDir, { recursive: true });
+// }
 
 const diskStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
+  destination: (req, file, cb) => {
+    try {
+      const dir = ensureUploadDir();
+      cb(null, dir);
+    } catch (err) {
+      cb(err);
+    }
+  },
   filename: (req, file, cb) => {
     const sanitizedOriginalName = file.originalname.replace(/\s+/g, "-");
     // const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
