@@ -321,7 +321,7 @@ exports.calculateDeliveryFee = async (req, res) => {
 
       if (!matchedBranch || !matchedBranch.location?.coordinates) continue;
 
-      const [vendorLat, vendorLng] = matchedBranch.location.coordinates;
+      const [vendorLng, vendorLat] = matchedBranch.location.coordinates;
       validVendorStops.push({
         vendorId: vendor._id,
         branchId: matchedBranch._id,
@@ -401,6 +401,7 @@ exports.createOrder = async (req, res) => {
       address,
       addressId,
       // stops = [],
+      subTotal,
       paymentMethod,
       promoDiscount,
       instructions,
@@ -413,7 +414,7 @@ exports.createOrder = async (req, res) => {
       deliveryFeeWithTax,
       taxAmountOfRider,
       riderAmount,
-      // totalAmount,
+      totalAmount,
       routingMetrics,
     } = req.body;
 
@@ -576,10 +577,10 @@ exports.createOrder = async (req, res) => {
 
     const discount = Number(promoDiscount) || 0;
 
-    const subtotalWithTax =
-      (Number(salesAndServiceTaxForUser) / 100) * subtotal;
-    const totalAmount =
-      subtotal + subtotalWithTax + Number(deliveryFee) - discount;
+    // const subtotalWithTax =
+    //   (Number(salesAndServiceTaxForUser) / 100) * subtotal;
+    // const totalAmount =
+    //   subtotal + subtotalWithTax + Number(deliveryFee) - discount;
 
     // const status = hasOnlyGroceryItems ? "confirmed" : "pending";
 
@@ -591,19 +592,19 @@ exports.createOrder = async (req, res) => {
       items: formattedItems,
       paymentMethod,
       paymentStatus: "pending",
-      subtotal,
-      deliveryFee: Number(deliveryFee),
+      subtotal: subTotal,
+      deliveryFee: Number(deliveryFee) || deliveryFee || 0,
       distanceKm,
       estimatedTime,
-      taxAmountOfUser : Number(taxAmountOfUser),
-      salesAndServiceTaxForUser: Number(salesAndServiceTaxForUser),
-      salesAndServiceTaxForRider: Number(salesAndServiceTaxForRider),
-      deliveryFeeWithTax: Number(deliveryFeeWithTax),
-      taxAmountOfRider: Number(taxAmountOfRider),
-      riderAmount: Number(riderAmount),
+      taxAmountOfUser : Number(taxAmountOfUser) || taxAmountOfUser || 0,
+      salesAndServiceTaxForUser: Number(salesAndServiceTaxForUser) || salesAndServiceTaxForUser || 0,
+      salesAndServiceTaxForRider: Number(salesAndServiceTaxForRider) || salesAndServiceTaxForRider || 0,
+      deliveryFeeWithTax: Number(deliveryFeeWithTax) || deliveryFeeWithTax || 0,
+      taxAmountOfRider: Number(taxAmountOfRider) || taxAmountOfRider || 0,
+      riderAmount: Number(riderAmount) || riderAmount || 0,
       instructions,
-      promoDiscount: Number(promoDiscount),
-      totalAmount,
+      promoDiscount: Number(promoDiscount) || promoDiscount || 0,
+      totalAmount: Number(totalAmount) || totalAmount || 0,
       currency: "PKR",
       routingMetrics,
       status: hasOnlyGroceryItems ? "ready" : "pending",

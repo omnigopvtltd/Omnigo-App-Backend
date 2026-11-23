@@ -833,8 +833,8 @@ exports.signup = async (req, res) => {
         branches: createdBranches, // Array of created branches
         tempPassword: rawAutoPassword,
       },
-      firebaseToken,
       201,
+      firebaseToken,
     );
   } catch (err) {
     console.error("VENDOR SIGNUP ERROR:", err);
@@ -1171,6 +1171,7 @@ exports.login = async (req, res) => {
       res,
       "Vendor login successful",
       vendorResponse,
+      201,
       firebaseToken,
     );
   } catch (err) {
@@ -4666,6 +4667,8 @@ exports.deleteAccount = async (req, res) => {
 
     // Keep the catalog consistent — a vendor's products can't exist without it
     await Product.deleteMany({ vendorId: vendor._id });
+    await Deal.deleteMany({ vendorId: vendor._id });
+    await Campaign.deleteMany({ vendorId: vendor._id });
 
     return res.status(200).json({
       success: true,
