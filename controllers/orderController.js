@@ -607,11 +607,12 @@ exports.createOrder = async (req, res) => {
       promoDiscount: Number(promoDiscount) || promoDiscount || 0,
       totalAmount: Number(totalAmount) || totalAmount || 0,
       currency: "PKR",
-      routingMetrics: {
-        totalDistanceKm: Number(distanceKm) || distanceKm || 0,
-        totalEtaMin: estimatedTime || "",
-        routeGeometry: { type: Object, default: {} },
-      },
+      // routingMetrics: {
+      //   totalDistanceKm: Number(distanceKm) || distanceKm || 0,
+      //   totalEtaMin: estimatedTime || "",
+      //   routeGeometry: { type: Object, default: {} },
+      // },
+      routingMetrics,
       status: hasOnlyGroceryItems ? "ready" : "pending",
       riderId: null,
       isAssigned: false,
