@@ -354,7 +354,7 @@ const orderSchema = new mongoose.Schema(
     // Live Navigation & Route Geometry (For OSRM / Mapbox Flutter Polylines)
     routingMetrics: {
       totalDistanceKm: { type: Number, default: 0 },
-      totalEtaMin: { type: String, default: "" },
+      totalEtaMin: { type: Number, default: 0 },
       routeGeometry: { type: Object, default: {} }, // GeoJSON line string
     },
 
