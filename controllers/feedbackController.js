@@ -193,6 +193,7 @@ exports.skipFeedback = async (req, res) => {
 exports.getFeedbacks = async (req, res) => {
   try {
     const { vendorId, productId } = req.query;
+  const { page = 1, limit = 10 } = req.query;
 
     let filter = {};
     if (vendorId) filter.vendorId = vendorId;
@@ -200,11 +201,19 @@ exports.getFeedbacks = async (req, res) => {
 
     const feedbacks = await Feedback.find(filter)
       .populate("userId", "name profilePicture")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(Number(limit));
+
+    const totalFeedbacks = await Feedback.countDocuments(filter);
 
     return res.status(200).json({
       success: true,
       count: feedbacks.length,
+      count: totalFeedbacks.length,
+      totalFeedbacks,
+      totalPages: Math.ceil(totalFeedbacks / limit),
+      currentPage: Number(page),
       data: feedbacks,
     });
   } catch (err) {

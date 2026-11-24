@@ -119,6 +119,7 @@ const uploadDir = isVercel
   : path.join(__dirname, "../uploads");
 
 const ensureUploadDir = () => {
+  console.log("Upload Directory:", uploadDir);
   if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
   }
@@ -137,6 +138,7 @@ const diskStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     try {
       const dir = ensureUploadDir();
+      console.log("Disk Storage Destination:", dir);
       cb(null, dir);
     } catch (err) {
       cb(err);
@@ -147,6 +149,7 @@ const diskStorage = multer.diskStorage({
     // const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
     const ext = path.extname(sanitizedOriginalName);
     const baseName = path.basename(sanitizedOriginalName, ext);
+    console.log("Disk Storage Filename:", `${baseName}${ext}`);
     cb(null, `${baseName}${ext}`);
   },
 });

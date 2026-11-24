@@ -159,14 +159,23 @@ exports.getRestaurantReviews = async (req, res) => {
 // ========================================================
 exports.getAllRestaurantReviews = async (req, res) => {
   try {
+    const { page = 1, limit = 10 } = req.query;
 
     const reviews = await RestaurantReview.find()
       .populate("user", "name rating message")
       .populate("restaurantId", "businessName name logo")
       .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(Number(limit));
+
+const totalReviews = await RestaurantReview.countDocuments();
 
     return res.status(200).json({
       success: true,
+       count: reviews.length,
+      totalReviews,
+      totalPages: Math.ceil(totalReviews / limit),
+      currentPage: Number(page),
       reviews,
     });
   } catch (err) {
