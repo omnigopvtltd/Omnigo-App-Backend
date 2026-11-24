@@ -668,7 +668,7 @@ exports.createOrder = async (req, res) => {
             userId: r._id,
             orderId: order._id,
             role: "rider",
-            title: "New Grocery Order Ready!",
+            title: "New Order Ready!",
             message: `Order #${order.orderNumber} is ready for pickup. Tap to accept.`,
             type: "ready",
             extraData: {
@@ -732,15 +732,15 @@ exports.getOrderById = async (req, res) => {
       .map((item) => item.productId)
       .filter(Boolean);
     const products = await Product.find({ _id: { $in: productIds } }).select(
-      "name price restaurantId chefId",
+      "name price vendorId chefId",
     );
 
     const restaurantIds = products
-      .map((p) => p.restaurantId || p.chefId)
+      .map((p) => p.vendorId || p.chefId)
       .filter(Boolean);
-    const restaurants = await Restaurant.find({
+    const restaurants = await Vendor.find({
       _id: { $in: restaurantIds },
-    }).select("name logo address contact");
+    }).select("businessName logo address businessPhone");
 
     const productMap = new Map(products.map((p) => [p._id.toString(), p]));
     const restaurantMap = new Map(
@@ -750,7 +750,7 @@ exports.getOrderById = async (req, res) => {
     const order = orderDoc.toObject();
     order.items = order.items.map((item) => {
       const product = productMap.get(item.productId?.toString());
-      const storeId = product?.restaurantId || product?.chefId;
+      const storeId = product?.vendorId || product?.chefId;
       const vendor = storeId ? restaurantMap.get(storeId.toString()) : null;
 
       return {
@@ -1542,7 +1542,7 @@ exports.cancelOrderByVendor = async (req, res) => {
           return (
             type.includes("mart") ||
             type.includes("grocery") ||
-            type.includes("store")
+            type.includes("pharmacy")
           );
         });
 
@@ -1551,6 +1551,7 @@ exports.cancelOrderByVendor = async (req, res) => {
           return (
             cat.includes("grocery") ||
             cat.includes("mart") ||
+            cat.includes("pharmacy") ||
             cat.includes("fastfood") === false
           );
         });
@@ -1767,7 +1768,7 @@ exports.getAvailableOrders = async (req, res) => {
 
       .populate("userId", "name email phone")
 
-      .populate("stops.vendorId", "businessName logo address contact location")
+      .populate("stops.vendorId", "businessName logo address businessPhone location")
 
       .sort({ createdAt: -1 });
 
@@ -2564,12 +2565,27 @@ exports.getOrderDetails = async (req, res) => {
         paymentStatus: order.paymentStatus,
         subtotal: order.subtotal,
         deliveryFee: order.deliveryFee,
+        distanceKm: order.distanceKm,
+        estimatedTime: order.estimatedTime,
         salesAndServiceTaxForUser: order.salesAndServiceTaxForUser,
+        salesAndServiceTaxForRider: order.salesAndServiceTaxForRider,
+        taxAmountOfUser: order.taxAmountOfUser,
+        taxAmountOfRider: order.taxAmountOfRider,
+        riderAmount: order.riderAmount,
         promoDiscount: order.promoDiscount,
         totalAmount: order.totalAmount,
+        currency: order.currency || "PKR",
+        user: order.userId
+          ? {
+              id: order.userId._id,
+              name: order.userId.name || "N/A",
+              phone: order.userId.phone || "N/A",
+              email: order.userId.email || "N/A",
+            }
+          : null,
         status: order.status,
         isAssigned: order.isAssigned,
-        routingMetrics: order.routingMetrics,
+        // routingMetrics: order.routingMetrics,
         createdAt: order.createdAt,
         updatedAt: order.updatedAt,
         acceptedAt: order.acceptedAt,
@@ -2672,7 +2688,7 @@ exports.reorder = async (req, res) => {
 
     const hasOnlyGroceryItems =
       formattedItems.length > 0 &&
-      formattedItems.every((item) => item.orderFrom === "grocery");
+      formattedItems.every((item) => item.orderFrom === "grocery" || item.orderFrom === "pharmacy");
 
     // Automatically generate stops from vendor branches
     let stops = [];
@@ -2727,6 +2743,38 @@ exports.reorder = async (req, res) => {
       subtotal + subtotalWithTax + deliveryFee - promoDiscount;
 
     const newOrder = await Order.create({
+// orderNumber: "ORD" + Date.now() + Math.floor(Math.random() * 1000),
+//       userId: req.user.id,
+//       address: formattedAddress,
+//       instructions,
+//       stops,
+//       items: formattedItems,
+//       paymentMethod,
+//       paymentStatus: "pending",
+//       subtotal: Number(subTotal) || subtotal || 0,
+//       deliveryFee: Number(deliveryFee) || deliveryFee || 0,
+//       distanceKm: Number(distanceKm) || distanceKm || 0,
+//       estimatedTime: estimatedTime || "",
+//       taxAmountOfUser : Number(taxAmountOfUser) || taxAmountOfUser || 0,
+//       salesAndServiceTaxForUser: Number(salesAndServiceTaxForUser) || salesAndServiceTaxForUser || 0,
+//       salesAndServiceTaxForRider: Number(salesAndServiceTaxForRider) || salesAndServiceTaxForRider || 0,
+//       deliveryFeeWithTax: Number(deliveryFeeWithTax) || deliveryFeeWithTax || 0,
+//       taxAmountOfRider: Number(taxAmountOfRider) || taxAmountOfRider || 0,
+//       riderAmount: Number(riderAmount) || riderAmount || 0,
+//       promoDiscount: Number(promoDiscount) || promoDiscount || 0,
+//       totalAmount: Number(totalAmount) || totalAmount || 0,
+//       currency: "PKR",
+//       // routingMetrics: {
+//       //   totalDistanceKm: Number(distanceKm) || distanceKm || 0,
+//       //   totalEtaMin: estimatedTime || "",
+//       //   routeGeometry: { type: Object, default: {} },
+//       // },
+//       routingMetrics,
+//       status: hasOnlyGroceryItems ? "ready" : "pending",
+//       riderId: null,
+//       isAssigned: false,
+
+
       orderNumber: "ORD" + Date.now() + Math.floor(Math.random() * 1000),
       userId: req.user.id,
       address: oldOrder.address,
@@ -2856,6 +2904,21 @@ exports.trackOrder = async (req, res) => {
         status: order.status, // Main order status
         address: order.address,
         stops: order.stops, // <-- Contains vendor details & updated stop statuses
+        items: order.items,
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
+        subtotal: order.subtotal,
+        deliveryFee: order.deliveryFee,
+        distanceKm: order.distanceKm,
+        estimatedTime: order.estimatedTime,
+        salesAndServiceTaxForUser: order.salesAndServiceTaxForUser,
+        salesAndServiceTaxForRider: order.salesAndServiceTaxForRider,
+        taxAmountOfUser: order.taxAmountOfUser,
+        taxAmountOfRider: order.taxAmountOfRider,
+        riderAmount: order.riderAmount,
+        promoDiscount: order.promoDiscount,
+        totalAmount: order.totalAmount,
+        currency: order.currency || "PKR",
 
         // Clean User Details Object
         user: order.userId
@@ -2880,7 +2943,7 @@ exports.trackOrder = async (req, res) => {
         // Rider Details Object
         vendors: vendors.length > 0 ? vendorsWithBranches : [],
 
-        routingMetrics: order.routingMetrics,
+        // routingMetrics: order.routingMetrics,
         timeline: {
           orderPlaced: order.createdAt,
           riderAssigned: order.acceptedAt,
