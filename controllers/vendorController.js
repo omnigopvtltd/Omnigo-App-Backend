@@ -751,7 +751,7 @@ exports.signup = async (req, res) => {
         city: b.city || "",
         location: {
           type: "Point",
-          coordinates: [Number(b.longitude) || 0, Number(b.latitude) || 0],
+          coordinates: [Number(b.latitude) || 0, Number(b.longitude) || 0],
         },
         isActive: true,
         isRushMode: false,
@@ -1008,7 +1008,7 @@ exports.register = async (req, res) => {
         city: b.city || "",
         location: {
           type: "Point",
-          coordinates: [Number(b.longitude) || 0, Number(b.latitude) || 0],
+          coordinates: [Number(b.latitude) || 0, Number(b.longitude) || 0],
         },
         isActive: true,
         isRushMode: false,
@@ -1902,8 +1902,8 @@ exports.updateVendorProfile = async (req, res) => {
             updatePayload.location = {
               type: "Point",
               coordinates: [
-                Number(branch.longitude) || 0,
                 Number(branch.latitude) || 0,
+                Number(branch.longitude) || 0,
               ],
             };
           }
@@ -2216,8 +2216,8 @@ exports.updateVendor = async (req, res) => {
             updatePayload.location = {
               type: "Point",
               coordinates: [
-                Number(branch.longitude) || 0,
                 Number(branch.latitude) || 0,
+                Number(branch.longitude) || 0,
               ],
             };
           }
@@ -2348,7 +2348,10 @@ exports.deleteVendor = async (req, res) => {
     }
 
     // Keep the catalog consistent — a vendor's products can't exist without it
+    await VendorBranch.deleteMany({ vendorId: vendor._id });
     await Product.deleteMany({ vendorId: vendor._id });
+    await Deal.deleteMany({ vendorId: vendor._id });
+    await Campaign.deleteMany({ vendorId: vendor._id });
 
     return res.status(200).json({
       success: true,
@@ -4666,6 +4669,7 @@ exports.deleteAccount = async (req, res) => {
     // });
 
     // Keep the catalog consistent — a vendor's products can't exist without it
+    await VendorBranch.deleteMany({ vendorId: vendor._id });
     await Product.deleteMany({ vendorId: vendor._id });
     await Deal.deleteMany({ vendorId: vendor._id });
     await Campaign.deleteMany({ vendorId: vendor._id });

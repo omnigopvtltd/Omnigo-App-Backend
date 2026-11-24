@@ -278,7 +278,7 @@ exports.calculateDeliveryFee = async (req, res) => {
         const price = Number(item.price) || 0;
         const quantity = Number(item.quantity) || 1;
         const total = price * quantity;
-        subtotal += total;
+        subtotal += item.total;
         return item.productId || item._id;
       })
       .filter(Boolean);
@@ -321,7 +321,7 @@ exports.calculateDeliveryFee = async (req, res) => {
 
       if (!matchedBranch || !matchedBranch.location?.coordinates) continue;
 
-      const [vendorLng, vendorLat] = matchedBranch.location.coordinates;
+      const [vendorLat, vendorLng] = matchedBranch.location.coordinates;
       validVendorStops.push({
         vendorId: vendor._id,
         branchId: matchedBranch._id,
@@ -448,7 +448,7 @@ exports.createOrder = async (req, res) => {
       const price = Number(item.price) || 0;
       const quantity = Number(item.quantity) || 1;
       const total = price * quantity;
-      subtotal += total;
+      subtotal += Number(item.total) || 0;
 
       return {
         productId: item.productId,
@@ -499,7 +499,7 @@ exports.createOrder = async (req, res) => {
 
     const hasOnlyGroceryItems =
       formattedItems.length > 0 &&
-      formattedItems.every((item) => item.orderFrom === "grocery");
+      formattedItems.every((item) => item.orderFrom === "grocery" || item.orderFrom === "pharmacy");
 
     // // Step 3: Extract unique Vendor IDs (Duplicates remove ho jayenge)
     // const vendorIds = [
@@ -558,7 +558,7 @@ exports.createOrder = async (req, res) => {
     }
 
     const savedAddresses = user.addresses.filter(
-      (addr) => addr.isSave === true,
+      (addr) => addr._id == addressId,
     );
 
     // Format delivery address with GeoJSON fallback
@@ -570,8 +570,9 @@ exports.createOrder = async (req, res) => {
       country: savedAddresses[0]?.country || "Pakistan",
       location: {
         type: "Point",
-        coordinates: savedAddresses[0]?.location?.coordinates ||
-          user.location?.coordinates || [0, 0],
+        coordinates: [savedAddresses[0]?.location?.coordinates[0].lat, savedAddresses[0]?.location?.coordinates[0].lng] || 
+        [savedAddresses[0]?.coordinates[0].lat, savedAddresses[0]?.coordinates[0].lng] || 
+        [user.location?.coordinates[0].lat, user.location?.coordinates[0].lng] || [0, 0],
       },
     };
 
@@ -588,29 +589,36 @@ exports.createOrder = async (req, res) => {
       orderNumber: "ORD" + Date.now() + Math.floor(Math.random() * 1000),
       userId: req.user.id,
       address: formattedAddress,
+      instructions,
       stops,
       items: formattedItems,
       paymentMethod,
       paymentStatus: "pending",
-      subtotal: subTotal,
+      subtotal: Number(subTotal) || subtotal || 0,
       deliveryFee: Number(deliveryFee) || deliveryFee || 0,
-      distanceKm,
-      estimatedTime,
+      distanceKm: Number(distanceKm) || distanceKm || 0,
+      estimatedTime: estimatedTime || "",
       taxAmountOfUser : Number(taxAmountOfUser) || taxAmountOfUser || 0,
       salesAndServiceTaxForUser: Number(salesAndServiceTaxForUser) || salesAndServiceTaxForUser || 0,
       salesAndServiceTaxForRider: Number(salesAndServiceTaxForRider) || salesAndServiceTaxForRider || 0,
       deliveryFeeWithTax: Number(deliveryFeeWithTax) || deliveryFeeWithTax || 0,
       taxAmountOfRider: Number(taxAmountOfRider) || taxAmountOfRider || 0,
       riderAmount: Number(riderAmount) || riderAmount || 0,
-      instructions,
       promoDiscount: Number(promoDiscount) || promoDiscount || 0,
       totalAmount: Number(totalAmount) || totalAmount || 0,
       currency: "PKR",
+      // routingMetrics: {
+      //   totalDistanceKm: Number(distanceKm) || distanceKm || 0,
+      //   totalEtaMin: estimatedTime || "",
+      //   routeGeometry: { type: Object, default: {} },
+      // },
       routingMetrics,
       status: hasOnlyGroceryItems ? "ready" : "pending",
       riderId: null,
       isAssigned: false,
     });
+
+    console.log("Order Created:", order);
 
     // CLEAR CART & NOTIFY SOCKETS
     cart.items = [];
