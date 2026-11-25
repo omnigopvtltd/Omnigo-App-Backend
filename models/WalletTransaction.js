@@ -52,9 +52,9 @@ const walletTransactionSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-    restaurantId: {
+    vendorId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Restaurant",
+      ref: "Vendor",
       default: null,
     },
     type: {
@@ -77,6 +77,7 @@ const walletTransactionSchema = new mongoose.Schema(
         "order_refund", // float refunded because the order was cancelled
         "session_bonus", // Option 2 bonus payout
         "bike_installment", // Added for bike loan deductions
+        "order_tax_deduction", // Deduction for tax on order earnings
       ],
       default: "manual",
     },
@@ -102,5 +103,6 @@ const walletTransactionSchema = new mongoose.Schema(
 );
 
 walletTransactionSchema.index({ userId: 1, createdAt: -1 });
+walletTransactionSchema.index({ vendorId: 1, createdAt: -1 });
 
 module.exports = mongoose.model("WalletTransaction", walletTransactionSchema);
