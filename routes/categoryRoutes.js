@@ -30,11 +30,6 @@ router.post(
   auth,
   createCategory,
 );
-router.put("/reorder", auth, reorderCategories);
-
-// Sub-Category Routes
-router.get("/all-categories", auth, AllCategoriesWithoutSubCategories);
-router.get("/subcategories", auth, getAllSubCategories);
 router.post(
   "/create/subcategories",
   upload.memoryUpload.fields([
@@ -44,6 +39,11 @@ router.post(
   auth,
   createSubCategory,
 );
+router.put("/reorder", auth, reorderCategories);
+
+// Sub-Category Routes
+router.get("/all-categories", auth, AllCategoriesWithoutSubCategories);
+router.get("/subcategories", auth, getAllSubCategories);
 router.put(
   "/update/subcategories/:subId",
   upload.memoryUpload.fields([
