@@ -2732,7 +2732,7 @@ exports.getVendorDashboardOverview = async (req, res) => {
           totalRevenue: {
             $sum: {
               $cond: [
-                { $ne: ["$status", "cancelled"] },
+                { $in: ["$status", ["completed", "delivered", "complete"]]},
                 "$vendorOrderRevenue",
                 0,
               ],
@@ -2768,12 +2768,21 @@ exports.getVendorDashboardOverview = async (req, res) => {
       {
         $lookup: {
           from: "deals",
-          localField: "items.dealId",
+          localField: "items.productId",
           foreignField: "_id",
           as: "dealDetails",
         },
       },
       { $unwind: { path: "$dealDetails", preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: "campaigns",
+          localField: "items.productId",
+          foreignField: "_id",
+          as: "campaignDetails",
+        },
+      },
+      { $unwind: { path: "$campaignDetails", preserveNullAndEmptyArrays: true } },
       {
         $addFields: {
           isThisVendorItem: {
@@ -2782,19 +2791,12 @@ exports.getVendorDashboardOverview = async (req, res) => {
               { $eq: ["$productDetails.vendorId", vendorObjectId] },
               { $eq: ["$productDetails.vendor", vendorObjectId] },
               { $eq: ["$dealDetails.vendorId", vendorObjectId] },
+              { $eq: ["$campaignDetails.vendorId", vendorObjectId] },
             ],
           },
           computedItemTotal: {
-            $ifNull: [
-              "$items.total",
-              {
-                $multiply: [
-                  { $ifNull: ["$items.price", 0] },
-                  { $ifNull: ["$items.quantity", 1] },
-                ],
-              },
-            ],
-          },
+  $ifNull: ["$items.total", 0],
+}
         },
       },
       {
@@ -2817,7 +2819,7 @@ exports.getVendorDashboardOverview = async (req, res) => {
       },
       {
         $match: {
-          status: { $ne: "cancelled" },
+          status: { $in: ["delivered", "completed", "complete"] },
           $expr: {
             $or: ["$hasVendorItems", "$hasVendorStop"],
           },
@@ -2825,11 +2827,13 @@ exports.getVendorDashboardOverview = async (req, res) => {
       },
       {
         $group: {
-          _id: { $dayOfWeek: "$createdAt" },
+         _id: { $dayOfWeek: { date: "$createdAt", timezone: "+05:00" } },
           total: { $sum: "$vendorOrderRevenue" },
         },
       },
     ]);
+
+    console.log(rawChartData);
 
     const daysLookup = {
       2: "Mon",
@@ -2984,13 +2988,24 @@ exports.getVendorPerformance = async (req, res) => {
       {
         $lookup: {
           from: "deals",
-          localField: "items.dealId",
+          localField: "items.productId",
           foreignField: "_id",
           as: "dealDetails",
         },
       },
       {
         $unwind: { path: "$dealDetails", preserveNullAndEmptyArrays: true },
+      },
+      {
+        $lookup: {
+          from: "campaigns",
+          localField: "items.productId",
+          foreignField: "_id",
+          as: "campaignDetails",
+        },
+      },
+      {
+        $unwind: { path: "$campaignDetails", preserveNullAndEmptyArrays: true },
       },
       {
         $addFields: {
@@ -3000,24 +3015,17 @@ exports.getVendorPerformance = async (req, res) => {
               { $eq: ["$productDetails.vendorId", vendorObjectId] },
               { $eq: ["$productDetails.vendor", vendorObjectId] },
               { $eq: ["$dealDetails.vendorId", vendorObjectId] },
+              { $eq: ["$campaignDetails.vendorId", vendorObjectId] },
             ],
           },
           computedItemTotal: {
-            $ifNull: [
-              "$items.total",
-              {
-                $multiply: [
-                  { $ifNull: ["$items.price", 0] },
-                  { $ifNull: ["$items.quantity", 1] },
-                ],
-              },
-            ],
-          },
+  $ifNull: ["$items.total", 0],
+}
         },
       },
       {
         $match: {
-          status: { $ne: "cancelled" },
+          status: {$in: ["completed", "delivered", "complete"] },
           $expr: {
             $or: [
               "$isThisVendorItem",
@@ -3109,7 +3117,7 @@ exports.getVendorPerformance = async (req, res) => {
         ...getVendorOrdersPipeline(currentPeriodStart, now),
         {
           $group: {
-            _id: { $dayOfWeek: "$createdAt" }, // 1=Sun, 2=Mon...
+            _id: { $dayOfWeek: { date: "$createdAt", timezone: "+05:00" } }, // 1=Sun, 2=Mon...
             totalSales: { $sum: "$vendorOrderRevenue" },
           },
         },

@@ -17,7 +17,7 @@ exports.getAllCategories = async (req, res) => {
     const query = {};
 
     if (categorySlug === "grocery") {
-      query.categorySlug = { $in: ["grocery", "pharmacy", "stationary"] };
+      query.categorySlug = { $in: ["grocery"] };
     } 
     else if (categorySlug) {
       query.categorySlug = categorySlug;
@@ -51,7 +51,7 @@ exports.getAllCategoriesWithSubCategories = async (req, res) => {
     const query = {};
 
     if (categorySlug === "grocery") {
-      query.categorySlug = { $in: ["grocery", "pharmacy", "stationary"] };
+      query.categorySlug = { $in: ["grocery"] };
     } else if (categorySlug) {
       query.categorySlug = categorySlug;
     }

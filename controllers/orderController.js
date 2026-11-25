@@ -250,10 +250,10 @@ exports.calculateDeliveryFee = async (req, res) => {
   try {
     const { cart, userLat, userLng, promoDiscount, instructions } = req.body;
 
-      let paymentMethod = "cash_on_delivery";
-     let salesAndServiceTaxForUser = 5;
-     let salesAndServiceTaxForRider = 25;
-    
+    let paymentMethod = "cash_on_delivery";
+    let salesAndServiceTaxForUser = 5;
+    let salesAndServiceTaxForRider = 25;
+
     if (!cart || userLat === undefined || userLng === undefined) {
       return res.status(400).json({
         success: false,
@@ -321,16 +321,28 @@ exports.calculateDeliveryFee = async (req, res) => {
 
       if (!matchedBranch || !matchedBranch.location?.coordinates) continue;
 
+      //  const hasOnlyGroceryItems =
+      // formattedItems.length > 0 &&
+      // formattedItems.every((item) => item.orderFrom === "grocery" || item.orderFrom === "pharmacy");
+
       const [vendorLat, vendorLng] = matchedBranch.location.coordinates;
       validVendorStops.push({
         vendorId: vendor._id,
         branchId: matchedBranch._id,
         businessName:
           vendor?.businessName || matchedBranch.branchName || "Vendor",
+        logo: vendor?.logo || "",
         address: matchedBranch.address || vendor.address || "",
+        city: matchedBranch.city || vendor.city || "",
+        country: matchedBranch.country || vendor.country || "",
         location: matchedBranch.location,
         lat: vendorLat,
         lng: vendorLng,
+        status:
+          vendor?.businessName == "Omnigo Mart" ||
+          vendor?.businessName == "Omnigo Pharmacy"
+            ? "ready"
+            : "pending",
       });
     }
 
@@ -340,7 +352,7 @@ exports.calculateDeliveryFee = async (req, res) => {
         message: "Valid vendor branches nahi mil sake",
       });
     }
-    
+
     // 5. Calculate Combined Route (1 Single Google API Call)
     const routeSummary = await calculateMultiStopChakwalRoute(
       validVendorStops,
@@ -358,17 +370,23 @@ exports.calculateDeliveryFee = async (req, res) => {
       estimatedTime: s.estimatedTime,
       deliveryFee: s.deliveryFee,
     }));
-    
-        const discount = Number(promoDiscount) || 0;
-    
-        const subtotalWithTax =
-          (Number(salesAndServiceTaxForUser) / 100) * subtotal;
-        const totalAmount =
-          subtotal + subtotalWithTax + Number(routeSummary.deliveryFee) - discount;
 
-          const riderAmountTax = (Number(salesAndServiceTaxForRider) / 100) * routeSummary.deliveryFee;
-          const riderAmount = routeSummary.deliveryFee - riderAmountTax;
-          console.log("Rider Amount:", salesAndServiceTaxForRider, riderAmountTax, riderAmount);
+    const discount = Number(promoDiscount) || 0;
+
+    const subtotalWithTax =
+      (Number(salesAndServiceTaxForUser) / 100) * subtotal;
+    const totalAmount =
+      subtotal + subtotalWithTax + Number(routeSummary.deliveryFee) - discount;
+
+    const riderAmountTax =
+      (Number(salesAndServiceTaxForRider) / 100) * routeSummary.deliveryFee;
+    const riderAmount = routeSummary.deliveryFee - riderAmountTax;
+    console.log(
+      "Rider Amount:",
+      salesAndServiceTaxForRider,
+      riderAmountTax,
+      riderAmount,
+    );
 
     return res.json({
       success: true,
@@ -400,7 +418,7 @@ exports.createOrder = async (req, res) => {
     const {
       address,
       addressId,
-      // stops = [],
+      countedStops,
       subTotal,
       paymentMethod,
       promoDiscount,
@@ -499,7 +517,9 @@ exports.createOrder = async (req, res) => {
 
     const hasOnlyGroceryItems =
       formattedItems.length > 0 &&
-      formattedItems.every((item) => item.orderFrom === "grocery" || item.orderFrom === "pharmacy");
+      formattedItems.every(
+        (item) => item.orderFrom === "grocery" || item.orderFrom === "pharmacy",
+      );
 
     // // Step 3: Extract unique Vendor IDs (Duplicates remove ho jayenge)
     // const vendorIds = [
@@ -570,9 +590,16 @@ exports.createOrder = async (req, res) => {
       country: savedAddresses[0]?.country || "Pakistan",
       location: {
         type: "Point",
-        coordinates: [savedAddresses[0]?.location?.coordinates[0].lat, savedAddresses[0]?.location?.coordinates[0].lng] || 
-        [savedAddresses[0]?.coordinates[0].lat, savedAddresses[0]?.coordinates[0].lng] || 
-        [user.location?.coordinates[0].lat, user.location?.coordinates[0].lng] || [0, 0],
+        coordinates: [
+          savedAddresses[0]?.location?.coordinates[0].lat,
+          savedAddresses[0]?.location?.coordinates[0].lng,
+        ] || [
+            savedAddresses[0]?.coordinates[0].lat,
+            savedAddresses[0]?.coordinates[0].lng,
+          ] || [
+            user.location?.coordinates[0].lat,
+            user.location?.coordinates[0].lng,
+          ] || [0, 0],
       },
     };
 
@@ -590,7 +617,7 @@ exports.createOrder = async (req, res) => {
       userId: req.user.id,
       address: formattedAddress,
       instructions,
-      stops,
+      stops: countedStops || stops,
       items: formattedItems,
       paymentMethod,
       paymentStatus: "pending",
@@ -598,9 +625,11 @@ exports.createOrder = async (req, res) => {
       deliveryFee: Number(deliveryFee) || deliveryFee || 0,
       distanceKm: Number(distanceKm) || distanceKm || 0,
       estimatedTime: estimatedTime || "",
-      taxAmountOfUser : Number(taxAmountOfUser) || taxAmountOfUser || 0,
-      salesAndServiceTaxForUser: Number(salesAndServiceTaxForUser) || salesAndServiceTaxForUser || 0,
-      salesAndServiceTaxForRider: Number(salesAndServiceTaxForRider) || salesAndServiceTaxForRider || 0,
+      taxAmountOfUser: Number(taxAmountOfUser) || taxAmountOfUser || 0,
+      salesAndServiceTaxForUser:
+        Number(salesAndServiceTaxForUser) || salesAndServiceTaxForUser || 0,
+      salesAndServiceTaxForRider:
+        Number(salesAndServiceTaxForRider) || salesAndServiceTaxForRider || 0,
       deliveryFeeWithTax: Number(deliveryFeeWithTax) || deliveryFeeWithTax || 0,
       taxAmountOfRider: Number(taxAmountOfRider) || taxAmountOfRider || 0,
       riderAmount: Number(riderAmount) || riderAmount || 0,
@@ -1453,15 +1482,25 @@ exports.cancelOrderByVendor = async (req, res) => {
       if (targetStop) {
         targetStop.status = "cancelled";
         targetStop.cancellationReason = cancellationReason;
+        // order.deliveryFee =
+        //   Number(order.deliveryFee) - Number(targetStop.deliveryFee || 0);
+        //   order.distanceKm = Number(order.distanceKm) - Number(targetStop.distanceKm || 0);
       }
       isFullOrderCancelled = true;
     }
     // SCENARIO 2: Multi-Vendor Order
     else {
+      const newDeliveryFee = Number(order.deliveryFee) - Number(targetStop.deliveryFee || 0);
+      const newDistanceKm = Number(order.distanceKm) - Number(targetStop.distanceKm || 0);
+      const newTaxAmountOfRider =  (Number(order.salesAndServiceTaxForRider) / 100) * newDeliveryFee;
+      const newRiderAmount = newDeliveryFee - newTaxAmountOfRider;
+
       // 1. Mark target vendor stop as cancelled
       targetStop.status = "cancelled";
       targetStop.cancellationReason = cancellationReason;
-
+      order.deliveryFee = newDeliveryFee >= 0 ? newDeliveryFee : 0;
+      order.distanceKm = newDistanceKm >= 0 ? newDistanceKm : 0;
+  
       // 2. Identify cancelled vendors and their business types
       const cancelledStops = order.stops.filter((stop) =>
         ["cancelled", "rejected_by_vendor"].includes(stop.status),
@@ -1518,14 +1557,15 @@ exports.cancelOrderByVendor = async (req, res) => {
         order.subtotal = newSubtotal;
 
         const taxPercent = Number(order.salesAndServiceTaxForUser) || 0;
-        const newTax = (newSubtotal * taxPercent) / 100;
-        order.tax = newTax;
+        const newTax = (taxPercent / 100) * newSubtotal;
+        order.taxAmountOfUser = newTax;
+        order.taxAmountOfRider = newTaxAmountOfRider >= 0 ? newTaxAmountOfRider : Number(order.taxAmountOfRider) || 0;
+        order.riderAmount = newRiderAmount >= 0 ? newRiderAMount : Number(order.riderAmount) || 0; 
 
-        const deliveryFee = Number(order.deliveryFee) || 0;
+        const deliveryFee = newDeliveryFee >= 0 ? newDeliveryFee : 0 || Number(order.deliveryFee) || 0;
         const promoDiscount = Number(order.promoDiscount) || 0;
 
         order.totalAmount = newSubtotal + deliveryFee + newTax - promoDiscount;
-
         // 6. GROCERY AUTO-CONFIRMATION CHECK
         const activeStops = order.stops.filter(
           (stop) => !["cancelled", "rejected_by_vendor"].includes(stop.status),
@@ -1768,7 +1808,10 @@ exports.getAvailableOrders = async (req, res) => {
 
       .populate("userId", "name email phone")
 
-      .populate("stops.vendorId", "businessName logo address businessPhone location")
+      .populate(
+        "stops.vendorId",
+        "businessName logo address businessPhone location",
+      )
 
       .sort({ createdAt: -1 });
 
@@ -2600,7 +2643,12 @@ exports.getOrderDetails = async (req, res) => {
 // REORDER
 // =====================================
 exports.reorder = async (req, res) => {
-  console.log("REORDER REQUEST RECEIVED:", req.params.id, "by user:", req.user.id);
+  console.log(
+    "REORDER REQUEST RECEIVED:",
+    req.params.id,
+    "by user:",
+    req.user.id,
+  );
   try {
     const oldOrder = await Order.findOne({
       _id: req.params.id,
@@ -2688,7 +2736,9 @@ exports.reorder = async (req, res) => {
 
     const hasOnlyGroceryItems =
       formattedItems.length > 0 &&
-      formattedItems.every((item) => item.orderFrom === "grocery" || item.orderFrom === "pharmacy");
+      formattedItems.every(
+        (item) => item.orderFrom === "grocery" || item.orderFrom === "pharmacy",
+      );
 
     // Automatically generate stops from vendor branches
     let stops = [];
@@ -2743,37 +2793,36 @@ exports.reorder = async (req, res) => {
       subtotal + subtotalWithTax + deliveryFee - promoDiscount;
 
     const newOrder = await Order.create({
-// orderNumber: "ORD" + Date.now() + Math.floor(Math.random() * 1000),
-//       userId: req.user.id,
-//       address: formattedAddress,
-//       instructions,
-//       stops,
-//       items: formattedItems,
-//       paymentMethod,
-//       paymentStatus: "pending",
-//       subtotal: Number(subTotal) || subtotal || 0,
-//       deliveryFee: Number(deliveryFee) || deliveryFee || 0,
-//       distanceKm: Number(distanceKm) || distanceKm || 0,
-//       estimatedTime: estimatedTime || "",
-//       taxAmountOfUser : Number(taxAmountOfUser) || taxAmountOfUser || 0,
-//       salesAndServiceTaxForUser: Number(salesAndServiceTaxForUser) || salesAndServiceTaxForUser || 0,
-//       salesAndServiceTaxForRider: Number(salesAndServiceTaxForRider) || salesAndServiceTaxForRider || 0,
-//       deliveryFeeWithTax: Number(deliveryFeeWithTax) || deliveryFeeWithTax || 0,
-//       taxAmountOfRider: Number(taxAmountOfRider) || taxAmountOfRider || 0,
-//       riderAmount: Number(riderAmount) || riderAmount || 0,
-//       promoDiscount: Number(promoDiscount) || promoDiscount || 0,
-//       totalAmount: Number(totalAmount) || totalAmount || 0,
-//       currency: "PKR",
-//       // routingMetrics: {
-//       //   totalDistanceKm: Number(distanceKm) || distanceKm || 0,
-//       //   totalEtaMin: estimatedTime || "",
-//       //   routeGeometry: { type: Object, default: {} },
-//       // },
-//       routingMetrics,
-//       status: hasOnlyGroceryItems ? "ready" : "pending",
-//       riderId: null,
-//       isAssigned: false,
-
+      // orderNumber: "ORD" + Date.now() + Math.floor(Math.random() * 1000),
+      //       userId: req.user.id,
+      //       address: formattedAddress,
+      //       instructions,
+      //       stops,
+      //       items: formattedItems,
+      //       paymentMethod,
+      //       paymentStatus: "pending",
+      //       subtotal: Number(subTotal) || subtotal || 0,
+      //       deliveryFee: Number(deliveryFee) || deliveryFee || 0,
+      //       distanceKm: Number(distanceKm) || distanceKm || 0,
+      //       estimatedTime: estimatedTime || "",
+      //       taxAmountOfUser : Number(taxAmountOfUser) || taxAmountOfUser || 0,
+      //       salesAndServiceTaxForUser: Number(salesAndServiceTaxForUser) || salesAndServiceTaxForUser || 0,
+      //       salesAndServiceTaxForRider: Number(salesAndServiceTaxForRider) || salesAndServiceTaxForRider || 0,
+      //       deliveryFeeWithTax: Number(deliveryFeeWithTax) || deliveryFeeWithTax || 0,
+      //       taxAmountOfRider: Number(taxAmountOfRider) || taxAmountOfRider || 0,
+      //       riderAmount: Number(riderAmount) || riderAmount || 0,
+      //       promoDiscount: Number(promoDiscount) || promoDiscount || 0,
+      //       totalAmount: Number(totalAmount) || totalAmount || 0,
+      //       currency: "PKR",
+      //       // routingMetrics: {
+      //       //   totalDistanceKm: Number(distanceKm) || distanceKm || 0,
+      //       //   totalEtaMin: estimatedTime || "",
+      //       //   routeGeometry: { type: Object, default: {} },
+      //       // },
+      //       routingMetrics,
+      //       status: hasOnlyGroceryItems ? "ready" : "pending",
+      //       riderId: null,
+      //       isAssigned: false,
 
       orderNumber: "ORD" + Date.now() + Math.floor(Math.random() * 1000),
       userId: req.user.id,

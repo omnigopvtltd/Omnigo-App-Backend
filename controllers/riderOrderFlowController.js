@@ -229,21 +229,21 @@ exports.completeOrderDelivery = async (req, res) => {
     }
 
     // 2. Wallet & Financial Calculations
-    const payout = (order.riderFloatAmount || 0) + (order.deliveryFee || 0);
-    // const newBalance = (rider.wallet?.balance || 0) + payout;
+    const payout = (order.taxAmountOfRider || 0);
+    const newBalance = (rider.wallet?.balance || 0) - payout;
 
-    // rider.wallet = { balance: newBalance };
-    // await rider.save();
+    rider.wallet = { balance: newBalance };
+    await rider.save();
 
-    // await WalletTransaction.create({
-    //   userId: rider._id,
-    //   type: "credit",
-    //   amount: payout,
-    //   reason: `Payment collected + delivery fee for ${order.orderNumber}`,
-    //   balanceAfter: newBalance,
-    //   source: "order_earning",
-    //   orderId: order._id,
-    // });
+    await WalletTransaction.create({
+      userId: rider._id,
+      type: "debit",
+      amount: payout,
+      reason: `Payment detected, tax amount of order ${order.orderNumber}`,
+      balanceAfter: newBalance,
+      source: "order_tax_deduction",
+      orderId: order._id,
+    });
 
     // 3. VENDOR STATUS UPDATE (Complete all vendor stops)
     if (order.stops && order.stops.length > 0) {
