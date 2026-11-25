@@ -210,7 +210,6 @@ exports.getFeedbacks = async (req, res) => {
     return res.status(200).json({
       success: true,
       count: feedbacks.length,
-      count: totalFeedbacks.length,
       totalFeedbacks,
       totalPages: Math.ceil(totalFeedbacks / limit),
       currentPage: Number(page),

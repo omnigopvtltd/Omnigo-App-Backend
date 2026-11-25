@@ -47,7 +47,7 @@ const transporter = nodemailer.createTransport({
 
 exports.generateToken = (vendor) => {
   return jwt.sign({ id: vendor._id, role: "vendor" }, process.env.JWT_SECRET, {
-    expiresIn: "7d",
+    expiresIn: "30d",
   });
 };
 

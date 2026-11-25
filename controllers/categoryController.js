@@ -202,6 +202,7 @@ exports.getSubCategoryById = async (req, res) => {
 exports.createSubCategory = async (req, res) => {
   try {
     const { categoryId, ...subData } = req.body;
+    
     const category = await Category.findById(categoryId);
     if (!category)
       return res

@@ -325,7 +325,7 @@ exports.createProduct = async (req, res) => {
       quantity,
       belongsTo,
       vendorId,
-      category: finalCategory,
+      category: finalCategory.toLowerCase(),
       subcategory: finalSubCategory,
       price,
       discountPrice: discountPrice || null,

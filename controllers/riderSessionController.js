@@ -1022,6 +1022,8 @@ const HOUR = 60 * 60 * 1000;
 const isValidId = mongoose.isValidObjectId;
 const REQUIRE_VERIFICATION = process.env.REQUIRE_RIDER_VERIFICATION === "true";
 
+// 120 180 240
+
 // Extension tiers (ek jagah config)
 const EXTEND_TIERS = {
   12: { requiredOrders: 23, bonusAmount: 230 },
