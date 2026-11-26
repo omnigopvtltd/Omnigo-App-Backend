@@ -115,7 +115,7 @@ function fileFilter(req, file, cb) {
 }
 
 const uploadDir = isVercel
-  ? path.join(os.tmpdir(), "../uploads")
+  ? path.join(os.tmpdir(), "uploads")
   : path.join(__dirname, "../uploads");
 
 const ensureUploadDir = () => {
