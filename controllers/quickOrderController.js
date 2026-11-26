@@ -429,7 +429,7 @@ const { parseOrder, localTextParse } = require("../utils/geminiHelper");
 const { searchCandidates, searchProducts, explainMatch, catalogStats, waitlistKey, entryFromDoc, firstImage, ACTIVE_FILTER } = require("../utils/productMatcher");
 const { priceSelection, PricingError, lineTotal, sumTotals, clampQty, lineKey } = require("../utils/pricing");
 
-const DELIVERY_FEE = Number(process.env.DELIVERY_FEE || 200);               // PKR
+// const DELIVERY_FEE = Number(process.env.DELIVERY_FEE || 200);               // PKR
 const CATEGORIES = ["food", "mart", "pharmacy", "grocery"];
 const LOCAL_FIRST = process.env.AI_TEXT_LOCAL_FIRST === "true";             // saade text orders AI ke baghair (0 tokens). Default OFF
 
@@ -469,7 +469,7 @@ function buildItem(doc, { quantity, variations, addOns, requestedName }) {
 }
 function recalc(qo) {
   qo.subtotal = sumTotals(qo.items.map((i) => i.totalItemPrice));
-  qo.grandTotal = sumTotals([qo.subtotal, qo.deliveryFee || DELIVERY_FEE]);
+  qo.grandTotal = sumTotals([qo.subtotal]);
 }
 const lineBreakdown = (i) => ({
   itemId: i._id, productId: i.productId, name: i.name, quantity: i.quantity, unitPrice: i.estimatedUnitPrice, basePrice: i.basePrice,
@@ -599,7 +599,7 @@ exports.quote = async (req, res) => {
   try {
     const items = await buildItems(req.body.selections);
     const subtotal = sumTotals(items.map((i) => i.totalItemPrice));
-    return res.json({ success: true, data: { lines: items.map(lineBreakdown), subtotal, deliveryFee: DELIVERY_FEE, grandTotal: sumTotals([subtotal, DELIVERY_FEE]) } });
+    return res.json({ success: true, data: { lines: items.map(lineBreakdown), subtotal, grandTotal: sumTotals([subtotal]) } });
   } catch (e) { return sendError(res, e, "Could not calculate the price"); }
 };
 
@@ -611,7 +611,7 @@ exports.createSlip = async (req, res) => {
     const qo = new QuickOrder({
       user: userId, category: normCategory(req.body.category), orderType: req.body.orderType === "IMAGE" ? "IMAGE" : "TEXT",
       rawInputText: String(req.body.rawInputText || "").slice(0, 1000), customerNotes: String(req.body.customerNotes || "").slice(0, 300),
-      parsedBy: "selection", items, deliveryFee: DELIVERY_FEE, status: "PROPOSED",
+      parsedBy: "selection", items, status: "PROPOSED",
     });
     recalc(qo);
     await qo.save();
@@ -684,11 +684,16 @@ exports.searchCatalog = async (req, res) => {
 // !! Agar aap ke Cart schema mein variations/addOns ki shakal alag ho to SIRF toCartItem() badlein.
 function toCartItem(it, doc, priced) {
   const mapped = mapCategoryToEnum(doc.belongsTo || doc.category);
+  const qty = Number(it.quantity) || 1;
+  const unitPrice = Number(priced.unit) || 0;
+  const computedTotal = Number((unitPrice * qty).toFixed(2));
+  console.log(it, doc, priced);
   return {
     productId: doc._id, name: doc.name, orderFrom: mapped !== "other" ? mapped : "fast-food", image: firstImage(doc),
     category: doc.category, subcategory: doc.subcategory || "", weight: doc.weight || "",
     variations: priced.selectedVariations, addOns: priced.selectedAddOns,
-    price: priced.unit,                                              // ek piece ki qeemat (variation + add-ons shamil)
+    price: priced.unit, 
+    total: computedTotal,                                              // ek piece ki qeemat (variation + add-ons shamil)
     quantity: it.quantity, vendorId: doc.vendorId || null, source: "QUICK_ORDER",
   };
 }
@@ -728,7 +733,7 @@ exports.addToCart = async (req, res) => {
       const item = toCartItem(it, doc, priced);
       const key = lineKey(item.productId, item.variations, item.addOns);
       const existing = cart.items.find((c) => lineKey(c.productId, c.variations || [], c.addOns || []) === key);
-      if (existing) { existing.quantity = (Number(existing.quantity) || 0) + item.quantity; existing.price = item.price; }
+      if (existing) { existing.quantity = (Number(existing.quantity) || 0) + item.quantity; existing.price = item.price; existing.total = Number((existing.price * existing.quantity).toFixed(2)); }
       else cart.items.push(item);
     }
     await cart.save();
