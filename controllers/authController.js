@@ -2513,9 +2513,9 @@ exports.updateUserProfile = async (req, res) => {
       const protocol =
         req.headers["x-forwarded-proto"] ||
         (host.includes("localhost") ? "http" : "https");
-
-      const baseUrl = host.includes("vercel.app")
-        ? `${protocol}://${host}`
+console.log(host);
+      const baseUrl = host.includes("vercel.app") || host.includes("localhost:5000")
+        ? "https://omnigo-app-backend.vercel.app"
         : "https://api.omnigoapp.com";
 
       profilePicture = `${baseUrl}/uploads/${req.file.filename}`;
