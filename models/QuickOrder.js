@@ -48,7 +48,7 @@ const quickOrderSchema = new Schema(
 
     items: [orderItemSchema],
     subtotal: { type: Number, required: true, default: 0 },
-    deliveryFee: { type: Number, default: 200 },
+    // deliveryFee: { type: Number, default: 200 },
     grandTotal: { type: Number, required: true, default: 0 },
     customerNotes: { type: String, default: "" },
 
