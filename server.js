@@ -17,6 +17,7 @@ const categoryRoutes = require("./routes/categoryRoutes");
 const foodCategoryRoutes = require("./routes/foodCategoryRoutes");
 const homeChefRoutes = require("./routes/homeChefRoutes");
 const AdminSettings = require("./models/AdminSettings");
+const os = require("os");
 require("./config/firebase");
 
 //  SOCKET
@@ -50,8 +51,15 @@ app.use((req, res, next) => {
   next();
 });
 
+const effectiveUploadDir =
+  process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME
+    ? path.join(os.tmpdir(), "uploads")
+    : path.join(__dirname, "uploads");
+
+app.use("/uploads", express.static(effectiveUploadDir));
+
 //  static uploads
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+// app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 
 // ================= ROUTES =================
