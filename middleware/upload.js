@@ -95,7 +95,7 @@ const fs = require("fs");
 const os = require("os");
 
 const BACKEND_URL = process.env.BACKEND_URL || "https://api.omnigoapp.com";
-const isVercel = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+const isVercel = true || Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 
 // File Filter (Common for both)
 function fileFilter(req, file, cb) {
@@ -115,7 +115,7 @@ function fileFilter(req, file, cb) {
 }
 
 const uploadDir = isVercel
-  ? path.join(os.tmpdir(), "uploads")
+  ? path.join(os.tmpdir(), "../uploads")
   : path.join(__dirname, "../uploads");
 
 const ensureUploadDir = () => {

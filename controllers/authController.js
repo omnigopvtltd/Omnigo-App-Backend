@@ -2505,10 +2505,27 @@ exports.updateUserProfile = async (req, res) => {
     let profilePicture;
 
     if (req.file) {
+      const host = (
+        req.headers["x-forwarded-host"] ||
+        req.get("host") ||
+        ""
+      ).toLowerCase();
+      const protocol =
+        req.headers["x-forwarded-proto"] ||
+        (host.includes("localhost") ? "http" : "https");
+
+      const baseUrl = host.includes("vercel.app")
+        ? `${protocol}://${host}`
+        : "https://api.omnigoapp.com";
+
+      profilePicture = `${baseUrl}/uploads/${req.file.filename}`;
+      console.log("1st", profilePicture);
       // Relative URL path for frontend access (e.g. /uploads/image-12345.jpg)
-      profilePicture = `https://api.omnigoapp.com/uploads/${req.file.filename}`;
+      // profilePicture = `https://api.omnigoapp.com/uploads/${req.file.filename}`;
+      // console.log("1st",profilePicture);
     } else if (req.body?.profilePicture) {
       profilePicture = req.body.profilePicture;
+      console.log("2nd", profilePicture);
     }
 
     // Validate input
