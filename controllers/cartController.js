@@ -389,8 +389,10 @@ exports.updateCart = async (req, res) => {
       );
 
       // 3. Recalculate Item Total: (Base Price + AddOns + Variations) * Quantity
+      // item.total =
+      //   (Number(item.price || 0) + addOnsPrice + variationsPrice) * newQty;
       item.total =
-        (Number(item.price || 0) + addOnsPrice + variationsPrice) * newQty;
+        (Number(item.price || 0)) * newQty;
     }
 
     await cart.save();
