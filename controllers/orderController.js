@@ -373,6 +373,16 @@ exports.calculateDeliveryFee = async (req, res) => {
 
     const discount = Number(promoDiscount) || 0;
 
+    if(subtotal >= 1 && subtotal <= 1000) {
+      salesAndServiceTaxForUser = 5;
+    }
+    else if (subtotal >= 1001 && subtotal <= 2000) {
+      salesAndServiceTaxForUser = 4;
+    }
+    else {
+      salesAndServiceTaxForUser = 3;
+    }
+
     const subtotalWithTax =
       (Number(salesAndServiceTaxForUser) / 100) * subtotal;
     const totalAmount =
