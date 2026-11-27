@@ -331,6 +331,8 @@ exports.calculateDeliveryFee = async (req, res) => {
         branchId: matchedBranch._id,
         businessName:
           vendor?.businessName || matchedBranch.branchName || "Vendor",
+        businessType:
+          vendor?.businessType || "",
         logo: vendor?.logo || "",
         address: matchedBranch.address || vendor.address || "",
         city: matchedBranch.city || vendor.city || "",
@@ -1570,7 +1572,7 @@ exports.cancelOrderByVendor = async (req, res) => {
         const newTax = (taxPercent / 100) * newSubtotal;
         order.taxAmountOfUser = newTax;
         order.taxAmountOfRider = newTaxAmountOfRider >= 0 ? newTaxAmountOfRider : Number(order.taxAmountOfRider) || 0;
-        order.riderAmount = newRiderAmount >= 0 ? newRiderAMount : Number(order.riderAmount) || 0; 
+        order.riderAmount = newRiderAmount >= 0 ? newRiderAmount : Number(order.riderAmount) || 0; 
 
         const deliveryFee = newDeliveryFee >= 0 ? newDeliveryFee : 0 || Number(order.deliveryFee) || 0;
         const promoDiscount = Number(order.promoDiscount) || 0;
