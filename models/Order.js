@@ -206,14 +206,6 @@ const orderSchema = new mongoose.Schema(
         logo: { type: String, default: "" },
         businessType: {
           type: String,
-          // enum: [
-          //   "fast-food",
-          //   "restaurant",
-          //   "grocery",
-          //   "pharmacy",
-          //   "bakery",
-          //   "other",
-          // ],
           default: "grocery",
         },
         address: { type: String, default: "" },
